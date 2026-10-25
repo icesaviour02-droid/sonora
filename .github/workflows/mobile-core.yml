@@ -24,6 +24,9 @@ jobs:
     timeout-minutes: 20
     env:
       IPHONEOS_DEPLOYMENT_TARGET: '26.0'
+      # The desktop rust-toolchain.toml otherwise overrides the toolchain whose iOS targets
+      # were installed by the setup action.
+      RUSTUP_TOOLCHAIN: stable
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
