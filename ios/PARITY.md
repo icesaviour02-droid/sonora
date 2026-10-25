@@ -21,32 +21,32 @@ whose behavior can be used as a separate reference.
 
 | Desktop behavior | iPhone status | Required acceptance |
 |---|---|---|
-| Guest YouTube song search, metadata/artwork | Verified in iOS 26.5 simulator | Empty/error/retry, Unicode, long results, unavailable songs; repeat on iOS 27 |
-| YouTube AAC streaming | Implemented; simulator playback advancement failed | Audible playback, advancing clock, pause/resume, long tracks, network/error recovery |
-| Offline downloads | Implemented; simulator resolution failed (sign-in required) | Exact byte count, playable file, progress, cancel/retry/remove, queued concurrency, interrupted recovery |
+| Guest YouTube song search, metadata/artwork | Earlier simulator search verified; catalog response repair verified on Linux, Apple confirmation pending | Empty/error/retry, Unicode, long results, unavailable songs; repeat on iOS 27 |
+| YouTube AAC streaming | Implemented; latest simulator resolution blocked by Google's bot-verification response | Audible playback, advancing clock, pause/resume, long tracks, network/error recovery |
+| Offline downloads | Implemented; latest simulator cannot resolve Guest audio | Exact byte count, playable file, progress, cancel/retry/remove, queued concurrency, interrupted recovery |
 | Offline relaunch | Implemented file selection; unverified | Cold launch in airplane mode, play/seek/queue downloaded tracks without provider requests |
 | Local audio import/search/delete | Implemented; unverified | Supported formats, corrupt files, large/multiple imports, durable metadata, deletion during playback |
 | Queue, next/previous, shuffle, repeat, seek | Implemented subset; unverified | Order changes, boundaries, repeated tracks, unavailable tracks, restore without autoplay |
-| Queue editing, play-next/append, radio/autoplay | Missing | Reorder/remove/append, radio continuation and queue persistence |
+| Queue editing, play-next/append, radio/autoplay | Implemented subset; reorder UI not wired, repeat-track identity needs review | Reorder/remove/append, radio continuation and queue persistence |
 | Background audio, lock-screen commands, AirPlay | Implemented; unverified on hardware | Screen lock, long background session, headphones/Bluetooth, calls/interruption, route loss |
 | Gapless playback | Missing | Consecutive tracks with measured gap behavior |
-| Audio normalization, quality selection | Missing | Provider loudness handling, level consistency, supported quality fallback |
-| Equalizer/output options | Missing / platform review | iOS audio-engine support and persistent sound settings |
-| Sleep timer | Missing | Timed stop and end-of-track behavior across backgrounding |
-| YouTube account sign-in/session/sign-out | Initial implementation; real-account verification, renewal/page selection/proof-of-origin remain open | Real account login, Keychain storage, expiration/restore, sign-out cache isolation |
-| Home feed, recommendations, genres | Missing | Loaded/empty/error/continuation and navigation behavior |
-| Albums, artists/discography, song/user pages | Missing | Metadata, tracks, artwork, playback, navigation and errors |
-| Search albums/playlists | Missing | Results and navigation with paging/error handling |
-| Saved songs/albums/artists, likes/follows | Missing | Read/write/undo/refresh, account isolation and persistence |
-| Playlists | Missing | List/detail/paging, create/rename/delete/visibility, save/remove, add/remove tracks |
-| Listening history/play counts, provider reporting | Missing | Start/pause/seek/stop reporting and completed-listen rules |
-| Pins/favorites and sharing/deep links | Partial deep-link routes only | Pin persistence, share destinations, malformed links and account changes |
-| Plain YouTube lyrics | Implemented; native Linux request verified | Correct track, loading/empty/retry, cancellation and provider attribution |
-| Synced/karaoke lyrics, background vocals, romanization | Missing | Timing/seek synchronization, alternate sources/languages and fallback |
-| LastFM/ListenBrainz/LibreFM/Maloja scrobbling | Missing | Auth, now-playing, completed listens, offline retry and duplicate prevention |
+| Audio normalization, quality selection | Implemented; runtime unverified | Provider loudness handling, level consistency, supported quality fallback |
+| Equalizer/output options | Presets exist, but current implementation changes overall gain instead of frequency bands | Real iOS audio-engine equalization and persistent sound settings |
+| Sleep timer | Implemented; runtime unverified | Timed stop and end-of-track behavior across backgrounding |
+| YouTube account sign-in/session/sign-out | Cookie sessions, renewal/page selection/proof-of-origin implemented but unaccepted; system Safari/OAuth missing | Real account login, Keychain storage, expiration/restore, sign-out cache isolation |
+| Home feed, recommendations, genres | Populated Home verified on iOS 26.5 simulator; account personalization and genre navigation unverified | Loaded/empty/error/continuation and navigation behavior |
+| Albums, artists/discography, song/user pages | Album/artist details implemented; broader desktop pages incomplete | Metadata, tracks, artwork, playback, navigation and errors |
+| Search albums/playlists | Implemented; repaired live Linux catalog returns all four collection types | Simulator decoding, results/navigation, paging/error handling |
+| Saved songs/albums/artists, likes/follows | Implemented; real-account acceptance missing | Read/write/undo/refresh, account isolation and persistence |
+| Playlists | Implemented subset; creation currently private/title-only, full parity unverified | List/detail/paging, create/rename/delete/visibility, save/remove, add/remove tracks |
+| Listening history/play counts, provider reporting | Local history implemented; provider reporting incomplete/unverified | Start/pause/seek/stop reporting and completed-listen rules |
+| Pins/favorites and sharing/deep links | Implemented subset; runtime acceptance missing | Pin persistence, share destinations, malformed links and account changes |
+| Plain YouTube lyrics | Implemented; Swift supports nullable timing fields | Correct track, loading/empty/retry, cancellation and provider attribution |
+| Synced/karaoke lyrics, background vocals, romanization | Synced lines and UI decode verified in simulator; word timing/backing vocals incomplete, local-file lookup needs repair | Playback timing/seek synchronization, alternate sources/languages and fallback |
+| LastFM/ListenBrainz/LibreFM/Maloja scrobbling | Basic ListenBrainz/Maloja calls implemented; 15-second trigger does not establish full parity | Auth, now-playing, completed listens, offline retry and duplicate prevention |
 | Apple Music/Spotify/Deezer/Tidal/Subsonic/Navidrome | Missing | Each provider's supported sign-in, catalog, playback, library and download capabilities |
 | Local albums/artists/playlists, folders/tag editing | Missing / platform review | Files security scope, metadata editing, indexes and rescan behavior |
-| Appearance/fonts/icons/themes/layout customization | Missing beyond native light/dark | iPhone-safe equivalents with persistent settings |
+| Appearance/fonts/icons/themes/layout customization | Settings subset implemented; full desktop customization missing | iPhone-safe equivalents with persistent settings |
 | Storage/cache management | Partial download removal only | Usage counts, clearing, low storage, damaged indexes and interrupted writes |
 | Localization/accessibility | English native strings; initial visual review verified | VoiceOver, large text across populated screens, contrast, reduced motion/transparency |
 | Discord Rich Presence/tray/dock/MPRIS/window/fullscreen | Platform review | Document iOS-supported equivalents; desktop IPC/window features cannot be assumed portable |
