@@ -3,7 +3,14 @@
 This directory starts the native iPhone port. **It is not the completed YouTube Music port.**
 The deployment target is iOS 26.0 and the device family is iPhone, including iPhone 13.
 
-## Implemented in source; not yet validated with Xcode
+## First cloud build
+
+The iPhone device and simulator targets compiled successfully with Xcode in
+[build 40191763029](https://github.com/icesaviour02-droid/sonora/actions/runs/40191763029).
+An unsigned arm64 IPA was downloaded and its bundle/archive integrity verified locally.
+That does not establish playback correctness on the physical iPhone.
+
+## Implemented in the initial app
 
 - Native SwiftUI Liquid Glass tab bar, mini-player accessory and player controls.
 - Multi-file audio import through Files; durable library index; local search and deletion.
@@ -39,9 +46,10 @@ calling a build usable. A successful compile cannot establish playback/download 
 `python3 ios/scripts/prepare.py` regenerates the Xcode project and iOS string resources from the
 canonical English Fluent keys beginning with `ios-`. Do not edit generated files directly.
 
-The iOS shell currently uses Apple's audio stack directly. A future Rust bridge must isolate
-provider/catalog logic from GPUI, rodio output and desktop authentication. Do not attempt to
-cross-compile the complete desktop workspace into the app.
+The iOS shell currently uses Apple's audio stack directly. `Core/` now isolates the desktop
+YouTube client behind a small native API. It compiles on Linux and a live anonymous search returned
+20 results. It is not yet linked into the SwiftUI app; the current IPA has no YouTube search.
+Do not attempt to cross-compile the complete desktop workspace into the app.
 
 ## Milestones and planning estimates
 

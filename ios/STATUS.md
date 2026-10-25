@@ -18,16 +18,29 @@ the IPA archive structure before upload. That step has not run here because it r
 actual Xcode device build. Library/queue restoration now shares one entry point so observer
 ordering cannot overwrite a saved queue before it is restored.
 
-These are source checks, not a Swift type-check, iOS build, simulator run or device test.
+## Cloud build verified
+
+- Fork created at https://github.com/icesaviour02-droid/sonora.
+- Initial source commit: `93af5a9b`.
+- Run https://github.com/icesaviour02-droid/sonora/actions/runs/40191763029 successfully built
+  both device and simulator targets with Xcode.
+- Device IPA packaged/uploaded; downloaded to `build/first-ipa/Sonora-unsigned.ipa`.
+- Downloaded bundle verified as arm64 iPhoneOS, minimum iOS 26.0, with intact ZIP contents.
+- Simulator boot/screenshots were still running when this record was written.
+
+## YouTube bridge verified separately
+
+`Core/` builds independently of GPUI using the desktop-pinned YouTube client. Cargo check,
+build and Clippy with warnings denied pass on Linux. A manual native-boundary invocation verified
+the callback/string-release contract and an invalid-query response; a live Beethoven search
+returned 20 results. This bridge has not been linked or cross-compiled into the IPA yet.
 
 ## Required next
 
-1. A user-owned GitHub repository containing these changes, with Actions enabled.
-2. Run the iPhone IPA workflow; fix any Apple SDK/compiler errors.
-3. Review the simulator artifacts and sideload the test IPA on the iPhone 13.
-4. Validate local playback, imports, queue behavior, background audio and accessibility.
-5. Implement and validate the YouTube Music provider milestones in README.md.
+1. Review simulator artifacts and sideload the test IPA on the iPhone 13.
+2. Validate local playback, imports, queue behavior, background audio and accessibility.
+3. Cross-compile/link the YouTube bridge and implement the provider milestones in README.md.
 
-No IPA has been generated or tested. No streaming provider or background download support has
-been completed in the iPhone app. The first source milestone must not be represented as the
-final feature-complete app.
+The first IPA has been generated but has not been tested on a physical device. No streaming
+provider or background download support has been completed in the iPhone app. This development
+milestone must not be represented as the final feature-complete app.
