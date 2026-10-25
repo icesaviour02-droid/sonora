@@ -12,7 +12,11 @@ BUNDLE = "org.sonorahq.iphone.development"
 
 
 def run(*args):
-    return subprocess.check_output(args, text=True).strip()
+    print("Running: " + " ".join(args), flush=True)
+    # Initial simulator migration can be slow on a fresh hosted Mac. Bound it so failures
+    # produce artifacts and diagnostics instead of consuming the entire job allowance.
+    limit = 600 if "bootstatus" in args else 120
+    return subprocess.check_output(args, text=True, timeout=limit).strip()
 
 
 def sim(*args):
@@ -26,6 +30,7 @@ if __name__ == "__main__":
     if not available:
         raise RuntimeError("No available iOS 26+ simulator runtime on this runner")
     runtime = sorted(available, key=lambda r: tuple(map(int, r["version"].split("."))))[-1]
+    (OUTPUT / "selected-runtime.json").write_text(json.dumps(runtime, indent=2))
     udid = sim("create", "Sonora iPhone 13 Review", "com.apple.CoreSimulator.SimDeviceType.iPhone-13", runtime["identifier"])
     try:
         sim("boot", udid)
@@ -47,5 +52,7 @@ if __name__ == "__main__":
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-library-large-text.png"))
         (OUTPUT / "device.json").write_text(json.dumps({"device": "iPhone 13 simulator", "runtime": runtime, "launch": launch, "limitations": "Launch/empty-state review only; playback, provider and download functionality are not validated."}, indent=2))
     finally:
-        sim("shutdown", udid)
-        sim("delete", udid)
+        try:
+            sim("shutdown", udid)
+        finally:
+            sim("delete", udid)

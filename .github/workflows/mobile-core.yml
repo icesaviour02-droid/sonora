@@ -1,0 +1,50 @@
+name: Mobile YouTube core
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios/Core/**'
+      - '.github/workflows/mobile-core.yml'
+  pull_request:
+    paths:
+      - 'ios/Core/**'
+      - '.github/workflows/mobile-core.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iphone-library:
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      IPHONEOS_DEPLOYMENT_TARGET: '26.0'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          components: clippy,rustfmt
+      - name: Check Rust style and contracts
+        run: |
+          cargo fmt --manifest-path ios/Core/Cargo.toml -- --check
+          cargo clippy --manifest-path ios/Core/Cargo.toml --locked -- -D warnings
+      - name: Build native iPhone and simulator libraries
+        run: |
+          cargo build --manifest-path ios/Core/Cargo.toml --locked --release --target aarch64-apple-ios
+          cargo build --manifest-path ios/Core/Cargo.toml --locked --release --target aarch64-apple-ios-sim
+      - name: Upload native libraries for integration
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sonora-YouTube-native-libraries
+          path: |
+            ios/Core/target/aarch64-apple-ios/release/libsonora_mobile_core.a
+            ios/Core/target/aarch64-apple-ios-sim/release/libsonora_mobile_core.a
+            ios/Core/include/sonora_mobile.h
+          retention-days: 3
+          if-no-files-found: error

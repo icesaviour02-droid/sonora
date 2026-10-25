@@ -4,13 +4,17 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'ios/**'
+      - 'ios/Sonora/**'
+      - 'ios/Sonora.xcodeproj/**'
+      - 'ios/scripts/**'
       - 'assets/i18n/en-US/main.ftl'
       - 'assets/macos/sonora.icns'
       - '.github/workflows/iphone.yml'
   pull_request:
     paths:
-      - 'ios/**'
+      - 'ios/Sonora/**'
+      - 'ios/Sonora.xcodeproj/**'
+      - 'ios/scripts/**'
       - 'assets/i18n/en-US/main.ftl'
       - '.github/workflows/iphone.yml'
 
