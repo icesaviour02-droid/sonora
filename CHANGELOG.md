@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- An initial iPhone app source with native Liquid Glass navigation and local audio import and
+  playback. YouTube Music integration is still in development; an unsigned IPA build workflow
+  is included for testing the port.
+
 ## [0.44.2] - 2026-10-25
 
 ### Fixed

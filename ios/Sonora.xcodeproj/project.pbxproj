@@ -1,0 +1,246 @@
+// !$*UTF8*$!
+{
+	"archiveVersion" = "1";
+	"classes" = {
+	};
+	"objectVersion" = "56";
+	"objects" = {
+		"979AD9DD582688E7B8E00A25" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sonora/LibraryStore.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"5BC85D7A604F8CD389A186B0" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "979AD9DD582688E7B8E00A25";
+		};
+		"2689C3FE66A5E9444AA51B5B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sonora/Models.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"76E2B731912207D6225AC038" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "2689C3FE66A5E9444AA51B5B";
+		};
+		"6EB62C9CA7ACB6EDC9FCFC1B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sonora/NowPlayingView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"1219CD0FD19F2F641795AFDD" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "6EB62C9CA7ACB6EDC9FCFC1B";
+		};
+		"C2A00F45FCC0D6E38A0D6B8C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sonora/PlaybackController.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"736900A0FD064AA3082AC2CB" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "C2A00F45FCC0D6E38A0D6B8C";
+		};
+		"2590459515210FF47D05FD04" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sonora/RootView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"13A2E9CA12A8016F33F7553F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "2590459515210FF47D05FD04";
+		};
+		"BA62B7DF19DC60FE0016A015" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sonora/SonoraApp.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"4887B93CF56DB3F1A91582C8" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "BA62B7DF19DC60FE0016A015";
+		};
+		"9E1AB9F6A98974FD6641E01C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.strings";
+			"name" = "en";
+			"path" = "Sonora/Resources/en.lproj/Localizable.strings";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"E967D16DAE74A49B5E0E0512" = {
+			"isa" = "PBXVariantGroup";
+			"children" = ("9E1AB9F6A98974FD6641E01C");
+			"name" = "Localizable.strings";
+			"sourceTree" = "<group>";
+		};
+		"8BF729FFE074CAEE622C0292" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "folder.assetcatalog";
+			"path" = "Sonora/Assets.xcassets";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"0D94A958AE5AAF27D5EA874F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "E967D16DAE74A49B5E0E0512";
+		};
+		"53D1B124C3CFA512382233B6" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "8BF729FFE074CAEE622C0292";
+		};
+		"06271BAF49532C879AA3C58B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "text.plist.xml";
+			"path" = "Sonora/Info.plist";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"A172CEDCAE47474B615C54D5" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"path" = "Sonora.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+			"includeInIndex" = "0";
+		};
+		"BA159D738938AB16638C246F" = {
+			"isa" = "PBXGroup";
+			"children" = ("979AD9DD582688E7B8E00A25", "2689C3FE66A5E9444AA51B5B", "6EB62C9CA7ACB6EDC9FCFC1B", "C2A00F45FCC0D6E38A0D6B8C", "2590459515210FF47D05FD04", "BA62B7DF19DC60FE0016A015", "E967D16DAE74A49B5E0E0512", "8BF729FFE074CAEE622C0292", "06271BAF49532C879AA3C58B");
+			"name" = "Sonora";
+			"sourceTree" = "<group>";
+		};
+		"0A3E27B8CA818264D75C8D81" = {
+			"isa" = "PBXGroup";
+			"children" = ("A172CEDCAE47474B615C54D5");
+			"name" = "Products";
+			"sourceTree" = "<group>";
+		};
+		"716E7ADD7BD0AABA913A3D61" = {
+			"isa" = "PBXGroup";
+			"children" = ("BA159D738938AB16638C246F", "0A3E27B8CA818264D75C8D81");
+			"sourceTree" = "<group>";
+		};
+		"878A52FC5FF6A57D50B7B870" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ("5BC85D7A604F8CD389A186B0", "76E2B731912207D6225AC038", "1219CD0FD19F2F641795AFDD", "736900A0FD064AA3082AC2CB", "13A2E9CA12A8016F33F7553F", "4887B93CF56DB3F1A91582C8");
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"41D311A605520FC7B8B9A980" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ("0D94A958AE5AAF27D5EA874F", "53D1B124C3CFA512382233B6");
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"E2AA269EB967A8853A258BFA" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"3D5D06619AD2FD8BA0F34D57" = {
+			"isa" = "XCBuildConfiguration";
+			"name" = "Debug";
+			"buildSettings" = {
+				"SDKROOT" = "iphoneos";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "26.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"SWIFT_VERSION" = "5.0";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"SWIFT_COMPILATION_MODE" = "singlefile";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+			};
+		};
+		"43766E90644A487AA94F24A8" = {
+			"isa" = "XCBuildConfiguration";
+			"name" = "Debug";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "Sonora";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "org.sonorahq.iphone.development";
+				"INFOPLIST_FILE" = "Sonora/Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"CODE_SIGNING_ALLOWED" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+			};
+		};
+		"61EE91C00F7653342CB155AF" = {
+			"isa" = "XCBuildConfiguration";
+			"name" = "Release";
+			"buildSettings" = {
+				"SDKROOT" = "iphoneos";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "26.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"SWIFT_VERSION" = "5.0";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"SWIFT_COMPILATION_MODE" = "wholemodule";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "";
+			};
+		};
+		"1E42B1A1A92F267CC06A78B3" = {
+			"isa" = "XCBuildConfiguration";
+			"name" = "Release";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "Sonora";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "org.sonorahq.iphone.development";
+				"INFOPLIST_FILE" = "Sonora/Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"CODE_SIGNING_ALLOWED" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+			};
+		};
+		"F0D0CC3CD0AE36F97BD8FD2B" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("3D5D06619AD2FD8BA0F34D57", "61EE91C00F7653342CB155AF");
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"B149CDBB55CAEF05BF802F0B" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("43766E90644A487AA94F24A8", "1E42B1A1A92F267CC06A78B3");
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"34A04005BCAF206EEC990BD9" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "B149CDBB55CAEF05BF802F0B";
+			"buildPhases" = ("878A52FC5FF6A57D50B7B870", "E2AA269EB967A8853A258BFA", "41D311A605520FC7B8B9A980");
+			"buildRules" = ();
+			"dependencies" = ();
+			"name" = "Sonora";
+			"productName" = "Sonora";
+			"productReference" = "A172CEDCAE47474B615C54D5";
+			"productType" = "com.apple.product-type.application";
+		};
+		"244210E48437B6556980A702" = {
+			"isa" = "PBXProject";
+			"attributes" = {
+				"LastUpgradeCheck" = "2600";
+			};
+			"buildConfigurationList" = "F0D0CC3CD0AE36F97BD8FD2B";
+			"compatibilityVersion" = "Xcode 14.0";
+			"developmentRegion" = "en";
+			"hasScannedForEncodings" = "0";
+			"knownRegions" = ("en", "Base");
+			"mainGroup" = "716E7ADD7BD0AABA913A3D61";
+			"productRefGroup" = "0A3E27B8CA818264D75C8D81";
+			"projectDirPath" = "";
+			"projectRoot" = "";
+			"targets" = ("34A04005BCAF206EEC990BD9");
+		};
+	};
+	"rootObject" = "244210E48437B6556980A702";
+}

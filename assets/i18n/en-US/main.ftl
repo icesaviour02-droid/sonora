@@ -1333,3 +1333,52 @@ response-graph-readout = { $frequency } · { $direction ->
         [down] -{ $gain }
        *[flat] { $gain }
     } dB
+
+# Native iPhone port. Canonical keys; ios/scripts/prepare.py generates the SwiftUI strings.
+ios-library = Library
+ios-search = Search
+ios-downloads = Downloads
+ios-settings = Settings
+ios-done = Done
+ios-import = Import music
+ios-importing = Importing music…
+ios-delete = Delete
+ios-retry = Try again
+ios-your-music = Your music, with you
+ios-import-description = Import audio from Files to start listening. Your imported music stays available offline.
+ios-loading-library = Opening your library. If it cannot be loaded, try again.
+ios-library-load-error = Your saved library could not be opened. Try again before importing more music.
+ios-import-error = Some files could not be imported. Check that they are downloaded in Files and use a supported audio format.
+ios-delete-error = The track could not be removed. Try again.
+ios-error-title = Something needs attention
+ios-unknown-artist = Unknown artist
+ios-missing-file = This audio file is missing. Import it again from Files.
+ios-playback-error = This file could not be played. Try another supported audio file.
+ios-audio-session-error = Audio playback could not start. Check your audio connection and try again.
+ios-search-library = Find your music
+ios-search-description = Search the titles and artists in your imported library.
+ios-search-prompt = Songs or artists
+ios-downloads-empty = No downloads yet
+ios-downloads-description = YouTube Music downloads are not connected in this build. Imported files are available offline in Library.
+ios-music-service = Music service
+ios-youtube-music = YouTube Music
+ios-in-development = In development
+ios-service-description = This first build plays imported audio. YouTube sign-in, streaming and downloads are being developed.
+ios-about = About
+ios-version = Version
+ios-license = Sonora contributors. GPL-3.0-or-later. This is an unofficial iPhone port.
+ios-current-track = Current track
+ios-open-player = Opens Now Playing
+ios-now-playing = Now Playing
+ios-play = Play
+ios-pause = Pause
+ios-previous = Previous track
+ios-next = Next track
+ios-shuffle = Shuffle
+ios-repeat = Repeat
+ios-repeat-all = Repeat all
+ios-repeat-one = Repeat one
+ios-on = On
+ios-off = Off
+ios-queue = Queue
+ios-playback-position = Playback position

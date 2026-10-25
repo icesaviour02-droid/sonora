@@ -1,0 +1,62 @@
+name: iPhone IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios/**'
+      - 'assets/i18n/en-US/main.ftl'
+      - 'assets/macos/sonora.icns'
+      - '.github/workflows/iphone.yml'
+  pull_request:
+    paths:
+      - 'ios/**'
+      - 'assets/i18n/en-US/main.ftl'
+      - '.github/workflows/iphone.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iphone-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Prepare native project
+        run: python3 ios/scripts/prepare.py
+      - name: Build iPhone app without signing
+        run: |
+          xcodebuild -version
+          xcodebuild -project ios/Sonora.xcodeproj -scheme Sonora \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO build
+      - name: Package unsigned device IPA
+        run: python3 ios/scripts/package_ipa.py
+      - name: Upload unsigned IPA for iLoader
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sonora-iPhone-unsigned
+          path: |
+            ios/build/Sonora-unsigned.ipa
+            ios/build/ipa-build-info.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Build simulator app
+        run: |
+          xcodebuild -project ios/Sonora.xcodeproj -scheme Sonora \
+            -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ios/build/simulator CODE_SIGNING_ALLOWED=NO build
+      - name: Launch on iPhone 13 simulator and capture accessibility appearances
+        run: python3 ios/scripts/simulator_smoke.py
+      - name: Upload simulator screenshots and device details
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sonora-iPhone-simulator-review
+          path: ios/build/review/
+          retention-days: 7
