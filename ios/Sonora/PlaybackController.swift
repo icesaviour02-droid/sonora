@@ -160,7 +160,10 @@ final class PlaybackController {
             try session.setActive(true)
             if duration > 0 && elapsed >= duration { seek(to: 0) }
             player.play()
-        } catch { self.error = String(localized: "ios-audio-session-error") }
+        } catch {
+            self.error = String(localized: "ios-audio-session-error")
+            publishNowPlaying()
+        }
     }
 
     func pause() {
@@ -194,6 +197,7 @@ final class PlaybackController {
                 self.resolutionTask = nil
                 self.isLoading = false
                 self.error = (error as? ProviderError)?.errorDescription ?? String(localized: "ios-provider-error")
+                self.publishNowPlaying()
             }
         }
     }
@@ -246,6 +250,9 @@ final class PlaybackController {
     }
 
     private func publishNowPlaying() {
+        #if DEBUG
+        writeReviewState()
+        #endif
         guard let current else { return }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = [
             MPMediaItemPropertyTitle: current.title,
@@ -321,9 +328,10 @@ final class PlaybackController {
             let isPlaying: Bool
             let isDownloaded: Bool
             let hasError: Bool
+            let error: String?
         }
         let state = Review(trackID: current.id, elapsed: elapsed, isPlaying: isPlaying,
-                           isDownloaded: downloads.fileURL(for: current.id) != nil, hasError: error != nil)
+                           isDownloaded: downloads.fileURL(for: current.id) != nil, hasError: error != nil, error: error)
         let url = URL.applicationSupportDirectory.appendingPathComponent("playback-review.json")
         if let data = try? JSONEncoder().encode(state) { try? data.write(to: url, options: .atomic) }
     }

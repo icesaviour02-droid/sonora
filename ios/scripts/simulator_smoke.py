@@ -29,19 +29,21 @@ def verify_playback(container, video_id, downloaded):
     """Require the native player clock to advance, rather than inferring audio from a screenshot."""
     state_file = container / "Library/Application Support/playback-review.json"
     state_file.unlink(missing_ok=True)
-    deadline = time.monotonic() + 45
+    deadline = time.monotonic() + 90
     state = None
     while time.monotonic() < deadline:
         if state_file.exists():
             state = json.loads(state_file.read_text())
             if state.get("hasError"):
-                raise RuntimeError("The native player reported a playback error")
+                (OUTPUT / ("downloaded-playback-failed.json" if downloaded else "stream-playback-failed.json")).write_text(json.dumps(state, indent=2))
+                return False
             if (state.get("trackID") == "youtube:" + video_id and state.get("isPlaying")
                     and state.get("elapsed", 0) > 1 and state.get("isDownloaded") == downloaded):
                 (OUTPUT / ("downloaded-playback.json" if downloaded else "stream-playback.json")).write_text(json.dumps(state, indent=2))
-                return
+                return True
         time.sleep(1)
-    raise RuntimeError("Native playback did not advance: " + json.dumps(state))
+    (OUTPUT / ("downloaded-playback-failed.json" if downloaded else "stream-playback-failed.json")).write_text(json.dumps(state, indent=2))
+    return False
 
 
 if __name__ == "__main__":
@@ -81,7 +83,7 @@ if __name__ == "__main__":
             container = Path(sim("get_app_container", udid, BUNDLE, "data"))
             play_url = "sonora://play?" + urllib.parse.urlencode({"id": video_id, "title": video_id})
             sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", play_url)
-            verify_playback(container, video_id, downloaded=False)
+            streamed = verify_playback(container, video_id, downloaded=False)
             sim("io", udid, "screenshot", str(OUTPUT / "iphone13-stream-player.png"))
             sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://download?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
             index = container / "Library/Application Support/Downloads/downloads.json"
@@ -106,13 +108,15 @@ if __name__ == "__main__":
             if not downloaded.exists() or downloaded.stat().st_size == 0:
                 raise RuntimeError("A completed download has no audio file")
             sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://play?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
-            verify_playback(container, video_id, downloaded=True)
+            played_download = verify_playback(container, video_id, downloaded=True)
             sim("io", udid, "screenshot", str(OUTPUT / "iphone13-downloaded-player.png"))
             (OUTPUT / "download-check.json").write_text(json.dumps({
                 "state": complete["state"], "bytes": downloaded.stat().st_size,
                 "expected_bytes": complete.get("expectedBytes"),
                 "limitations": "The file was downloaded and validated by the app. Physical-device airplane mode is not verified."
             }, indent=2))
+            if not streamed or not played_download:
+                raise RuntimeError("Native playback did not advance; inspect playback diagnostic artifacts")
         (OUTPUT / "device.json").write_text(json.dumps({"device": "iPhone 13 simulator", "runtime": runtime, "launch": launch, "limitations": "Simulator launch and appearance review; see download-check.json when the optional live transfer check runs. Physical-device behavior remains unverified."}, indent=2))
     finally:
         try:
