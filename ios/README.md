@@ -22,9 +22,10 @@ That does not establish playback correctness on the physical iPhone.
 
 ## Not implemented
 
-YouTube sign-in, catalog/search, stream resolution, background downloads, lyrics, playlists,
-scrobbling, equalizer and the other streaming providers. Nothing in this initial app claims
-those features work. Existing Rust code remains the reference for their implementation.
+YouTube sign-in, background downloads, lyrics, playlists, scrobbling, equalizer and the other
+streaming providers. Guest search and native AAC stream playback are now implemented, but
+still require the integrated build and device checks. Existing Rust code remains the reference
+for the remaining implementation.
 
 ## Build an unsigned IPA without owning a Mac
 
@@ -46,10 +47,16 @@ calling a build usable. A successful compile cannot establish playback/download 
 `python3 ios/scripts/prepare.py` regenerates the Xcode project and iOS string resources from the
 canonical English Fluent keys beginning with `ios-`. Do not edit generated files directly.
 
-The iOS shell currently uses Apple's audio stack directly. `Core/` now isolates the desktop
-YouTube client behind a small native API. It compiles on Linux and a live anonymous search returned
-20 results. It is not yet linked into the SwiftUI app; the current IPA has no YouTube search.
-Do not attempt to cross-compile the complete desktop workspace into the app.
+The iOS shell uses Apple's audio stack directly. `Core/` isolates the desktop YouTube client
+behind a small native API. It compiles on Linux; a live anonymous search returned 20 results,
+and stream resolution produced AAC audio with a successfully verified 1 MiB range. The app now
+links the native core, offers YouTube/library search scopes and resolves streams just before
+playback. Signed stream URLs are not saved to the queue. The earlier IPA remains local-only;
+the next integrated build is required before delivering these capabilities.
+
+The workflow builds both native libraries before invoking Xcode. On a Mac, use
+`python3 ios/scripts/build_native.py` after installing the two iOS Rust targets. Do not attempt to
+cross-compile the complete desktop workspace into the app.
 
 ## Milestones and planning estimates
 

@@ -23,11 +23,13 @@ struct MiniPlayer: View {
             .buttonStyle(.plain)
             .accessibilityHint(Text("ios-open-player"))
             Button(action: playback.toggle) {
-                Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
-                    .frame(minWidth: Layout.control, minHeight: Layout.control)
+                Group {
+                    if playback.isLoading { ProgressView() }
+                    else { Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill") }
+                }.frame(minWidth: Layout.control, minHeight: Layout.control)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(playback.isPlaying ? LocalizedStringKey("ios-pause") : LocalizedStringKey("ios-play")))
+            .accessibilityLabel(Text((playback.isPlaying || playback.isLoading) ? LocalizedStringKey("ios-pause") : LocalizedStringKey("ios-play")))
         }
         .padding(.horizontal, Layout.spacing)
     }
@@ -44,13 +46,7 @@ struct NowPlayingView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: Layout.spacing * 2) {
-                    Image(systemName: "music.note")
-                        .resizable()
-                        .scaledToFit()
-                        .padding(Layout.spacing * 3)
-                        .frame(maxWidth: Layout.artwork, maxHeight: Layout.artwork)
-                        .foregroundStyle(.secondary)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: Layout.spacing))
+                    ArtworkView(track: playback.current, side: Layout.artwork)
                         .accessibilityHidden(true)
                     VStack(spacing: Layout.compact) {
                         Text(playback.current?.title ?? "").font(.title2.bold()).multilineTextAlignment(.center)
@@ -79,12 +75,13 @@ struct NowPlayingView: View {
                     HStack(spacing: Layout.spacing) {
                         transport("backward.fill", label: "ios-previous", action: playback.previous)
                         Button(action: playback.toggle) {
-                            Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.title)
-                                .frame(minWidth: Layout.control * 1.5, minHeight: Layout.control * 1.5)
+                            Group {
+                                if playback.isLoading { ProgressView() }
+                                else { Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill").font(.title) }
+                            }.frame(minWidth: Layout.control * 1.5, minHeight: Layout.control * 1.5)
                         }
                         .buttonStyle(.glassProminent)
-                        .accessibilityLabel(Text(playback.isPlaying ? LocalizedStringKey("ios-pause") : LocalizedStringKey("ios-play")))
+                        .accessibilityLabel(Text((playback.isPlaying || playback.isLoading) ? LocalizedStringKey("ios-pause") : LocalizedStringKey("ios-play")))
                         transport("forward.fill", label: "ios-next") { playback.next() }
                     }
                     HStack(spacing: Layout.spacing) {

@@ -5,12 +5,14 @@ import SwiftUI
 struct SonoraApp: App {
     @State private var library = LibraryStore()
     @State private var playback = PlaybackController()
+    @State private var youtube = YouTubeSearch()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(library)
                 .environment(playback)
+                .environment(youtube)
                 .task { await library.load() }
         }
     }

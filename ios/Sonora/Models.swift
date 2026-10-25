@@ -1,12 +1,16 @@
 import Foundation
 
-/// A sandbox-owned audio file. Relative paths survive changes to the app container after updates.
-struct LocalTrack: Codable, Identifiable, Hashable, Sendable {
-    let id: UUID
+/// Queue metadata for local or provider audio. Signed stream URLs are never persisted here.
+struct MusicTrack: Codable, Identifiable, Hashable, Sendable {
+    let id: String
     var title: String
     var artist: String
     let filename: String
     let addedAt: Date
+    var youtubeID: String? = nil
+    var artworkURL: URL? = nil
+    var durationSeconds: Double? = nil
+    var available: Bool? = nil
 }
 
 /// Playback repeat behavior, stored with the queue rather than with a screen.

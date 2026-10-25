@@ -5,13 +5,15 @@ import UniformTypeIdentifiers
 struct RootView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackController.self) private var playback
+    @Environment(YouTubeSearch.self) private var youtube
+    @State private var selectedTab = Destination.library
     @State private var showImporter = false
     @State private var showSettings = false
     @State private var showPlayer = false
 
     var body: some View {
-        TabView {
-            Tab("ios-library", systemImage: "music.note.house") {
+        TabView(selection: $selectedTab) {
+            Tab("ios-library", systemImage: "music.note.house", value: Destination.library) {
                 NavigationStack {
                     LibraryView(importAction: { showImporter = true })
                         .toolbar {
@@ -22,10 +24,10 @@ struct RootView: View {
                         }
                 }
             }
-            Tab("ios-downloads", systemImage: "arrow.down.circle") {
+            Tab("ios-downloads", systemImage: "arrow.down.circle", value: Destination.downloads) {
                 NavigationStack { DownloadsView() }
             }
-            Tab("ios-search", systemImage: "magnifyingglass", role: .search) {
+            Tab("ios-search", systemImage: "magnifyingglass", value: Destination.search, role: .search) {
                 NavigationStack { SearchView() }
             }
         }
@@ -51,7 +53,18 @@ struct RootView: View {
         .onChange(of: library.tracks) { _, tracks in
             if library.isLoaded { playback.synchronizeLibrary(with: tracks) }
         }
+        .onOpenURL { url in
+            guard url.scheme == "sonora", url.host == "search",
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let query = components.queryItems?.first(where: { $0.name == "q" })?.value,
+                  !query.isEmpty, query.utf8.count <= 512 else { return }
+            youtube.query = query
+            selectedTab = .search
+            youtube.submit(query)
+        }
     }
+
+    private enum Destination: Hashable { case library, downloads, search }
 }
 
 /// iOS 26.1 can hide the accessory without rebuilding the tab hierarchy. The 26.0 fallback
@@ -146,10 +159,11 @@ struct LibraryView: View {
 struct SearchView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackController.self) private var playback
-    @State private var query = ""
+    @Environment(YouTubeSearch.self) private var youtube
+    @State private var scope = Scope.youtube
 
-    private var matches: [LocalTrack] {
-        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    private var matches: [MusicTrack] {
+        let term = youtube.query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !term.isEmpty else { return [] }
         return library.tracks.filter {
             $0.title.localizedStandardContains(term) || $0.artist.localizedStandardContains(term)
@@ -157,22 +171,65 @@ struct SearchView: View {
     }
 
     var body: some View {
-        Group {
-            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                ContentUnavailableView("ios-search-library", systemImage: "magnifyingglass", description: Text("ios-search-description"))
-                    .modifier(ScrollableEmptyState())
-            } else if matches.isEmpty {
-                ContentUnavailableView.search(text: query)
-                    .modifier(ScrollableEmptyState())
-            } else {
-                List(matches) { track in
-                    TrackRow(track: track) { playback.play(track, in: matches) }
-                }.listStyle(.plain)
+        @Bindable var youtube = youtube
+        VStack(spacing: 0) {
+            Picker("ios-search-in", selection: $scope) {
+                Text("ios-youtube-music").tag(Scope.youtube)
+                Text("ios-library").tag(Scope.library)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, Layout.spacing)
+            .padding(.bottom, Layout.compact)
+            Group {
+                if scope == .youtube {
+                    providerResults
+                } else if youtube.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ContentUnavailableView("ios-search-library", systemImage: "magnifyingglass", description: Text("ios-search-description"))
+                        .modifier(ScrollableEmptyState())
+                } else if matches.isEmpty {
+                    ContentUnavailableView.search(text: youtube.query)
+                        .modifier(ScrollableEmptyState())
+                } else {
+                    List(matches) { track in
+                        TrackRow(track: track) { playback.play(track, in: matches) }
+                    }.listStyle(.plain)
+                }
             }
         }
         .navigationTitle("ios-search")
-        .searchable(text: $query, prompt: "ios-search-prompt")
+        .searchable(text: $youtube.query, prompt: "ios-search-prompt")
+        .onSubmit(of: .search) { if scope == .youtube { youtube.submit(youtube.query) } }
+        .onChange(of: youtube.query) { _, value in if value.isEmpty { youtube.clear() } }
     }
+
+    @ViewBuilder
+    private var providerResults: some View {
+        if youtube.isLoading {
+            ProgressView("ios-searching")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error = youtube.error {
+            ContentUnavailableView {
+                Label("ios-search-unavailable", systemImage: "wifi.exclamationmark")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("ios-retry") { youtube.submit(youtube.query) }.buttonStyle(.glass)
+            }
+            .modifier(ScrollableEmptyState())
+        } else if !youtube.hasSearched {
+            ContentUnavailableView("ios-search-youtube", systemImage: "magnifyingglass", description: Text("ios-search-youtube-description"))
+                .modifier(ScrollableEmptyState())
+        } else if youtube.tracks.isEmpty {
+            ContentUnavailableView.search(text: youtube.query).modifier(ScrollableEmptyState())
+        } else {
+            List(youtube.tracks) { track in
+                TrackRow(track: track) { playback.play(track, in: youtube.tracks) }
+                    .disabled(track.available == false)
+            }.listStyle(.plain)
+        }
+    }
+
+    private enum Scope: Hashable { case youtube, library }
 }
 
 struct DownloadsView: View {
@@ -194,7 +251,7 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section("ios-music-service") {
-                    LabeledContent("ios-youtube-music", value: String(localized: "ios-in-development"))
+                    LabeledContent("ios-youtube-music", value: String(localized: "ios-guest-mode"))
                     Text("ios-service-description").foregroundStyle(.secondary)
                 }
                 Section("ios-about") {
@@ -211,15 +268,13 @@ struct SettingsView: View {
 /// Full-width native row; the content remains visually separate from the glass navigation layer.
 struct TrackRow: View {
     @Environment(PlaybackController.self) private var playback
-    let track: LocalTrack
+    let track: MusicTrack
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: Layout.spacing) {
-                Image(systemName: "music.note")
-                    .frame(width: Layout.control, height: Layout.control)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: Layout.compact))
+                ArtworkView(track: track, side: Layout.control)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading) {
                     Text(track.title).foregroundStyle(.primary).lineLimit(2)
@@ -236,5 +291,22 @@ struct TrackRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Uses the same square artwork treatment for rows and the expanded player.
+struct ArtworkView: View {
+    let track: MusicTrack?
+    let side: CGFloat
+
+    var body: some View {
+        AsyncImage(url: track?.artworkURL) { image in
+            image.resizable().scaledToFill()
+        } placeholder: {
+            Image(systemName: "music.note").foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity).background(.quaternary)
+        }
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: Layout.compact))
     }
 }

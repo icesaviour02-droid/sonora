@@ -9,6 +9,7 @@
 "ios-downloads-description" = "YouTube Music downloads are not connected in this build. Imported files are available offline in Library.";
 "ios-downloads-empty" = "No downloads yet";
 "ios-error-title" = "Something needs attention";
+"ios-guest-mode" = "Guest";
 "ios-import" = "Import music";
 "ios-import-description" = "Import audio from Files to start listening. Your imported music stays available offline.";
 "ios-import-error" = "Some files could not be imported. Check that they are downloaded in Files and use a supported audio format.";
@@ -30,6 +31,9 @@
 "ios-playback-error" = "This file could not be played. Try another supported audio file.";
 "ios-playback-position" = "Playback position";
 "ios-previous" = "Previous track";
+"ios-provider-error" = "YouTube Music could not serve this request. Check your connection and try again.";
+"ios-provider-sign-in-required" = "This track requires a signed-in account. Account sign-in is not available in this build yet.";
+"ios-provider-timeout" = "YouTube Music took too long to respond. Try again.";
 "ios-queue" = "Queue";
 "ios-repeat" = "Repeat";
 "ios-repeat-all" = "Repeat all";
@@ -37,9 +41,14 @@
 "ios-retry" = "Try again";
 "ios-search" = "Search";
 "ios-search-description" = "Search the titles and artists in your imported library.";
+"ios-search-in" = "Search in";
 "ios-search-library" = "Find your music";
 "ios-search-prompt" = "Songs or artists";
-"ios-service-description" = "This first build plays imported audio. YouTube sign-in, streaming and downloads are being developed.";
+"ios-search-unavailable" = "Search could not finish";
+"ios-search-youtube" = "Find something to play";
+"ios-search-youtube-description" = "Search YouTube Music for a song or artist, then choose a result to listen.";
+"ios-searching" = "Searching YouTube Music…";
+"ios-service-description" = "Search and play available YouTube Music tracks as a guest. Account sign-in and downloads are still being developed.";
 "ios-settings" = "Settings";
 "ios-shuffle" = "Shuffle";
 "ios-unknown-artist" = "Unknown artist";

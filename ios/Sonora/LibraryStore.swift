@@ -5,7 +5,7 @@ import Observation
 /// Owns the durable local library. File IO and metadata work run on a separate actor.
 @MainActor @Observable
 final class LibraryStore {
-    private(set) var tracks: [LocalTrack] = []
+    private(set) var tracks: [MusicTrack] = []
     private(set) var isImporting = false
     private(set) var isLoaded = false
     var error: String?
@@ -36,14 +36,14 @@ final class LibraryStore {
         if failures { error = String(localized: "ios-import-error") }
     }
 
-    func remove(_ track: LocalTrack) async {
+    func remove(_ track: MusicTrack) async {
         do {
             try await files.remove(track)
             tracks.removeAll { $0.id == track.id }
         } catch { self.error = String(localized: "ios-delete-error") }
     }
 
-    func url(for track: LocalTrack) -> URL {
+    func url(for track: MusicTrack) -> URL {
         LibraryFiles.root.appendingPathComponent(track.filename)
     }
 }
@@ -55,17 +55,17 @@ private actor LibraryFiles {
     }
 
     private var index: URL { Self.root.appendingPathComponent("library.json") }
-    private var tracks: [LocalTrack] = []
+    private var tracks: [MusicTrack] = []
 
-    func load() throws -> [LocalTrack] {
+    func load() throws -> [MusicTrack] {
         try FileManager.default.createDirectory(at: Self.root, withIntermediateDirectories: true)
         guard FileManager.default.fileExists(atPath: index.path) else { return [] }
         // A damaged index is reported, never silently replaced with an empty library.
-        tracks = try JSONDecoder().decode([LocalTrack].self, from: Data(contentsOf: index))
+        tracks = try JSONDecoder().decode([MusicTrack].self, from: Data(contentsOf: index))
         return tracks
     }
 
-    func importFile(_ source: URL) async throws -> LocalTrack {
+    func importFile(_ source: URL) async throws -> MusicTrack {
         let scoped = source.startAccessingSecurityScopedResource()
         defer { if scoped { source.stopAccessingSecurityScopedResource() } }
         let id = UUID()
@@ -87,7 +87,7 @@ private actor LibraryFiles {
                     }
                 }
             }
-            let track = LocalTrack(id: id, title: title, artist: artist, filename: filename, addedAt: .now)
+            let track = MusicTrack(id: id.uuidString, title: title, artist: artist, filename: filename, addedAt: .now)
             var next = tracks
             next.append(track)
             try save(next)
@@ -99,7 +99,7 @@ private actor LibraryFiles {
         }
     }
 
-    func remove(_ track: LocalTrack) throws {
+    func remove(_ track: MusicTrack) throws {
         let next = tracks.filter { $0.id != track.id }
         // Persist first: a failed write must not leave the index pointing at a deleted file.
         try save(next)
@@ -107,7 +107,7 @@ private actor LibraryFiles {
         try? FileManager.default.removeItem(at: Self.root.appendingPathComponent(track.filename))
     }
 
-    private func save(_ value: [LocalTrack]) throws {
+    private func save(_ value: [MusicTrack]) throws {
         try JSONEncoder().encode(value).write(to: index, options: .atomic)
     }
 }

@@ -25,6 +25,16 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "2689C3FE66A5E9444AA51B5B";
 		};
+		"AAC13CAAB4F64C46BDB256DD" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sonora/NativeProvider.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"6172C884292DF1601B089ADE" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "AAC13CAAB4F64C46BDB256DD";
+		};
 		"6EB62C9CA7ACB6EDC9FCFC1B" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -107,7 +117,7 @@
 		};
 		"BA159D738938AB16638C246F" = {
 			"isa" = "PBXGroup";
-			"children" = ("979AD9DD582688E7B8E00A25", "2689C3FE66A5E9444AA51B5B", "6EB62C9CA7ACB6EDC9FCFC1B", "C2A00F45FCC0D6E38A0D6B8C", "2590459515210FF47D05FD04", "BA62B7DF19DC60FE0016A015", "E967D16DAE74A49B5E0E0512", "8BF729FFE074CAEE622C0292", "06271BAF49532C879AA3C58B");
+			"children" = ("979AD9DD582688E7B8E00A25", "2689C3FE66A5E9444AA51B5B", "AAC13CAAB4F64C46BDB256DD", "6EB62C9CA7ACB6EDC9FCFC1B", "C2A00F45FCC0D6E38A0D6B8C", "2590459515210FF47D05FD04", "BA62B7DF19DC60FE0016A015", "E967D16DAE74A49B5E0E0512", "8BF729FFE074CAEE622C0292", "06271BAF49532C879AA3C58B");
 			"name" = "Sonora";
 			"sourceTree" = "<group>";
 		};
@@ -125,7 +135,7 @@
 		"878A52FC5FF6A57D50B7B870" = {
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = "2147483647";
-			"files" = ("5BC85D7A604F8CD389A186B0", "76E2B731912207D6225AC038", "1219CD0FD19F2F641795AFDD", "736900A0FD064AA3082AC2CB", "13A2E9CA12A8016F33F7553F", "4887B93CF56DB3F1A91582C8");
+			"files" = ("5BC85D7A604F8CD389A186B0", "76E2B731912207D6225AC038", "6172C884292DF1601B089ADE", "1219CD0FD19F2F641795AFDD", "736900A0FD064AA3082AC2CB", "13A2E9CA12A8016F33F7553F", "4887B93CF56DB3F1A91582C8");
 			"runOnlyForDeploymentPostprocessing" = "0";
 		};
 		"41D311A605520FC7B8B9A980" = {
@@ -169,6 +179,9 @@
 				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
 				"CODE_SIGNING_ALLOWED" = "NO";
 				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"SWIFT_OBJC_BRIDGING_HEADER" = "Sonora/Sonora-Bridging-Header.h";
+				"LIBRARY_SEARCH_PATHS" = ("$(inherited)", "$(SRCROOT)/build/native/$(PLATFORM_NAME)");
+				"OTHER_LDFLAGS" = ("$(inherited)", "-lsonora_mobile_core", "-lc++", "-framework", "Security", "-framework", "SystemConfiguration");
 			};
 		};
 		"61EE91C00F7653342CB155AF" = {
@@ -200,6 +213,9 @@
 				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
 				"CODE_SIGNING_ALLOWED" = "NO";
 				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"SWIFT_OBJC_BRIDGING_HEADER" = "Sonora/Sonora-Bridging-Header.h";
+				"LIBRARY_SEARCH_PATHS" = ("$(inherited)", "$(SRCROOT)/build/native/$(PLATFORM_NAME)");
+				"OTHER_LDFLAGS" = ("$(inherited)", "-lsonora_mobile_core", "-lc++", "-framework", "Security", "-framework", "SystemConfiguration");
 			};
 		};
 		"F0D0CC3CD0AE36F97BD8FD2B" = {

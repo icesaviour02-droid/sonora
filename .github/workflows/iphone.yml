@@ -7,6 +7,7 @@ on:
       - 'ios/Sonora/**'
       - 'ios/Sonora.xcodeproj/**'
       - 'ios/scripts/**'
+      - 'ios/Core/**'
       - 'assets/i18n/en-US/main.ftl'
       - 'assets/macos/sonora.icns'
       - '.github/workflows/iphone.yml'
@@ -15,6 +16,7 @@ on:
       - 'ios/Sonora/**'
       - 'ios/Sonora.xcodeproj/**'
       - 'ios/scripts/**'
+      - 'ios/Core/**'
       - 'assets/i18n/en-US/main.ftl'
       - '.github/workflows/iphone.yml'
 
@@ -29,8 +31,16 @@ jobs:
   build:
     runs-on: macos-26
     timeout-minutes: 30
+    env:
+      RUSTUP_TOOLCHAIN: stable
+      IPHONEOS_DEPLOYMENT_TARGET: '26.0'
     steps:
       - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+      - name: Build shared YouTube provider libraries
+        run: python3 ios/scripts/build_native.py
       - name: Prepare native project
         run: python3 ios/scripts/prepare.py
       - name: Build iPhone app without signing

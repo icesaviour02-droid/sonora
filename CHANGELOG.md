@@ -12,6 +12,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - An initial iPhone app source with native Liquid Glass navigation and local audio import and
   playback. YouTube Music integration is still in development; an unsigned IPA build workflow
   is included for testing the port.
+- The iPhone search screen can query YouTube Music as a guest, show artwork, and resolve available
+  AAC tracks through the shared provider client for native playback.
 
 ### Fixed
 

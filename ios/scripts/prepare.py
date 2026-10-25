@@ -123,6 +123,9 @@ def project():
             "SUPPORTS_MACCATALYST": "NO", "SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD": "NO",
             "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon", "CODE_SIGNING_ALLOWED": "NO",
             "LD_RUNPATH_SEARCH_PATHS": ["$(inherited)", "@executable_path/Frameworks"],
+            "SWIFT_OBJC_BRIDGING_HEADER": "Sonora/Sonora-Bridging-Header.h",
+            "LIBRARY_SEARCH_PATHS": ["$(inherited)", "$(SRCROOT)/build/native/$(PLATFORM_NAME)"],
+            "OTHER_LDFLAGS": ["$(inherited)", "-lsonora_mobile_core", "-lc++", "-framework", "Security", "-framework", "SystemConfiguration"],
         }))
     project_list = add("project.configs", "XCConfigurationList", buildConfigurations=project_configs, defaultConfigurationIsVisible="0", defaultConfigurationName="Release")
     target_list = add("target.configs", "XCConfigurationList", buildConfigurations=target_configs, defaultConfigurationIsVisible="0", defaultConfigurationName="Release")

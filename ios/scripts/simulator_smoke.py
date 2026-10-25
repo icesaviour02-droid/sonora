@@ -50,6 +50,11 @@ if __name__ == "__main__":
         sim("ui", udid, "content_size", "accessibility-extra-extra-extra-large")
         time.sleep(1)
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-library-large-text.png"))
+        sim("ui", udid, "content_size", "large")
+        sim("ui", udid, "appearance", "light")
+        sim("openurl", udid, "sonora://search?q=Beethoven")
+        time.sleep(10)
+        sim("io", udid, "screenshot", str(OUTPUT / "iphone13-youtube-search.png"))
         (OUTPUT / "device.json").write_text(json.dumps({"device": "iPhone 13 simulator", "runtime": runtime, "launch": launch, "limitations": "Launch/empty-state review only; playback, provider and download functionality are not validated."}, indent=2))
     finally:
         try:
