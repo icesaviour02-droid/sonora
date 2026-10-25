@@ -308,6 +308,11 @@ final class PlaybackController {
 
     func resume() {
         guard let current else { return }
+        error = nil
+        if player.currentItem?.status == .failed, current.youtubeID != nil {
+            itemObserver = nil
+            player.replaceCurrentItem(with: nil)
+        }
         settings.recordHistory(current)
         if player.currentItem == nil, let videoID = current.youtubeID {
             if let downloaded = downloads.fileURL(for: current.id) {

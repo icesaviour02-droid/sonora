@@ -646,3 +646,44 @@ private func writeReviewEvidence(_ filename: String, _ values: [String: Any]) {
     try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent(filename), options: .atomic)
 }
 #endif
+
+#if DEBUG
+/// Tests several real public search results so one gated video cannot stand in for all Guest playback.
+@MainActor
+final class GuestAcceptanceProbe {
+    private var task: Task<Void, Never>?
+
+    func start(playback: PlaybackController, selected: @escaping () -> Void) {
+        task?.cancel()
+        task = Task {
+            var results: [[String: String]] = []
+            do {
+                let tracks = try await NativeProvider.search("Beethoven")
+                for track in tracks.filter({ $0.available != false }).prefix(4) {
+                    guard !Task.isCancelled, let id = track.youtubeID else { return }
+                    do {
+                        _ = try await NativeProvider.resolve(id)
+                        results.append(["id": id, "result": "resolved"])
+                        writeReviewEvidence("guest-probe.json", ["status": "selected", "selected_id": id, "candidates": results])
+                        playback.play(track, in: [track])
+                        selected()
+                        return
+                    } catch {
+                        let code: String
+                        switch error as? ProviderError {
+                        case .signInRequired: code = "sign_in_required"
+                        case .timeout: code = "timeout"
+                        default: code = "provider_unavailable"
+                        }
+                        results.append(["id": id, "result": code])
+                        writeReviewEvidence("guest-probe.json", ["status": "running", "candidates": results])
+                    }
+                }
+            } catch {
+                results.append(["result": "search_failed"])
+            }
+            writeReviewEvidence("guest-probe.json", ["status": "failed", "candidates": results])
+        }
+    }
+}
+#endif

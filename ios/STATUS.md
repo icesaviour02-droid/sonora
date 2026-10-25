@@ -33,3 +33,21 @@ open; a cookie verification result alone cannot establish complete authenticated
 - Complete the desktop parity inventory in PARITY.md before a final IPA handoff.
 
 The app is a development beta, not a feature-complete replacement for the desktop app.
+
+## Repair batch 49c5a68b (26 October 2026)
+
+Home shelf/genre, album/artist/playlist, account-library and lyrics response shapes now match the
+Swift decoder requirements. Local live checks returned populated Home and detail payloads with
+none of the previously missing required fields. Native Rust build/Clippy and Swift syntax checks pass.
+The player has bounded background geometry, available-space artwork sizing, larger touch regions,
+accessibility scrolling and reduced-motion/transparency handling. Metadata review uses a real public
+YouTube search result, without fabricated playback or exported audio. Version is 0.3.0 (4).
+
+Apple run 40231715841 compiled both targets and verified populated Home (8 sections, 90 items,
+40 genres) and decoded synced lyrics (37 lines) on the iPhone 13/iOS 26.5 simulator. Artwork, lyrics,
+queue and large-text captures were inspected. The fixed guest test video was refused with a
+sign-in-required response, so streaming/download acceptance still failed. The confirmation batch
+fixes the yt3 artwork-host case and accessibility control sizing, and probes several actual search
+candidates to distinguish a gated track from general guest failure. Guest playback remains an
+acceptance gate. Commercial Safari/OAuth sign-in is not implemented; see References/AppleMusic/AUTHENTICATION.md.
+The user selected Emil Kowalski's apple-design skill instead of Impeccable.

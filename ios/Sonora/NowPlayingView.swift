@@ -101,14 +101,9 @@ struct NowPlayingView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let side = min(geometry.size.width - Layout.playerMargin * 2,
-                           max(Layout.playerMinimumArtwork, geometry.size.height - Layout.playerChrome))
+            let side = max(1, min(geometry.size.width - Layout.playerMargin * 2,
+                           max(Layout.playerMinimumArtwork, geometry.size.height - Layout.playerChrome)))
             ZStack {
-                atmosphericBackground
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .clipped()
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
                 if textSize.isAccessibilitySize {
                     ScrollView {
                         playerContent(artworkSide: min(side, Layout.accessibleArtwork), expands: false)
@@ -118,6 +113,16 @@ struct NowPlayingView: View {
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .background {
+            GeometryReader { geometry in
+                atmosphericBackground
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
         .preferredColorScheme(.dark)
         .presentationDetents([.large])
@@ -142,10 +147,10 @@ struct NowPlayingView: View {
             }
             .frame(maxWidth: .infinity, minHeight: expands ? nil : Layout.accessibleArtwork,
                    maxHeight: expands ? .infinity : nil)
-            scrubberSection
-            transportControls
-            volumeSection
-            bottomModeBar
+            scrubberSection.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            transportControls.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            volumeSection.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            bottomModeBar.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .padding(.horizontal, Layout.playerMargin)
         .padding(.top, Layout.compact)
@@ -244,41 +249,47 @@ struct NowPlayingView: View {
     }
 
     private var trackHeaderRow: some View {
-        HStack(alignment: .center, spacing: Layout.compact) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(playback.current?.title ?? "")
-                        .font(.title3.bold())
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    if playback.current?.explicit == true {
-                        Image(systemName: "e.square.fill")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
+        Group {
+            if textSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: Layout.compact) {
+                    trackTitles
+                    HStack { favoriteControl; overflowMenu; Spacer() }
                 }
-                Text(playback.current?.artist ?? "")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(1)
-            }
-            Spacer(minLength: Layout.compact)
-
-            if let current = playback.current, current.youtubeID != nil {
-                Button {
-                    catalog.toggleLike(current)
-                } label: {
-                    Image(systemName: catalog.isLiked(current) ? "star.fill" : "star")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(catalog.isLiked(current) ? .yellow : .white.opacity(0.88))
-                        .frame(width: Layout.control, height: Layout.control)
-                        .background(.white.opacity(0.14), in: Circle())
+            } else {
+                HStack(spacing: Layout.compact) {
+                    trackTitles
+                    Spacer(minLength: Layout.compact)
+                    favoriteControl
+                    overflowMenu
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("ios-favorite"))
             }
+        }
+    }
 
-            overflowMenu
+    private var trackTitles: some View {
+        VStack(alignment: .leading, spacing: Layout.compact) {
+            Text(playback.current?.title ?? "")
+                .font(.title2.bold()).foregroundStyle(.white)
+                .lineLimit(textSize.isAccessibilitySize ? 3 : 1)
+            Text(playback.current?.artist ?? "")
+                .font(.subheadline).foregroundStyle(.white.opacity(0.75))
+                .lineLimit(textSize.isAccessibilitySize ? 2 : 1)
+        }
+    }
+
+    @ViewBuilder
+    private var favoriteControl: some View {
+        if let current = playback.current, current.youtubeID != nil {
+            Button { catalog.toggleLike(current) } label: {
+                Image(systemName: catalog.isLiked(current) ? "star.fill" : "star")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(catalog.isLiked(current) ? .yellow : .white.opacity(0.88))
+                    .frame(width: Layout.control, height: Layout.control)
+                    .background(.white.opacity(0.14), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            .accessibilityLabel(Text("ios-favorite"))
         }
     }
 
@@ -395,6 +406,7 @@ struct NowPlayingView: View {
                 .background(.white.opacity(0.14), in: Circle())
         }
         .buttonStyle(.plain)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .accessibilityLabel(Text("ios-track-actions"))
     }
 

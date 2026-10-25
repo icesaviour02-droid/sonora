@@ -28,7 +28,6 @@ def sim(*args):
 def verify_playback(container, video_id, downloaded):
     """Require the native player clock to advance, rather than inferring audio from a screenshot."""
     state_file = container / "Library/Application Support/playback-review.json"
-    state_file.unlink(missing_ok=True)
     deadline = time.monotonic() + 130
     state = None
     while time.monotonic() < deadline:
@@ -114,10 +113,21 @@ if __name__ == "__main__":
         if not lyrics_evidence or lyrics_evidence.get("line_count", 0) == 0:
             raise RuntimeError("Lyrics did not return decoded lines; inspect the captured screen")
         video_id = os.environ.get("SONORA_SMOKE_VIDEO_ID", "")
-        if len(video_id) == 11 and all(c.isascii() and (c.isalnum() or c in "_-") for c in video_id):
-            container = Path(sim("get_app_container", udid, BUNDLE, "data"))
-            play_url = "sonora://play?" + urllib.parse.urlencode({"id": video_id, "title": video_id})
-            sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", play_url)
+        if video_id:
+            probe_file = container / "Library/Application Support/guest-probe.json"
+            sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://guestprobe")
+            deadline = time.monotonic() + 390
+            probe = None
+            while time.monotonic() < deadline:
+                if probe_file.exists():
+                    probe = json.loads(probe_file.read_text())
+                    if probe.get("status") in ("selected", "failed"): break
+                time.sleep(1)
+            (OUTPUT / "guest-probe.json").write_text(json.dumps(probe, indent=2))
+            if not probe or probe.get("status") != "selected":
+                sim("io", udid, "screenshot", str(OUTPUT / "iphone13-guest-probe.png"))
+                raise RuntimeError("Guest resolution failed for the search candidates; inspect guest-probe.json")
+            video_id = probe["selected_id"]
             streamed = verify_playback(container, video_id, downloaded=False)
             sim("io", udid, "screenshot", str(OUTPUT / "iphone13-stream-player.png"))
             sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://download?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))

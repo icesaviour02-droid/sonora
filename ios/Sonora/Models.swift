@@ -257,3 +257,15 @@ enum Layout {
     static let rowArtwork: CGFloat = 48
     static let miniArtwork: CGFloat = 40
 }
+
+/// Requests a retina-sized rendition only from the provider's known resizable artwork hosts.
+enum ArtworkRendition {
+    static func url(_ original: URL?, side: CGFloat) -> URL? {
+        guard let original, let host = original.host,
+              host.hasSuffix(".googleusercontent.com") || host.hasSuffix(".ggpht.com") else { return original }
+        let pixels = Int(ceil(max(1, side) * 3))
+        let value = original.absoluteString.replacingOccurrences(
+            of: "=w[0-9]+-h[0-9]+", with: "=w\(pixels)-h\(pixels)", options: .regularExpression)
+        return URL(string: value) ?? original
+    }
+}

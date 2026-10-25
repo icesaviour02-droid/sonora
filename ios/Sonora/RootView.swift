@@ -17,6 +17,9 @@ struct RootView: View {
     @State private var showPlayer = false
     @State private var playerMode = "artwork"
     @State private var didHandleLaunchURL = false
+    #if DEBUG
+    @State private var guestProbe = GuestAcceptanceProbe()
+    #endif
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -100,6 +103,12 @@ struct RootView: View {
     private func open(_ url: URL) {
         guard url.scheme == "sonora",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        #if DEBUG
+        if url.host == "guestprobe" {
+            guestProbe.start(playback: playback) { playerMode = "artwork"; showPlayer = true }
+            return
+        }
+        #endif
         let parameters = components.queryItems ?? []
         func value(_ name: String) -> String? { parameters.first { $0.name == name }?.value }
         if url.host == "search", let query = value("q"), !query.isEmpty, query.utf8.count <= 512 {
@@ -384,7 +393,7 @@ private struct SquareCard: View {
 
     var body: some View {
         VStack(alignment: circular ? .center : .leading, spacing: 6) {
-            AsyncImage(url: artworkURL) { image in
+            AsyncImage(url: ArtworkRendition.url(artworkURL, side: Layout.cardArtwork)) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Image(systemName: circular ? "music.mic" : "music.note")
@@ -978,7 +987,7 @@ struct AlbumDetailView: View {
         List {
             Section {
                 VStack(spacing: Layout.spacing) {
-                    AsyncImage(url: detail?.artwork_url ?? fallbackArtwork) { image in
+                    AsyncImage(url: ArtworkRendition.url(detail?.artwork_url ?? fallbackArtwork, side: Layout.detailArtwork)) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Image(systemName: "square.stack")
@@ -1100,7 +1109,7 @@ struct PlaylistDetailView: View {
         List {
             Section {
                 VStack(spacing: Layout.spacing) {
-                    AsyncImage(url: detail?.artwork_url ?? fallbackArtwork) { image in
+                    AsyncImage(url: ArtworkRendition.url(detail?.artwork_url ?? fallbackArtwork, side: Layout.detailArtwork)) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Image(systemName: "music.note.list")
@@ -1269,7 +1278,7 @@ struct ArtistDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Layout.spacing * 1.5) {
                 VStack(spacing: Layout.compact) {
-                    AsyncImage(url: detail?.artwork_url ?? fallbackArtwork) { image in
+                    AsyncImage(url: ArtworkRendition.url(detail?.artwork_url ?? fallbackArtwork, side: Layout.detailArtwork)) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Image(systemName: "music.mic")
@@ -2103,15 +2112,7 @@ struct ArtworkView: View {
     let side: CGFloat
     var cornerRadius: CGFloat = Layout.compact
 
-    /// Requests a display-sized Google artwork rendition instead of enlarging a tiny row thumbnail.
-    private var artworkURL: URL? {
-        guard let original = track?.artworkURL, let host = original.host,
-              host == "lh3.googleusercontent.com" || host.hasSuffix(".ggpht.com") else { return track?.artworkURL }
-        let pixels = Int(ceil(side * 3))
-        let value = original.absoluteString.replacingOccurrences(
-            of: "=w[0-9]+-h[0-9]+", with: "=w\(pixels)-h\(pixels)", options: .regularExpression)
-        return URL(string: value) ?? original
-    }
+    private var artworkURL: URL? { ArtworkRendition.url(track?.artworkURL, side: side) }
 
     var body: some View {
         AsyncImage(url: artworkURL) { image in
