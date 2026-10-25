@@ -295,10 +295,19 @@ pub unsafe extern "C" fn sonora_mobile_request(
         let outcome = tokio::time::timeout(deadline, execute(request)).await;
         let response = match outcome {
             Ok(Ok(data)) => json!({ "ok": true, "data": data }),
-            Ok(Err(error)) if error.downcast_ref::<ytmusic::SignInRequired>().is_some() => {
-                json!({ "ok": false, "error": "sign_in_required" })
+            Ok(Err(error)) => {
+                let message = format!("{error:#}").to_lowercase();
+                let verification = message.contains("not a bot");
+                let code = if verification { "verification_required" }
+                    else if error.downcast_ref::<ytmusic::SignInRequired>().is_some() { "sign_in_required" }
+                    else { "provider_unavailable" };
+                json!({ "ok": false, "error": code, "diagnostics": {
+                    "network_verification": verification,
+                    "decipher_problem": message.contains("solver") || message.contains("decipher") || message.contains("quickjs"),
+                    "audio_host_refused": message.contains("is not being served") || message.contains("stream host refused"),
+                    "api_login_required": message.contains("login_required"),
+                }})
             }
-            Ok(Err(_)) => json!({ "ok": false, "error": "provider_unavailable" }),
             Err(_) => json!({ "ok": false, "error": "timeout" }),
         };
         // JSON serialization escapes interior NULs, so a CString is always representable.
@@ -446,14 +455,13 @@ async fn execute(request: Request) -> Result<Value> {
                 Some("normal") => Some(160_000),
                 _ => None,
             };
-            let format = match (ceiling, api.is_cookie_auth()) {
-                (None, false) => api.best_audio(&video_id).await,
-                _ => api
-                    .open_audio_within(&video_id, ceiling)
-                    .await
-                    .map(|(format, _)| format),
-            }
-            .context("cannot resolve youtube audio")?;
+            // Match desktop playback: validate by opening the first real body range. A separate
+            // one-byte URL probe can be rejected even when the normal stream request is served.
+            let (format, body) = api
+                .open_audio_within(&video_id, ceiling)
+                .await
+                .context("cannot open youtube audio")?;
+            drop(body);
             if !format.mime.starts_with("audio/mp4") {
                 bail!("the provider did not offer a native audio format");
             }

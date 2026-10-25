@@ -360,7 +360,10 @@ final class PoTokenMinter: NSObject, WKNavigationDelegate {
 
     private func mint(binding: String) async {
         let view = ensureWebView()
-        let escaped = binding.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? binding
+        // Match JavaScript encodeURIComponent, including base64url '-' and '_' characters.
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))
+        let escaped = binding.addingPercentEncoding(withAllowedCharacters: allowed) ?? binding
+        reviewStage("loading")
         if warmed {
             if let encoded = try? JSONEncoder().encode(binding),
                let literal = String(data: encoded, encoding: .utf8) {
@@ -382,15 +385,27 @@ final class PoTokenMinter: NSObject, WKNavigationDelegate {
             let answer = String(cookie.value.dropFirst(prefix.count))
             if answer.hasPrefix("!") {
                 warmed = false
+                reviewStage("mint_failed")
                 await NativeProvider.poTokenFailed()
                 return
             } else if !answer.isEmpty {
                 await NativeProvider.poTokenGive(binding: binding, token: answer)
+                reviewStage("minted")
                 return
             }
         }
         warmed = false
+        reviewStage("timed_out")
         await NativeProvider.poTokenFailed()
+    }
+
+    /// Records the handoff stage for CLI review without cookies, visitor IDs or tokens.
+    private func reviewStage(_ stage: String) {
+        #if DEBUG
+        guard ProcessInfo.processInfo.arguments.contains("--sonora-review-url"),
+              let data = try? JSONSerialization.data(withJSONObject: ["stage": stage]) else { return }
+        try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("potoken-review.json"), options: .atomic)
+        #endif
     }
 
     private static let script = #"""

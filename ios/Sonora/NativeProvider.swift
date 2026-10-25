@@ -3,13 +3,14 @@ import Observation
 
 /// Stable errors cross the native boundary; raw provider responses and signed URLs never reach alerts.
 enum ProviderError: LocalizedError {
-    case unavailable, timeout, signInRequired
+    case unavailable, timeout, signInRequired, verificationRequired
 
     var errorDescription: String? {
         switch self {
         case .unavailable: String(localized: "ios-provider-error")
         case .timeout: String(localized: "ios-provider-timeout")
         case .signInRequired: String(localized: "ios-provider-sign-in-required")
+        case .verificationRequired: String(localized: "ios-provider-verification-required")
         }
     }
 }
@@ -35,6 +36,7 @@ enum NativeProvider {
         let ok: Bool
         let data: Value?
         let error: String?
+        let diagnostics: [String: Bool]?
     }
 
     struct Song: Decodable {
@@ -408,9 +410,15 @@ enum NativeProvider {
         try Task.checkCancellation()
         let envelope = try JSONDecoder().decode(Envelope<Value>.self, from: data)
         guard envelope.ok, let value = envelope.data else {
+            #if DEBUG
+            if let diagnostics = envelope.diagnostics {
+                await MainActor.run { writeReviewEvidence("provider-failure.json", diagnostics) }
+            }
+            #endif
             switch envelope.error {
             case "timeout": throw ProviderError.timeout
             case "sign_in_required": throw ProviderError.signInRequired
+            case "verification_required": throw ProviderError.verificationRequired
             default: throw ProviderError.unavailable
             }
         }
@@ -673,6 +681,7 @@ final class GuestAcceptanceProbe {
                         switch error as? ProviderError {
                         case .signInRequired: code = "sign_in_required"
                         case .timeout: code = "timeout"
+                        case .verificationRequired: code = "network_verification_required"
                         default: code = "provider_unavailable"
                         }
                         results.append(["id": id, "result": code])

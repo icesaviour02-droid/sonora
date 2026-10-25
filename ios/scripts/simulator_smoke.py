@@ -164,6 +164,10 @@ if __name__ == "__main__":
                 raise RuntimeError("Native playback did not advance; inspect playback diagnostic artifacts")
         (OUTPUT / "device.json").write_text(json.dumps({"device": "iPhone 13 simulator", "runtime": runtime, "launch": launch, "limitations": "Simulator launch and appearance review; see download-check.json when the optional live transfer check runs. Physical-device behavior remains unverified."}, indent=2))
     finally:
+        if "container" in locals():
+            for filename in ("potoken-review.json", "provider-failure.json"):
+                path = container / "Library/Application Support" / filename
+                if path.exists(): (OUTPUT / filename).write_text(path.read_text())
         try:
             sim("shutdown", udid)
         finally:

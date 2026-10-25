@@ -138,6 +138,7 @@
 "ios-provider-error" = "YouTube Music could not serve this request. Check your connection and try again.";
 "ios-provider-sign-in-required" = "YouTube requires a signed-in account for this request. Open Settings to sign in.";
 "ios-provider-timeout" = "YouTube Music took too long to respond. Try again.";
+"ios-provider-verification-required" = "YouTube is requesting verification on this connection. Guest playback is currently unavailable.";
 "ios-quality-high" = "High (AAC 256 kbps)";
 "ios-quality-low" = "Data Saver (HE-AAC 48 kbps)";
 "ios-quality-normal" = "Normal (AAC 128 kbps)";

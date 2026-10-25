@@ -220,6 +220,9 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
                 guard let self, let index = self.entries.firstIndex(where: { $0.filename == entry.filename }) else { return }
                 var request = URLRequest(url: stream.url)
                 request.setValue(stream.user_agent, forHTTPHeaderField: "User-Agent")
+                request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+                request.setValue("https://www.youtube.com", forHTTPHeaderField: "Origin")
+                request.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
                 request.setValue("bytes=0-\(length - 1)", forHTTPHeaderField: "Range")
                 request.allowsCellularAccess = self.allowsCellular
                 let transfer = self.session.downloadTask(with: request)

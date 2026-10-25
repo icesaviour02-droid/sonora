@@ -1534,3 +1534,5 @@ ios-maloja-url = Maloja Server URL
 ios-maloja-key = Maloja API Key
 
 ios-private-playlist-description = New playlists are private.
+
+ios-provider-verification-required = YouTube is requesting verification on this connection. Guest playback is currently unavailable.
