@@ -39,6 +39,7 @@ jobs:
           cargo clippy --manifest-path ios/Core/Cargo.toml --locked -- -D warnings
       - name: Build native iPhone and simulator libraries
         run: |
+          export LIBCLANG_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
           cargo build --manifest-path ios/Core/Cargo.toml --locked --release --target aarch64-apple-ios
           cargo build --manifest-path ios/Core/Cargo.toml --locked --release --target aarch64-apple-ios-sim
       - name: Upload native libraries for integration

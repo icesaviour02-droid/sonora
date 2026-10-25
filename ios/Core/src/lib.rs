@@ -23,6 +23,7 @@ static CLIENT: OnceLock<Arc<YtMusic>> = OnceLock::new();
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 enum Request {
     Search { query: String },
+    Resolve { video_id: String },
 }
 
 /// Accepts owned JSON work and delivers an owned JSON response on a background worker.
@@ -62,6 +63,9 @@ pub unsafe extern "C" fn sonora_mobile_request(
         let outcome = tokio::time::timeout(DEADLINE, execute(request)).await;
         let response = match outcome {
             Ok(Ok(data)) => json!({ "ok": true, "data": data }),
+            Ok(Err(error)) if error.downcast_ref::<ytmusic::SignInRequired>().is_some() => {
+                json!({ "ok": false, "error": "sign_in_required" })
+            }
             Ok(Err(_)) => json!({ "ok": false, "error": "provider_unavailable" }),
             Err(_) => json!({ "ok": false, "error": "timeout" }),
         };
@@ -108,6 +112,29 @@ async fn execute(request: Request) -> Result<Value> {
                     "available": track.available,
                 }))
             }).collect()))
+        }
+        Request::Resolve { video_id } => {
+            if video_id.len() != 11
+                || !video_id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+            {
+                bail!("invalid youtube video id");
+            }
+            let format = api
+                .best_audio(&video_id)
+                .await
+                .context("cannot resolve youtube audio")?;
+            if !format.mime.starts_with("audio/mp4") {
+                bail!("the provider did not offer a native audio format");
+            }
+            Ok(json!({
+                "url": format.url,
+                "mime": format.mime,
+                "user_agent": format.user_agent,
+                "duration_seconds": format.duration.map(|duration| duration.as_secs()),
+                "content_length": format.content_length,
+            }))
         }
     }
 }
