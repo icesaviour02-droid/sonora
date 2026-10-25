@@ -5,6 +5,7 @@ import SwiftUI
 struct SonoraApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
+    @State private var account = AccountStore()
     @State private var library = LibraryStore()
     @State private var downloads: DownloadsStore
     @State private var playback: PlaybackController
@@ -19,11 +20,12 @@ struct SonoraApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environment(account)
                 .environment(library)
                 .environment(playback)
                 .environment(youtube)
                 .environment(downloads)
-                .task { await library.load() }
+                .task { await account.restore(); await library.load() }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active { downloads.resumeQueue() }
                 }

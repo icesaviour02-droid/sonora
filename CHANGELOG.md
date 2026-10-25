@@ -18,6 +18,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   retry failed transfers and reconnect to background downloads after relaunch.
 
 - The iPhone player can display plain YouTube lyrics when supplied by the provider.
+- The iPhone settings now offer account verification and session import with device Keychain storage.
+  Account playback compatibility is still under verification.
 
 ### Fixed
 

@@ -2,7 +2,7 @@
 //! Network operations stay on Tokio, with no GPUI, desktop audio output or UI dependencies.
 
 use std::ffi::{CStr, CString, c_char, c_void};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail};
@@ -17,7 +17,22 @@ const MAX_QUERY: usize = 512;
 type Callback = extern "C" fn(*mut c_void, *mut c_char);
 
 static RUNTIME: OnceLock<Result<Runtime, String>> = OnceLock::new();
-static CLIENT: OnceLock<Arc<YtMusic>> = OnceLock::new();
+static SESSION: OnceLock<RwLock<Session>> = OnceLock::new();
+
+/// The generation prevents an old sign-in from replacing a later sign-out or account choice.
+struct Session {
+    api: Arc<YtMusic>,
+    generation: u64,
+}
+
+fn session() -> &'static RwLock<Session> {
+    SESSION.get_or_init(|| {
+        RwLock::new(Session {
+            api: Arc::new(YtMusic::anonymous()),
+            generation: 0,
+        })
+    })
+}
 
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
@@ -25,6 +40,8 @@ enum Request {
     Search { query: String },
     Resolve { video_id: String },
     Lyrics { video_id: String },
+    Authenticate { cookies: String },
+    SignOut {},
 }
 
 /// Accepts owned JSON work and delivers an owned JSON response on a background worker.
@@ -90,7 +107,23 @@ pub unsafe extern "C" fn sonora_mobile_string_free(json: *mut c_char) {
 }
 
 async fn execute(request: Request) -> Result<Value> {
-    let api = CLIENT.get_or_init(|| Arc::new(YtMusic::anonymous()));
+    match request {
+        Request::Authenticate { cookies } => return authenticate(&cookies).await,
+        Request::SignOut {} => {
+            let mut session = session()
+                .write()
+                .map_err(|_| anyhow::anyhow!("session lock poisoned"))?;
+            session.generation += 1;
+            session.api = Arc::new(YtMusic::anonymous());
+            return Ok(json!({ "signed_out": true }));
+        }
+        _ => {}
+    }
+    let api = session()
+        .read()
+        .map_err(|_| anyhow::anyhow!("session lock poisoned"))?
+        .api
+        .clone();
     match request {
         Request::Search { query } => {
             let query = query.trim();
@@ -133,9 +166,60 @@ async fn execute(request: Request) -> Result<Value> {
         }
         Request::Lyrics { video_id } => {
             validate_video_id(&video_id)?;
-            youtube_lyrics(api, &video_id).await
+            youtube_lyrics(&api, &video_id).await
+        }
+        Request::Authenticate { .. } | Request::SignOut {} => {
+            unreachable!("session operations handled above")
         }
     }
+}
+
+/// Validates the desktop cookie-header format and checks the account before publishing a session.
+/// Credentials are supplied from the host Keychain and are never saved or logged by the core.
+async fn authenticate(cookies: &str) -> Result<Value> {
+    if cookies.len() > 32_768 || cookies.contains(['\r', '\n', '\0']) {
+        bail!("invalid cookie header");
+    }
+    let pairs: Vec<_> = cookies
+        .split(';')
+        .map(str::trim)
+        .filter(|pair| !pair.is_empty())
+        .collect();
+    if !pairs.iter().all(|pair| {
+        pair.split_once('=').is_some_and(|(name, value)| {
+            !name.is_empty()
+                && name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+                && !value.is_empty()
+                && !value.chars().any(char::is_whitespace)
+        })
+    }) || !pairs.iter().any(|pair| {
+        pair.split_once('=')
+            .is_some_and(|(name, _)| matches!(name, "SAPISID" | "__Secure-3PAPISID"))
+    }) {
+        bail!("cookies carry no signed-in account");
+    }
+    let generation = {
+        let mut state = session()
+            .write()
+            .map_err(|_| anyhow::anyhow!("session lock poisoned"))?;
+        state.generation += 1;
+        state.generation
+    };
+    let api = Arc::new(YtMusic::with_cookies(pairs.join("; ")));
+    let profile = api
+        .profile()
+        .await
+        .context("cannot verify youtube account")?;
+    let mut state = session()
+        .write()
+        .map_err(|_| anyhow::anyhow!("session lock poisoned"))?;
+    if state.generation != generation {
+        bail!("superseded account request");
+    }
+    state.api = api;
+    Ok(json!({ "name": profile.name }))
 }
 
 fn validate_video_id(id: &str) -> Result<()> {

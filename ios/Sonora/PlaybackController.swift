@@ -249,6 +249,19 @@ final class PlaybackController {
         saveQueue()
     }
 
+    /// Drops account-backed queue data when the active provider identity changes.
+    func clearRemoteQueue() {
+        if current?.youtubeID != nil {
+            pause()
+            player.replaceCurrentItem(with: nil)
+            current = nil
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        }
+        queue.removeAll { $0.youtubeID != nil }
+        originalQueue.removeAll { $0.youtubeID != nil }
+        saveQueue()
+    }
+
     private func publishNowPlaying() {
         #if DEBUG
         writeReviewState()

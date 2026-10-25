@@ -13,7 +13,9 @@ The owner of this checkout, listening on an iPhone 13 and developing on Linux.
 ## Product Purpose
 
 Port Sonora to an iPhone app with reliable playback, offline downloads, library browsing,
-search, queues and lyrics. YouTube Music is the first streaming provider requested.
+search, queues and lyrics. YouTube Music is the first streaming provider requested. The user
+requires functionality matching the original desktop app and rejects unfinished beta handoffs.
+Use ios/PARITY.md as the acceptance inventory; do not present a compiled IPA as a final app.
 
 ## Operating Context
 
@@ -38,7 +40,9 @@ bottom navigation and Liquid Glass buttons. Platform behavior governs layout and
 Desktop source, localization resources, icon assets, download queue, encrypted vault,
 YouTube provider and the pinned ytmusic-rs dependency. Initial device and simulator builds and
 native iPhone 13 screenshots now exist. Guest provider search/stream resolution and full-range
-transfer have been verified on Linux. Integrated playback/download checks are in progress.
+transfer have been verified on Linux. Integrated simulator search/artwork pass, but YouTube
+requires sign-in for streaming/download resolution on the cloud runner. Account support is
+under implementation; the app does not meet the final release gates.
 
 ## Open Decisions
 

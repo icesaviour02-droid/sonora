@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 /// System tabs supply the native floating Liquid Glass navigation on iOS 26.
 struct RootView: View {
+    @Environment(AccountStore.self) private var account
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackController.self) private var playback
     @Environment(YouTubeSearch.self) private var youtube
@@ -54,6 +55,8 @@ struct RootView: View {
         .onChange(of: library.tracks) { _, tracks in
             if library.isLoaded { playback.synchronizeLibrary(with: tracks) }
         }
+        .onChange(of: account.revision) { _, _ in youtube.clear(); playback.clearRemoteQueue(); downloads.clearRemoteDownloads() }
+        .disabled(account.isRestoring)
         .onOpenURL(perform: open)
         .task {
             #if DEBUG
@@ -324,14 +327,26 @@ struct DownloadsView: View {
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AccountStore.self) private var account
     @Environment(DownloadsStore.self) private var downloads
+    @State private var showSignIn = false
+    @State private var confirmSignOut = false
 
     var body: some View {
         @Bindable var downloads = downloads
         NavigationStack {
             List {
                 Section("ios-music-service") {
-                    LabeledContent("ios-youtube-music", value: String(localized: "ios-guest-mode"))
+                    LabeledContent("ios-youtube-music", value: account.name ?? String(localized: "ios-guest-mode"))
+                    if account.name != nil {
+                        Button("ios-account-sign-out", role: .destructive) { confirmSignOut = true }.disabled(account.isBusy)
+                    } else {
+                        Button("ios-account-sign-in") { showSignIn = true }.disabled(account.isBusy || account.isRestoring)
+                    }
+                    if let error = account.error {
+                        Text(error).foregroundStyle(.secondary)
+                        Button("ios-retry") { account.retryRestore() }.disabled(account.isBusy || account.isRestoring)
+                    }
                     Text("ios-service-description").foregroundStyle(.secondary)
                 }
                 Section("ios-about") {
@@ -344,6 +359,10 @@ struct SettingsView: View {
                     Text("ios-cellular-downloads-description")
                 }
             }
+            .sheet(isPresented: $showSignIn) { AccountSignInView() }
+            .confirmationDialog("ios-account-sign-out-confirm", isPresented: $confirmSignOut, titleVisibility: .visible) {
+                Button("ios-account-sign-out", role: .destructive) { account.signOut() }
+            } message: { Text("ios-account-sign-out-description") }
             .navigationTitle("ios-settings")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("ios-done") { dismiss() } } }
         }

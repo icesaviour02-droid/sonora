@@ -64,6 +64,17 @@ enum NativeProvider {
         let source: String
     }
 
+    struct Account: Decodable { let name: String }
+    private struct SignedOut: Decodable { let signed_out: Bool }
+
+    static func authenticate(_ cookies: String) async throws -> Account {
+        try await request(["operation": "authenticate", "cookies": cookies])
+    }
+
+    static func signOut() async throws {
+        let _: SignedOut = try await request(["operation": "sign_out"])
+    }
+
     static func search(_ query: String) async throws -> [MusicTrack] {
         let songs: [Song] = try await request(["operation": "search", "query": query])
         var seen: Set<String> = []
@@ -178,6 +189,7 @@ final class YouTubeSearch {
     }
 
     func clear() {
+        query = ""
         task?.cancel()
         generation = UUID()
         tracks = []

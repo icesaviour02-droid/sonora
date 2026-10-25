@@ -165,6 +165,12 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         pump()
     }
 
+    /// Isolates saved provider data when an account signs in or out.
+    func clearRemoteDownloads() {
+        let ids = entries.filter { $0.track.youtubeID != nil }.map(\.id)
+        ids.forEach { remove($0) }
+    }
+
     private func pump() {
         guard !isRestoring, error == nil, UIApplication.shared.applicationState != .background else { return }
         let active = entries.filter { $0.state == .resolving }.count

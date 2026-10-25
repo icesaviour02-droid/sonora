@@ -12,9 +12,10 @@ The intended device is an iPhone 13 running iOS 27.
 - Persistent background download queue with progress, cancellation/retry, fresh stream URLs,
   byte-count/playability validation and downloaded-file preference during playback.
 - Plain YouTube lyrics where the provider supplies them.
+- Initial account verification, isolated sign-in window, existing-session import and device Keychain storage.
 
 These are implemented capabilities, not a claim that every path has passed device testing.
-See STATUS.md for evidence and outstanding checks. Account sign-in/library, playlist mutations,
+See STATUS.md for evidence and outstanding checks. Account sign-in validation/renewal, account library, playlist mutations,
 other providers, scrobbling and equalizer remain unfinished.
 
 ## Build from Linux using GitHub's Mac runner
