@@ -9,11 +9,13 @@
 "ios-done" = "Done";
 "ios-download" = "Download";
 "ios-download-failed" = "Download failed. Check your connection, then try again.";
+"ios-download-invalid" = "The provider returned incomplete or unsupported audio. Try again.";
 "ios-download-preparing" = "Preparing download";
 "ios-download-progress" = "Download progress";
 "ios-download-queued" = "Waiting";
 "ios-download-restore-error" = "Saved downloads could not be opened. Reopen the app before adding more downloads.";
 "ios-download-save-error" = "Download information could not be saved. Check your available storage.";
+"ios-download-storage-failed" = "The audio file could not be saved. Check your available storage.";
 "ios-downloaded" = "Available offline";
 "ios-downloading" = "Downloading";
 "ios-downloads" = "Downloads";
@@ -30,9 +32,13 @@
 "ios-library-load-error" = "Your saved library could not be opened. Try again before importing more music.";
 "ios-license" = "Sonora contributors. GPL-3.0-or-later. This is an unofficial iPhone port.";
 "ios-loading-library" = "Opening your library. If it cannot be loaded, try again.";
+"ios-loading-lyrics" = "Loading lyrics…";
+"ios-lyrics" = "Lyrics";
+"ios-lyrics-unavailable" = "No lyrics available";
 "ios-missing-file" = "This audio file is missing. Import it again from Files.";
 "ios-music-service" = "Music service";
 "ios-next" = "Next track";
+"ios-no-lyrics-description" = "YouTube Music has no lyrics for this recording.";
 "ios-now-playing" = "Now Playing";
 "ios-off" = "Off";
 "ios-on" = "On";

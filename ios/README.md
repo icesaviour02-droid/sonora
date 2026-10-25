@@ -1,85 +1,40 @@
-# Sonora for iPhone — initial development milestone
+# Sonora for iPhone — development beta
 
-This directory starts the native iPhone port. **It is not the completed YouTube Music port.**
-The deployment target is iOS 26.0 and the device family is iPhone, including iPhone 13.
+Native SwiftUI iPhone port using the desktop-pinned Rust YouTube client. Requires iOS 26+.
+The intended device is an iPhone 13 running iOS 27.
 
-## First cloud build
+## Implemented
 
-The iPhone device and simulator targets compiled successfully with Xcode in
-[build 40191763029](https://github.com/icesaviour02-droid/sonora/actions/runs/40191763029).
-An unsigned arm64 IPA was downloaded and its bundle/archive integrity verified locally.
-That does not establish playback correctness on the physical iPhone.
+- System Liquid Glass floating tabs, mini-player, glass actions and native player sheet.
+- Files audio import, persistent local library, search and deletion.
+- Guest YouTube Music search, artwork and native AAC stream resolution.
+- AVPlayer queue, seeking, shuffle/repeat, lock-screen commands and background audio configuration.
+- Persistent background download queue with progress, cancellation/retry, fresh stream URLs,
+  byte-count/playability validation and downloaded-file preference during playback.
+- Plain YouTube lyrics where the provider supplies them.
 
-## Implemented in the initial app
+These are implemented capabilities, not a claim that every path has passed device testing.
+See STATUS.md for evidence and outstanding checks. Account sign-in/library, playlist mutations,
+other providers, scrobbling and equalizer remain unfinished.
 
-- Native SwiftUI Liquid Glass tab bar, mini-player accessory and player controls.
-- Multi-file audio import through Files; durable library index; local search and deletion.
-- AVPlayer queue, shuffle/repeat, seeking and background audio configuration.
-- Lock-screen commands, interruption/route-change handling and playback failure reporting.
-- Saved library and last queue; playback never starts automatically on launch.
-- Native settings and downloads screens with honest empty/incomplete states.
-- An unsigned-device build workflow and simulator smoke checks/screenshot artifacts.
+## Build from Linux using GitHub's Mac runner
 
-## Not implemented
+The fork is https://github.com/icesaviour02-droid/sonora. The **iPhone IPA** workflow builds the
+native libraries, device app and simulator app. Download **Sonora-iPhone-unsigned**, extract the
+IPA, then sign/install it with iLoader. No Apple certificate or account credential is stored here.
+The separate simulator-review artifact contains screenshots and optional live-download evidence,
+never the downloaded audio. A passing build cannot prove physical-device playback correctness.
 
-YouTube sign-in, lyrics, playlists, scrobbling, equalizer and the other streaming providers.
-Guest search, native AAC playback and background downloads are implemented but still require
-the next integrated build and device checks. Existing Rust code remains the reference for the
-remaining implementation.
+Artifacts expire after seven days. Public repository macOS runner usage follows GitHub's plan
+terms; artifact storage has quotas. Sideload signing is handled by the installation tool.
 
-The download queue persists metadata and iOS transfer identifiers, retries with freshly resolved
-URLs, and verifies byte length and playability before marking a file complete. Completed files
-stay inside the app sandbox with iOS data protection. Playback prefers those files, including
-after an offline cold launch. Cellular downloads are off by default. iOS force-quit behavior and
-provider URL expiration remain platform constraints; failed transfers can be retried in the app.
+## Local preparation
 
-## Build an unsigned IPA without owning a Mac
+Run `python3 ios/scripts/prepare.py` to regenerate the project, icon and English iOS resources.
+Strings originate in `assets/i18n/en-US/main.ftl`; generated files must not be edited directly.
+`Core/` is isolated from GPUI. On a Mac, install the two arm64 iOS Rust targets and run
+`python3 ios/scripts/build_native.py` before Xcode. The workflow performs these steps automatically.
 
-1. Put this checkout, including the iOS changes, in a GitHub repository you control.
-2. Open Actions → **iPhone IPA** → **Run workflow**.
-3. Download the **Sonora-iPhone-unsigned** artifact after the build succeeds.
-4. Extract `Sonora-unsigned.ipa`, then sign/install it using iLoader.
-
-Standard macOS runners are free for public repositories. Artifacts have storage quotas, and this
-workflow expires them after seven days. No Apple ID or certificate belongs in this repository.
-Sideload signing is performed by the user's installation tool, not by this build.
-
-The generated IPA is a device app, not a simulator app. A separate simulator build launches the
-empty library and captures light/dark screenshots. Review those and test on the iPhone before
-calling a build usable. A successful compile cannot establish playback/download correctness.
-
-## Local preparation on Linux
-
-`python3 ios/scripts/prepare.py` regenerates the Xcode project and iOS string resources from the
-canonical English Fluent keys beginning with `ios-`. Do not edit generated files directly.
-
-The iOS shell uses Apple's audio stack directly. `Core/` isolates the desktop YouTube client
-behind a small native API. It compiles on Linux; a live anonymous search returned 20 results,
-and stream resolution produced AAC audio with a successfully verified 1 MiB range. The app now
-links the native core, offers YouTube/library search scopes and resolves streams just before
-playback. Signed stream URLs are not saved to the queue. The earlier IPA remains local-only;
-the next integrated build is required before delivering these capabilities.
-
-The workflow builds both native libraries before invoking Xcode. On a Mac, use
-`python3 ios/scripts/build_native.py` after installing the two iOS Rust targets. Do not attempt to
-cross-compile the complete desktop workspace into the app.
-
-## Milestones and planning estimates
-
-These are rough engineering-effort estimates, not elapsed-time commitments or unattended work:
-
-1. Foundation and first cloud/device build: 1–3 working days, including fixing build/device issues.
-2. YouTube authentication, catalog and playback integration: 1–3 weeks, depending on protocol compatibility.
-3. Reliable downloads, offline metadata, queue/library mutations and lyrics: another 2–4 weeks.
-4. iPhone 13 performance, accessibility and failure/recovery testing: another 1–2 weeks.
-5. Remaining provider parity: separate work; potentially months and provider-specific limitations.
-
-Before milestone 2, validate the pinned ytmusic-rs client on iOS: its stream resolution, cookies,
-proof-of-origin token acquisition and network lifecycle are critical dependencies. Resolve stream
-authorization while foregrounded and determine whether transfer requests can be handed to Apple's
-background session; do not assume a custom Tokio download survives suspension.
-
-Release gates include real-device background playback, network switching, airplane-mode cold
-launch, interrupted download recovery, low storage, expired auth/stream URLs, seek/queue behavior,
-VoiceOver, large text, reduced transparency/motion and long listening sessions. Gapless playback
-and equalizer parity need a dedicated engine decision; AVPlayer alone is not proof of parity.
+Downloads remain inside the app sandbox with iOS data protection. Cellular downloads default to
+off. iOS owns suspended transfers; unresolved requests resume when the app returns to foreground.
+Force-quitting and expiring provider URLs can interrupt transfers; failed entries support retry.

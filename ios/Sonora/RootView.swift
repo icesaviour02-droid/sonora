@@ -54,30 +54,43 @@ struct RootView: View {
         .onChange(of: library.tracks) { _, tracks in
             if library.isLoaded { playback.synchronizeLibrary(with: tracks) }
         }
-        .onOpenURL { url in
-            guard url.scheme == "sonora",
-                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
-            let parameters = components.queryItems ?? []
-            func value(_ name: String) -> String? { parameters.first { $0.name == name }?.value }
-            if url.host == "search", let query = value("q"), !query.isEmpty, query.utf8.count <= 512 {
-                youtube.query = query
-                selectedTab = .search
-                youtube.submit(query)
-            } else if let id = value("id"), id.utf8.count == 11,
-                      id.utf8.allSatisfy({ (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95 }) {
-                let track = youtube.tracks.first { $0.youtubeID == id } ?? MusicTrack(
-                    id: "youtube:" + id,
-                    title: String((value("title") ?? id).prefix(200)),
-                    artist: String((value("artist") ?? "").prefix(200)),
-                    filename: "", addedAt: .now, youtubeID: id
-                )
-                if url.host == "play" {
-                    playback.play(track, in: [track])
-                    showPlayer = true
-                } else if url.host == "download" {
-                    downloads.enqueue(track)
-                    selectedTab = .downloads
-                }
+        .onOpenURL(perform: open)
+        .task {
+            #if DEBUG
+            // The simulator runner can route without SpringBoard's external-URL confirmation.
+            let arguments = ProcessInfo.processInfo.arguments
+            if let index = arguments.firstIndex(of: "--sonora-review-url"),
+               arguments.indices.contains(index + 1), let url = URL(string: arguments[index + 1]) {
+                open(url)
+            }
+            #endif
+        }
+    }
+
+    /// Shares URL validation between system deep links and the debug simulator runner.
+    private func open(_ url: URL) {
+        guard url.scheme == "sonora",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        let parameters = components.queryItems ?? []
+        func value(_ name: String) -> String? { parameters.first { $0.name == name }?.value }
+        if url.host == "search", let query = value("q"), !query.isEmpty, query.utf8.count <= 512 {
+            youtube.query = query
+            selectedTab = .search
+            youtube.submit(query)
+        } else if let id = value("id"), id.utf8.count == 11,
+                  id.utf8.allSatisfy({ (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95 }) {
+            let track = youtube.tracks.first { $0.youtubeID == id } ?? MusicTrack(
+                id: "youtube:" + id,
+                title: String((value("title") ?? id).prefix(200)),
+                artist: String((value("artist") ?? "").prefix(200)),
+                filename: "", addedAt: .now, youtubeID: id
+            )
+            if url.host == "play" {
+                playback.play(track, in: [track])
+                showPlayer = true
+            } else if url.host == "download" {
+                downloads.enqueue(track)
+                selectedTab = .downloads
             }
         }
     }
@@ -278,7 +291,7 @@ struct DownloadsView: View {
                                 ProgressView(value: entry.progress).accessibilityLabel(Text("ios-download-progress"))
                             }
                             HStack {
-                                Text(stateLabel(entry.state)).font(.caption).foregroundStyle(.secondary)
+                                Text(stateLabel(entry)).font(.caption).foregroundStyle(.secondary)
                                 Spacer()
                                 if entry.state == .failed {
                                     Button("ios-retry") { downloads.retry(entry.id) }.buttonStyle(.glass)
@@ -295,13 +308,16 @@ struct DownloadsView: View {
         .navigationTitle("ios-downloads")
     }
 
-    private func stateLabel(_ state: DownloadEntry.State) -> LocalizedStringKey {
-        switch state {
+    private func stateLabel(_ entry: DownloadEntry) -> LocalizedStringKey {
+        switch entry.state {
         case .queued: "ios-download-queued"
         case .resolving: "ios-download-preparing"
         case .downloading: "ios-downloading"
         case .downloaded: "ios-downloaded"
-        case .failed: "ios-download-failed"
+        case .failed:
+            if entry.failureCode == "size_mismatch" || entry.failureCode == "unplayable" { "ios-download-invalid" }
+            else if entry.failureCode?.hasPrefix("file_") == true { "ios-download-storage-failed" }
+            else { "ios-download-failed" }
         }
     }
 }

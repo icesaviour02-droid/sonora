@@ -1,48 +1,29 @@
 # iPhone port status
 
-Initial source milestone, 25 October 2026. Target: iPhone 13, iOS 26+.
+Development beta, 25 October 2026. Target: iPhone 13, iOS 26+; the intended phone runs iOS 27.
 
-## Checked on Linux
+## Verified
 
-- All six Swift sources parse without syntax errors using the tree-sitter Swift grammar.
-- The generated Xcode project's references and source paths resolve.
-- Info.plist, shared scheme XML and asset JSON parse successfully.
-- Canonical Fluent keys cover all explicit iOS localization keys.
-- Regeneration produces identical output.
-- Build workflow YAML parses and requests read-only repository access.
-- Native design detector reports no findings.
-- `git diff --check` passes.
+- Device and simulator SwiftUI builds pass Xcode compilation, including the linked Rust YouTube core.
+- The native core builds for arm64 iPhone and simulator; Linux Clippy passes with warnings denied.
+- Manual native-boundary calls returned live YouTube search results, AAC stream URLs and lyrics.
+- A full AAC range transfer on Linux returned the expected byte count.
+- IPA packaging validates arm64 iPhoneOS, minimum OS and archive contents.
+- Native navigation light/dark/large-text screenshots were inspected. Empty accessory and large-text overflow fixes were confirmed.
 
-The cloud packaging step also rejects simulator bundles, requires arm64 device code and verifies
-the IPA archive structure before upload. That step has not run here because it requires an
-actual Xcode device build. Library/queue restoration now shares one entry point so observer
-ordering cannot overwrite a saved queue before it is restored.
+## Integration check in progress
 
-## Cloud build verified
+Run 40208633614 compiled the app and packaged an IPA, but the live simulator check timed out.
+Review screenshots show SpringBoard's external URL confirmation prevented the search/download
+routes from reaching the app. The debug runner now passes the same validated routes at launch,
+avoiding that prompt. This correction and the latest download safeguards require a new run.
+No successful integrated download or playback check is claimed yet.
 
-- Fork created at https://github.com/icesaviour02-droid/sonora.
-- Initial source commit: `93af5a9b`.
-- Run https://github.com/icesaviour02-droid/sonora/actions/runs/40191763029 successfully built
-  both device and simulator targets with Xcode.
-- Device IPA packaged/uploaded; downloaded to `build/first-ipa/Sonora-unsigned.ipa`.
-- Downloaded bundle verified as arm64 iPhoneOS, minimum iOS 26.0, with intact ZIP contents.
-- Simulator launch and light/dark/maximum-text captures passed on iPhone 13, iOS 26.5.
-- Visual review found an empty player accessory and large-text empty-state overflow; both were
-  corrected in source and require confirmation in the next build.
+## Remaining release gates
 
-## YouTube bridge verified separately
+- Live search, full download, downloaded playback and relaunch in the simulator.
+- Physical iPhone import, streaming, background/lock-screen playback, airplane-mode cold launch,
+  interrupted transfer recovery, network changes, accessibility and long listening sessions.
+- YouTube sign-in/account library, playlist mutations, other providers, scrobbling and equalizer.
 
-`Core/` builds independently of GPUI using the desktop-pinned YouTube client. Cargo check,
-build and Clippy with warnings denied pass on Linux. A manual native-boundary invocation verified
-the callback/string-release contract and an invalid-query response; a live Beethoven search
-returned 20 results. This bridge has not been linked or cross-compiled into the IPA yet.
-
-## Required next
-
-1. Review simulator artifacts and sideload the test IPA on the iPhone 13.
-2. Validate local playback, imports, queue behavior, background audio and accessibility.
-3. Cross-compile/link the YouTube bridge and implement the provider milestones in README.md.
-
-The first IPA has been generated but has not been tested on a physical device. No streaming
-provider or background download support has been completed in the iPhone app. This development
-milestone must not be represented as the final feature-complete app.
+The app is a development beta, not a feature-complete replacement for the desktop app.

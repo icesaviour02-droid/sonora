@@ -54,13 +54,13 @@ if __name__ == "__main__":
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-library-large-text.png"))
         sim("ui", udid, "content_size", "large")
         sim("ui", udid, "appearance", "light")
-        sim("openurl", udid, "sonora://search?q=Beethoven")
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://search?q=Beethoven")
         time.sleep(10)
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-youtube-search.png"))
         video_id = os.environ.get("SONORA_SMOKE_VIDEO_ID", "")
         if len(video_id) == 11 and all(c.isascii() and (c.isalnum() or c in "_-") for c in video_id):
             container = Path(sim("get_app_container", udid, BUNDLE, "data"))
-            sim("openurl", udid, "sonora://download?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
+            sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://download?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
             index = container / "Library/Application Support/Downloads/downloads.json"
             deadline = time.monotonic() + 180
             complete = None
@@ -72,7 +72,9 @@ if __name__ == "__main__":
                         complete = entry
                         break
                     if entry and entry["state"] == "failed":
-                        raise RuntimeError("The optional live download check failed; inspect provider/network behavior")
+                        (OUTPUT / "download-failure.json").write_text(json.dumps(entry, indent=2))
+                        sim("io", udid, "screenshot", str(OUTPUT / "iphone13-download-failed.png"))
+                        raise RuntimeError("The optional live download check failed: " + str(entry.get("failureCode", "unspecified")))
                 time.sleep(2)
             sim("io", udid, "screenshot", str(OUTPUT / "iphone13-download.png"))
             if complete is None:
@@ -80,7 +82,7 @@ if __name__ == "__main__":
             downloaded = index.parent / complete["filename"]
             if not downloaded.exists() or downloaded.stat().st_size == 0:
                 raise RuntimeError("A completed download has no audio file")
-            sim("openurl", udid, "sonora://play?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
+            sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://play?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
             time.sleep(8)
             sim("io", udid, "screenshot", str(OUTPUT / "iphone13-downloaded-player.png"))
             (OUTPUT / "download-check.json").write_text(json.dumps({
@@ -88,7 +90,7 @@ if __name__ == "__main__":
                 "expected_bytes": complete.get("expectedBytes"),
                 "limitations": "The file was downloaded and validated by the app. Physical-device airplane mode is not verified."
             }, indent=2))
-        (OUTPUT / "device.json").write_text(json.dumps({"device": "iPhone 13 simulator", "runtime": runtime, "launch": launch, "limitations": "Launch/empty-state review only; playback, provider and download functionality are not validated."}, indent=2))
+        (OUTPUT / "device.json").write_text(json.dumps({"device": "iPhone 13 simulator", "runtime": runtime, "launch": launch, "limitations": "Simulator launch and appearance review; see download-check.json when the optional live transfer check runs. Physical-device behavior remains unverified."}, indent=2))
     finally:
         try:
             sim("shutdown", udid)

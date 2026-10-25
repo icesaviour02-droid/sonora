@@ -41,6 +41,7 @@ struct NowPlayingView: View {
     @State private var seekValue: Double = 0
     @State private var isSeeking = false
     @State private var showQueue = false
+    @State private var showLyrics = false
 
     var body: some View {
         NavigationStack {
@@ -105,6 +106,11 @@ struct NowPlayingView: View {
                             .frame(minWidth: Layout.control, minHeight: Layout.control)
                             .buttonStyle(.glass)
                     }
+                    if playback.current?.youtubeID != nil {
+                        Button("ios-lyrics", systemImage: "quote.bubble") { showLyrics = true }
+                            .frame(minHeight: Layout.control)
+                            .buttonStyle(.glass)
+                    }
                 }
                 .padding(Layout.spacing * 1.5)
                 .frame(maxWidth: .infinity)
@@ -113,6 +119,9 @@ struct NowPlayingView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("ios-done") { dismiss() } } }
             .sheet(isPresented: $showQueue) { QueueView() }
+            .sheet(isPresented: $showLyrics) {
+                if let track = playback.current { LyricsView(track: track) }
+            }
         }
         .presentationDragIndicator(.visible)
     }
@@ -137,6 +146,48 @@ struct NowPlayingView: View {
         let value = Int(max(0, seconds.isFinite ? seconds : 0))
         return String(format: "%d:%02d", value / 60, value % 60)
     }
+}
+
+struct LyricsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var lyrics = LyricsStore()
+    let track: MusicTrack
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if lyrics.isLoading {
+                    ProgressView("ios-loading-lyrics")
+                } else if let error = lyrics.error {
+                    ContentUnavailableView {
+                        Label("ios-lyrics-unavailable", systemImage: "quote.bubble")
+                    } description: {
+                        Text(error)
+                    } actions: {
+                        Button("ios-retry") { load() }.buttonStyle(.glass)
+                    }
+                } else if let text = lyrics.sheet?.text, !text.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Layout.spacing) {
+                            Text(track.title).font(.title2.bold())
+                            Text(text).font(.title3).frame(maxWidth: .infinity, alignment: .leading)
+                            if let source = lyrics.sheet?.source { Text(source).font(.caption).foregroundStyle(.secondary) }
+                        }.padding(Layout.spacing)
+                    }
+                } else {
+                    ContentUnavailableView("ios-lyrics-unavailable", systemImage: "quote.bubble", description: Text("ios-no-lyrics-description"))
+                }
+            }
+            .navigationTitle("ios-lyrics")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("ios-done") { dismiss() } } }
+            .onAppear { load() }
+            .onChange(of: track.youtubeID) { _, _ in load() }
+            .onDisappear { lyrics.cancel() }
+        }
+    }
+
+    private func load() { if let id = track.youtubeID { lyrics.load(id) } }
 }
 
 struct QueueView: View {

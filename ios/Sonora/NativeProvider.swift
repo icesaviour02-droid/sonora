@@ -59,13 +59,23 @@ enum NativeProvider {
         let content_length: UInt64?
     }
 
+    struct Lyrics: Decodable {
+        let text: String?
+        let source: String
+    }
+
     static func search(_ query: String) async throws -> [MusicTrack] {
         let songs: [Song] = try await request(["operation": "search", "query": query])
-        return songs.map(\.track)
+        var seen: Set<String> = []
+        return songs.map(\.track).filter { seen.insert($0.id).inserted }
     }
 
     static func resolve(_ id: String) async throws -> Stream {
         try await request(["operation": "resolve", "video_id": id])
+    }
+
+    static func lyrics(_ id: String) async throws -> Lyrics {
+        try await request(["operation": "lyrics", "video_id": id])
     }
 
     private static func request<Value: Decodable>(_ request: [String: String]) async throws -> Value {
@@ -89,6 +99,44 @@ enum NativeProvider {
             }
         }
         return value
+    }
+}
+
+/// Owns a cancellable lyrics request and discards results after a track changes or the sheet closes.
+@MainActor @Observable
+final class LyricsStore {
+    private(set) var sheet: NativeProvider.Lyrics?
+    private(set) var isLoading = false
+    var error: String?
+    @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private var generation = UUID()
+
+    func load(_ id: String) {
+        cancel()
+        let generation = UUID()
+        self.generation = generation
+        isLoading = true
+        error = nil
+        sheet = nil
+        task = Task { [weak self] in
+            do {
+                let lyrics = try await NativeProvider.lyrics(id)
+                guard let self, self.generation == generation else { return }
+                self.sheet = lyrics
+                self.isLoading = false
+            } catch is CancellationError {
+            } catch {
+                guard let self, self.generation == generation else { return }
+                self.error = (error as? ProviderError)?.errorDescription ?? String(localized: "ios-provider-error")
+                self.isLoading = false
+            }
+        }
+    }
+
+    func cancel() {
+        task?.cancel()
+        generation = UUID()
+        isLoading = false
     }
 }
 

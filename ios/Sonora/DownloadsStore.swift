@@ -8,11 +8,12 @@ struct DownloadEntry: Codable, Identifiable {
     enum State: String, Codable { case queued, resolving, downloading, downloaded, failed }
     var id: String { track.id }
     let track: MusicTrack
-    let filename: String
+    var filename: String
     var state: State
     var taskID: Int?
     var expectedBytes: UInt64?
     var progress: Double = 0
+    var failureCode: String? = nil
 }
 
 /// Delays the OS completion handler until all downloaded files and their metadata are finalized.
@@ -79,6 +80,9 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
             try FileManager.default.createDirectory(at: Self.root, withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: indexURL.path) {
                 entries = try JSONDecoder().decode([DownloadEntry].self, from: Data(contentsOf: indexURL))
+                guard entries.allSatisfy({ UUID(uuidString: ($0.filename as NSString).deletingPathExtension) != nil && ($0.filename as NSString).pathExtension == "m4a" }) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
             }
         } catch { self.error = String(localized: "ios-download-restore-error") }
         let config = URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
@@ -134,9 +138,13 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
 
     func retry(_ id: String) {
         guard let index = entries.firstIndex(where: { $0.id == id }), entries[index].state == .failed else { return }
+        try? FileManager.default.removeItem(at: Self.root.appendingPathComponent(entries[index].filename))
+        entries[index].filename = UUID().uuidString + ".m4a"
         entries[index].state = .queued
         entries[index].progress = 0
         entries[index].taskID = nil
+        entries[index].expectedBytes = nil
+        entries[index].failureCode = nil
         persist()
         pump()
     }
@@ -168,26 +176,29 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         guard let videoID = entry.track.youtubeID,
               let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
         entries[index].state = .resolving
-        persist()
+        guard persist() else { entries[index].state = .queued; return }
         resolving[entry.id] = Task { [weak self] in
             do {
                 let stream = try await NativeProvider.resolve(videoID)
                 try Task.checkCancellation()
+                guard let length = stream.content_length, length > 0 else { throw ProviderError.unavailable }
                 guard let self, let index = self.entries.firstIndex(where: { $0.filename == entry.filename }) else { return }
                 var request = URLRequest(url: stream.url)
                 request.setValue(stream.user_agent, forHTTPHeaderField: "User-Agent")
-                if let length = stream.content_length, length > 0 {
-                    request.setValue("bytes=0-\(length - 1)", forHTTPHeaderField: "Range")
-                }
+                request.setValue("bytes=0-\(length - 1)", forHTTPHeaderField: "Range")
                 request.allowsCellularAccess = self.allowsCellular
                 let transfer = self.session.downloadTask(with: request)
                 transfer.taskDescription = entry.filename
                 self.entries[index].taskID = transfer.taskIdentifier
                 self.transfers[transfer.taskIdentifier] = transfer
-                self.entries[index].expectedBytes = stream.content_length
+                self.entries[index].expectedBytes = length
                 self.entries[index].state = .downloading
                 self.resolving.removeValue(forKey: entry.id)
-                self.persist()
+                guard self.persist() else {
+                    self.transfers.removeValue(forKey: transfer.taskIdentifier)
+                    transfer.cancel()
+                    return
+                }
                 transfer.resume()
                 self.pump()
             } catch is CancellationError {
@@ -197,6 +208,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
                 self.resolving.removeValue(forKey: entry.id)
                 if let index = self.entries.firstIndex(where: { $0.filename == entry.filename }) {
                     self.entries[index].state = .failed
+                    self.entries[index].failureCode = "resolve_failed"
                     self.persist()
                     self.pump()
                 }
@@ -204,38 +216,47 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    private func persist() {
+    @discardableResult
+    private func persist() -> Bool {
         do {
             try JSONEncoder().encode(entries).write(to: indexURL, options: .atomic)
             error = nil
+            return true
         }
-        catch { self.error = String(localized: "ios-download-save-error") }
+        catch { self.error = String(localized: "ios-download-save-error"); return false }
     }
 
-    private func failed(_ taskID: Int) {
+    private func failed(_ taskID: Int, reason: String = "transfer_failed") {
         guard let index = entries.firstIndex(where: { $0.taskID == taskID }) else { return }
         entries[index].state = .failed
         entries[index].taskID = nil
+        entries[index].failureCode = reason
         lastProgress.removeValue(forKey: taskID)
         transfers.removeValue(forKey: taskID)
         persist()
         pump()
     }
 
-    private func finalize(_ taskID: Int, url: URL?) async {
+    private func finalize(_ taskID: Int, url: URL?, failure: String?) async {
         defer { DownloadEvents.shared.end() }
         guard let index = entries.firstIndex(where: { $0.taskID == taskID }), let url else {
             if let url { try? FileManager.default.removeItem(at: url) }
-            failed(taskID)
+            failed(taskID, reason: failure ?? "transfer_failed")
             return
         }
         let filename = entries[index].filename
         do {
             let bytes = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
             if let expected = entries[index].expectedBytes, UInt64(bytes) != expected {
-                throw CocoaError(.fileReadCorruptFile)
+                try? FileManager.default.removeItem(at: url)
+                failed(taskID, reason: "size_mismatch")
+                return
             }
-            guard try await AVURLAsset(url: url).load(.isPlayable) else { throw CocoaError(.fileReadCorruptFile) }
+            guard try await AVURLAsset(url: url).load(.isPlayable) else {
+                try? FileManager.default.removeItem(at: url)
+                failed(taskID, reason: "unplayable")
+                return
+            }
             // Awaiting metadata can race removal. Never resurrect a transfer the listener removed.
             guard let current = entries.firstIndex(where: { $0.filename == filename }) else {
                 try? FileManager.default.removeItem(at: url)
@@ -244,13 +265,14 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
             entries[current].state = .downloaded
             entries[current].progress = 1
             entries[current].taskID = nil
+            entries[current].failureCode = nil
             persist()
             lastProgress.removeValue(forKey: taskID)
             transfers.removeValue(forKey: taskID)
             pump()
         } catch {
             try? FileManager.default.removeItem(at: url)
-            failed(taskID)
+            failed(taskID, reason: "file_\((error as NSError).code)")
         }
     }
 
@@ -259,6 +281,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         DownloadEvents.shared.begin()
         var destination: URL?
         var movedFile: URL?
+        var failure = "http_\((downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0)"
         // The system deletes the temporary file when this callback returns, so move it now.
         if let filename = downloadTask.taskDescription,
            UUID(uuidString: (filename as NSString).deletingPathExtension) != nil,
@@ -272,23 +295,28 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
                 try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: target.path)
                 destination = target
             } catch {
+                failure = "file_\((error as NSError).code)"
                 if let movedFile { try? FileManager.default.removeItem(at: movedFile) }
                 destination = nil
             }
         }
         let result = destination
+        let reason = failure
         let taskID = downloadTask.taskIdentifier
         Task { @MainActor [weak self] in
             guard let self else { DownloadEvents.shared.end(); return }
-            await self.finalize(taskID, url: result)
+            await self.finalize(taskID, url: result, failure: reason)
         }
     }
 
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard error != nil else { return }
+        guard let error else { return }
         DownloadEvents.shared.begin()
         let taskID = task.taskIdentifier
-        Task { @MainActor [weak self] in self?.failed(taskID); DownloadEvents.shared.end() }
+        let code = (error as NSError).code
+        let fileErrors = [URLError.Code.cannotWriteToFile.rawValue, URLError.Code.cannotCreateFile.rawValue, URLError.Code.cannotMoveFile.rawValue]
+        let reason = (fileErrors.contains(code) ? "file_" : "network_") + String(code)
+        Task { @MainActor [weak self] in self?.failed(taskID, reason: reason); DownloadEvents.shared.end() }
     }
 
     nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,

@@ -17,6 +17,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The iPhone download queue can keep guest tracks for offline playback, show transfer progress,
   retry failed transfers and reconnect to background downloads after relaunch.
 
+- The iPhone player can display plain YouTube lyrics when supplied by the provider.
+
 ### Fixed
 
 - The iPhone player capsule stays hidden until a track is selected, and empty screens can

@@ -9,7 +9,7 @@ use anyhow::{Context as _, Result, bail};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::runtime::{Builder, Runtime};
-use ytmusic::YtMusic;
+use ytmusic::{Client, YtMusic, nav::Nav as _, parse::find_renderers};
 
 const DEADLINE: Duration = Duration::from_secs(30);
 const MAX_QUERY: usize = 512;
@@ -24,6 +24,7 @@ static CLIENT: OnceLock<Arc<YtMusic>> = OnceLock::new();
 enum Request {
     Search { query: String },
     Resolve { video_id: String },
+    Lyrics { video_id: String },
 }
 
 /// Accepts owned JSON work and delivers an owned JSON response on a background worker.
@@ -114,13 +115,7 @@ async fn execute(request: Request) -> Result<Value> {
             }).collect()))
         }
         Request::Resolve { video_id } => {
-            if video_id.len() != 11
-                || !video_id
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
-            {
-                bail!("invalid youtube video id");
-            }
+            validate_video_id(&video_id)?;
             let format = api
                 .best_audio(&video_id)
                 .await
@@ -136,5 +131,59 @@ async fn execute(request: Request) -> Result<Value> {
                 "content_length": format.content_length,
             }))
         }
+        Request::Lyrics { video_id } => {
+            validate_video_id(&video_id)?;
+            youtube_lyrics(api, &video_id).await
+        }
     }
+}
+
+fn validate_video_id(id: &str) -> Result<()> {
+    if id.len() != 11
+        || !id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+    {
+        bail!("invalid youtube video id");
+    }
+    Ok(())
+}
+
+/// The same guest lyrics endpoint and shared response parser used by desktop YouTubeLyrics.
+async fn youtube_lyrics(api: &YtMusic, id: &str) -> Result<Value> {
+    let next = api
+        .execute(
+            "next",
+            Client::Music,
+            json!({
+                "videoId": id,
+                "playlistId": format!("RDAMVM{id}"),
+                "enablePersistentPlaylistPanel": true,
+            }),
+        )
+        .await?;
+    let browse = find_renderers(&next, "browseEndpoint")
+        .into_iter()
+        .find_map(|endpoint| {
+            let kind = endpoint.str_at(&[
+                "browseEndpointContextSupportedConfigs",
+                "browseEndpointContextMusicConfig",
+                "pageType",
+            ]);
+            let id = endpoint.str_at(&["browseId"])?;
+            (kind == Some("MUSIC_PAGE_TYPE_TRACK_LYRICS") || id.starts_with("MPLYt")).then_some(id)
+        });
+    let text = match browse {
+        Some(browse) => {
+            let response = api
+                .execute("browse", Client::Music, json!({ "browseId": browse }))
+                .await?;
+            find_renderers(&response, "musicDescriptionShelfRenderer")
+                .into_iter()
+                .filter_map(|shelf| shelf.run_text(&["description"]))
+                .find(|text| !text.trim().is_empty())
+        }
+        None => None,
+    };
+    Ok(json!({ "text": text, "source": "YouTube Music" }))
 }

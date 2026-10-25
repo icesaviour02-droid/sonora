@@ -22,7 +22,7 @@ the user to sign and install with iLoader. No paid developer membership is assum
 
 ## Capabilities and Constraints
 
-- Native Liquid Glass requires iOS 26 or later; the user's installed iOS version is unknown.
+- Native Liquid Glass requires iOS 26 or later; the user's iPhone 13 runs iOS 27.
 - The desktop app is Rust/GPUI, not an existing iOS application.
 - Provider parity is a goal, not an established capability of this port.
 - A hosted build and real-device tests are required before calling an IPA verified.
@@ -36,8 +36,11 @@ bottom navigation and Liquid Glass buttons. Platform behavior governs layout and
 ## Evidence on Hand
 
 Desktop source, localization resources, icon assets, download queue, encrypted vault,
-YouTube provider and the pinned ytmusic-rs dependency. No iPhone screenshots or build exist yet.
+YouTube provider and the pinned ytmusic-rs dependency. Initial device and simulator builds and
+native iPhone 13 screenshots now exist. Guest provider search/stream resolution and full-range
+transfer have been verified on Linux. Integrated playback/download checks are in progress.
 
 ## Open Decisions
 
-Installed iOS version; user-owned GitHub destination for running the macOS workflow.
+Physical-device installation/playback results and account sign-in behavior remain unverified.
+The authorized GitHub fork is https://github.com/icesaviour02-droid/sonora.
