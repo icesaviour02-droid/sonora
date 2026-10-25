@@ -32,8 +32,12 @@ the user to sign and install with iLoader. No paid developer membership is assum
 
 ## Brand Commitments
 
-Keep Sonora's name and existing icon. The user explicitly requests Apple's native pill-shaped
-bottom navigation and Liquid Glass buttons. Platform behavior governs layout and interaction.
+Keep Sonora's name and existing icon. The user explicitly directs that the **Apple Music iPhone app**
+serve as the primary visual, layout, navigation and interaction reference across every screen:
+floating Liquid Glass bottom navigation that collapses on scroll down and pops up with the
+mini-player, full-screen Now Playing with dynamic artwork scaling, in-player synced lyrics and
+queue modes, system `MPVolumeView` and AirPlay controls, and Apple Music-style Home, Library and
+Search screens accommodating all original Sonora desktop features in the bottom navigation and Settings.
 
 ## Evidence on Hand
 

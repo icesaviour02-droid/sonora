@@ -73,6 +73,16 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var lastProgress: [Int: Date] = [:]
     private var indexURL: URL { Self.root.appendingPathComponent("downloads.json") }
 
+    var totalBytesUsed: UInt64 {
+        entries.reduce(0) { sum, entry in
+            guard entry.state == .downloaded else { return sum }
+            if let expected = entry.expectedBytes { return sum + expected }
+            let url = Self.root.appendingPathComponent(entry.filename)
+            let bytes = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            return sum + UInt64(max(0, bytes))
+        }
+    }
+
     override init() {
         allowsCellular = UserDefaults.standard.bool(forKey: "sonora.downloads.cellular")
         super.init()
@@ -136,6 +146,23 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         pump()
     }
 
+    func enqueueAll(_ tracks: [MusicTrack]) {
+        guard error == nil else { return }
+        var changed = false
+        for track in tracks where track.youtubeID != nil && track.available != false {
+            if let existing = entry(for: track.id) {
+                if existing.state == .failed { retry(track.id) }
+                continue
+            }
+            entries.append(DownloadEntry(track: track, filename: UUID().uuidString + ".m4a", state: .queued))
+            changed = true
+        }
+        if changed {
+            persist()
+            pump()
+        }
+    }
+
     func retry(_ id: String) {
         guard let index = entries.firstIndex(where: { $0.id == id }), entries[index].state == .failed else { return }
         try? FileManager.default.removeItem(at: Self.root.appendingPathComponent(entries[index].filename))
@@ -165,7 +192,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         pump()
     }
 
-    /// Isolates saved provider data when an account signs in or out.
+    /// Isolates saved provider data when an account signs in or out, or when the listener clears all downloads.
     func clearRemoteDownloads() {
         let ids = entries.filter { $0.track.youtubeID != nil }.map(\.id)
         ids.forEach { remove($0) }
@@ -183,9 +210,11 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
               let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
         entries[index].state = .resolving
         guard persist() else { entries[index].state = .queued; return }
+        let qualityRaw = UserDefaults.standard.string(forKey: "sonora.settings.downloadQuality") ?? AudioQuality.high.rawValue
+        let quality = AudioQuality(rawValue: qualityRaw) ?? .high
         resolving[entry.id] = Task { [weak self] in
             do {
-                let stream = try await NativeProvider.resolve(videoID)
+                let stream = try await NativeProvider.resolve(videoID, quality: quality)
                 try Task.checkCancellation()
                 guard let length = stream.content_length, length > 0 else { throw ProviderError.unavailable }
                 guard let self, let index = self.entries.firstIndex(where: { $0.filename == entry.filename }) else { return }

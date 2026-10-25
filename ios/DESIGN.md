@@ -2,20 +2,51 @@
 
 Scope: the iPhone port only; desktop styling remains governed by its Rust theme.
 
-Use the platform's native visual world, as explicitly requested: SwiftUI TabView, NavigationStack,
-large titles, semantic system backgrounds, SF Pro text styles and SF Symbols. Follow the device's
-light/dark preference. Keep the existing Sonora identity in the app icon.
+## Design Reference & Visual World
 
-The bottom tab bar is the system Liquid Glass capsule. A bottom accessory carries the mini-player;
-the expanded player is a native sheet. Glass and glassProminent button styles are for actions,
-not list rows or content backgrounds. No manual blur overlays or imitation glass.
+The **Apple Music iPhone app** (iOS 26/27 Liquid Glass era) is the primary reference for every layout, appearance, navigation pattern, player transition and touch interaction. Retain Sonora's identity and app icon while accommodating all original Sonora desktop features in idiomatic Apple Music places.
 
-Library, Search and Downloads are destinations. Settings is a toolbar sheet. Library starts with a
-real empty state and an import action. Never manufacture music, artwork, completion or provider status.
+## Navigation & Bottom Chrome
 
-All hit targets are at least 44 points. Use Dynamic Type, semantic foreground styles, native
-VoiceOver labels and system sheet/back gestures. Built-in materials handle reduced transparency;
-custom animation must respect reduced motion. No decorative looping animation.
+- **Liquid Glass Tab Bar**: System `TabView` capsule with `.tabBarMinimizeBehavior(.onScrollDown)` so the floating pill bar collapses smoothly when scrolling down and pops back up when scrolling up or interacting.
+- **Top-Level Destinations**:
+  - **Home** (`house.fill`): Personal and guest feed (`Listen Again`, `Quick Picks`, `From Your Library`, `Pinned` items, `Recently Played / History`, and `Genres & Moods` shelves).
+  - **Library** (`music.note.house` / `square.stack.fill`): Apple Music-style category list at top (`Playlists`, `Artists`, `Albums`, `Songs`, `Downloaded`, `Imported`) with `Recently Added` below, plus toolbar actions for importing local audio and opening Settings.
+  - **Downloads** (`arrow.down.circle`): Active and completed offline transfers with progress, retry and swipe-to-remove.
+  - **Search** (`magnifyingglass`, `role: .search`): Floating search pill on the right of the tab bar that expands into the bottom search bar when active, supporting `YouTube Music` and `Library` scopes across Songs, Albums, Artists and Playlists, plus Genre browsing when the query is empty.
+- **Mini-Player Accessory**: Hosted in `tabViewBottomAccessory` directly above the floating tab bar. Displays rounded track artwork thumbnail, track title, artist subtitle, play/pause button and next-track (`forward.fill`) button. Tapping or swiping up expands into the full-screen Now Playing view.
 
-Mode: Operate. First milestone: import audio, find it, play it, change queue position and recover
-the library after relaunch. Streaming integration is a later milestone, clearly stated in Settings.
+## Full-Screen Now Playing, Lyrics & Queue
+
+- **Presentation**: Full-height sheet with top grabber capsule, interactive swipe-to-dismiss, and atmospheric background derived from the current track's artwork over dark material.
+- **Three In-Player Modes** (toggled from the bottom bar, matching Apple Music):
+  1. **Artwork Mode (Default)**:
+     - Large square album artwork with rounded corners and deep shadow that scales dynamically (`1.0` when playing, `0.82` when paused) with a spring animation (respecting Reduce Motion).
+     - Track title and artist header on the left; favorite (`star` / `heart`) toggle and overflow action menu (`ellipsis.circle.fill` for Play Next, Add to Queue, Start Radio, Add to Playlist, Download, Go to Album/Artist, Sleep Timer, Share) on the right.
+  2. **Lyrics Mode** (`quote.bubble` active):
+     - Compact top track header (small artwork thumbnail + title + artist + menu).
+     - Full-height scrolling lyrics canvas: synced lines highlight at the active playhead and seek when tapped; inactive lines dim (and optionally blur per settings); supports romanization and plain-lyrics fallback with source attribution.
+  3. **Queue / Up Next Mode** (`list.bullet` active):
+     - Compact top track header.
+     - Pill toggles for Shuffle (`shuffle`), Repeat (`repeat` / `repeat.1`), and Autoplay Radio (`infinity`).
+     - Reorderable and swipe-deletable Up Next queue with History access.
+- **Scrubber & Quality Badge**: Interactive progress bar with elapsed time on left, remaining time (`-0:00`) on right, and centered audio format/quality badge (`AAC`, `256 kbps`, `Downloaded`).
+- **Transport Controls**: Large centered `backward.fill`, `play.fill`/`pause.fill`, and `forward.fill` buttons.
+- **System Volume & Routing**: Native `MPVolumeView` slider flanked by `speaker.fill` and `speaker.wave.3.fill`, plus bottom row with Lyrics toggle, native `AVRoutePickerView` (AirPlay / Bluetooth), and Queue toggle.
+
+## Sonora Feature Accommodation in Settings
+
+Settings opens from the top toolbar and organizes all desktop Sonora capabilities into native grouped sections:
+- **Music Services & Accounts**: YouTube Music sign-in, existing Cookie session import, account/brand-channel selection, cookie rotation status, and local Files import.
+- **Playback & Audio Quality**: Streaming/download quality (High / Normal / Low), Gapless & Automix Radio continuation, Loudness Normalization, Sleep Timer, and Equalizer (presets and custom preamp/bass/treble).
+- **Lyrics**: Synced/Karaoke highlighting, inactive-line blur, Romanization for non-Latin scripts, local-file lyrics lookup, and source priority (YouTube Music, LRCLIB).
+- **Appearance**: Theme override (System / Light / Dark) and Now Playing motion options.
+- **Downloads & Storage**: Cellular downloads toggle, offline storage usage, and cache/download clearing.
+- **Scrobbling & About**: Last.fm / ListenBrainz / Libre.fm / Maloja configuration, version, and GPL-3.0-or-later license.
+
+## Craft & Accessibility Rules
+
+- All hit targets are at least 44×44 pt. Do not apply oversized `.glass` button wrappers inside dense list rows; use clean plain/borderless trailing menus on rows like Apple Music.
+- Use Dynamic Type, semantic foreground styles, native VoiceOver labels and system back/sheet gestures.
+- Never manufacture fake tracks, artwork, completion or playback status.
+- Mode: Operate.

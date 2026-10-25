@@ -1332,6 +1332,7 @@ name = "sonora-mobile-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "rquickjs",
  "serde",
  "serde_json",
