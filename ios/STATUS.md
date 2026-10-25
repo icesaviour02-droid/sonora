@@ -1,6 +1,6 @@
 # iPhone port status
 
-Development beta, 25 October 2026. Target: iPhone 13, iOS 26+; the intended phone runs iOS 27.
+Development beta, 26 October 2026. Target: iPhone 13, iOS 26+; the intended phone runs iOS 27.
 
 ## Verified
 
@@ -19,10 +19,10 @@ sign-in-required response. This is an observed runtime failure, not a passing pl
 The same video resolved and served AAC bytes from Linux. Network/account differences must be
 resolved; no network-verification bypass or proxy has been added.
 
-An initial account verification, ephemeral sign-in window, desktop-compatible session import,
-Keychain persistence and sign-out implementation is now in source. It has not been accepted
-with a real account. Cookie renewal, account/page selection and proof-of-origin support remain
-open; a cookie verification result alone cannot establish complete authenticated playback.
+Account verification, ephemeral sign-in, desktop-compatible session import, Keychain persistence,
+account/page selection, cookie renewal and proof-of-origin support are in source. They have not
+been accepted with a real account; a cookie verification result alone cannot establish complete
+authenticated playback. The requested system Safari sign-in is still unimplemented.
 
 ## Remaining release gates
 
@@ -51,3 +51,26 @@ fixes the yt3 artwork-host case and accessibility control sizing, and probes sev
 candidates to distinguish a gated track from general guest failure. Guest playback remains an
 acceptance gate. Commercial Safari/OAuth sign-in is not implemented; see References/AppleMusic/AUTHENTICATION.md.
 The user selected Emil Kowalski's apple-design skill instead of Impeccable.
+
+## Desktop-path confirmation 7c3aa2f2 (26 October 2026)
+
+Apple run 40234634963 compiled device and simulator targets. Actual simulator Home returned
+8 sections, 79 items and 40 genres; synced lyrics returned 37 decoded lines. The 01f5a62b captures
+confirm that the yt3 display-sized artwork is sharp and large-text player controls no longer overlap.
+These captures review metadata/layout; they do not establish working audio.
+
+All four live search candidates failed Guest resolution with `network_verification_required`.
+Sanitized provider diagnostics confirm Google's bot-verification response and LOGIN_REQUIRED,
+without a decipher or audio-host refusal. No PO token stage was reached. This happens with
+the same `open_audio_within` method used by desktop; changing the one-byte check was insufficient.
+Linux resolved a public test track through that method, but this is not an iPhone playback pass.
+The user also confirms that the older installed IPA requires sign-in when playing Search results;
+the precise server response on their phone has not been captured.
+
+The subsequent Search repair restores the catalog's `songs` field (Library continues to use
+`liked_songs`). A live Linux boundary check returned 20 songs, albums, playlists and artists each.
+Simulator acceptance now requires decoded Search results as well as Home/lyrics, real advancing
+stream playback, complete download and advancing downloaded playback. IPA upload is after these
+checks; a missing repository variable cannot silently skip the audio check. A failing build must
+not be handed off as a working IPA. Authenticated playback, physical-device behavior and the
+remaining feature inventory are still release gates.

@@ -520,6 +520,9 @@ final class YouTubeSearch {
                 self.playlists = catalog.playlists.map(\.playlist)
                 self.artists = catalog.artists.map(\.artist)
                 self.isLoading = false
+                #if DEBUG
+                writeReviewEvidence("search-review.json", ["songs": self.tracks.count, "albums": self.albums.count, "playlists": self.playlists.count, "artists": self.artists.count])
+                #endif
             } catch is CancellationError {
                 // A newer search owns the screen; the old native callback still frees its response.
             } catch {

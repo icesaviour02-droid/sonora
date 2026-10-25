@@ -52,7 +52,14 @@ jobs:
             -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO build
       - name: Package unsigned device IPA
         run: python3 ios/scripts/package_ipa.py
-      - name: Upload unsigned IPA for iLoader
+      - name: Build simulator app
+        run: |
+          xcodebuild -project ios/Sonora.xcodeproj -scheme Sonora \
+            -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ios/build/simulator ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
+      - name: Launch on iPhone 13 simulator and capture accessibility appearances
+        run: python3 ios/scripts/simulator_smoke.py
+      - name: Upload unsigned IPA after simulator acceptance
         uses: actions/upload-artifact@v4
         with:
           name: Sonora-iPhone-unsigned
@@ -61,13 +68,6 @@ jobs:
             ios/build/ipa-build-info.json
           retention-days: 7
           if-no-files-found: error
-      - name: Build simulator app
-        run: |
-          xcodebuild -project ios/Sonora.xcodeproj -scheme Sonora \
-            -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath ios/build/simulator ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
-      - name: Launch on iPhone 13 simulator and capture accessibility appearances
-        run: python3 ios/scripts/simulator_smoke.py
       - name: Upload simulator screenshots and device details
         if: always()
         uses: actions/upload-artifact@v4

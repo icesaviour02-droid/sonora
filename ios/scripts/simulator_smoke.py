@@ -92,7 +92,7 @@ if __name__ == "__main__":
         home_evidence = evidence(container, "home-review.json")
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-home.png"))
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://search?q=Beethoven")
-        time.sleep(10)
+        search_evidence = evidence(container, "search-review.json")
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-youtube-search.png"))
         fixture = json.loads((IOS / "scripts/review-track.json").read_text())
         metadata = {"id": fixture["id"], "title": fixture["title"], "artist": fixture["artist"], "artwork": fixture["artwork_url"]}
@@ -110,9 +110,12 @@ if __name__ == "__main__":
                 sim("ui", udid, "content_size", "large")
         if not home_evidence or home_evidence.get("items", 0) == 0:
             raise RuntimeError("Home did not return decoded content; inspect the captured screen")
+        if not search_evidence or search_evidence.get("songs", 0) == 0:
+            raise RuntimeError("Catalog Search did not return decoded songs; inspect the captured screen")
         if not lyrics_evidence or lyrics_evidence.get("line_count", 0) == 0:
             raise RuntimeError("Lyrics did not return decoded lines; inspect the captured screen")
-        video_id = os.environ.get("SONORA_SMOKE_VIDEO_ID", "")
+        # A fork without repository variables must still verify real audio before publishing.
+        video_id = os.environ.get("SONORA_SMOKE_VIDEO_ID") or fixture["id"]
         if video_id:
             probe_file = container / "Library/Application Support/guest-probe.json"
             sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://guestprobe")
@@ -144,11 +147,11 @@ if __name__ == "__main__":
                     if entry and entry["state"] == "failed":
                         (OUTPUT / "download-failure.json").write_text(json.dumps(entry, indent=2))
                         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-download-failed.png"))
-                        raise RuntimeError("The optional live download check failed: " + str(entry.get("failureCode", "unspecified")))
+                        raise RuntimeError("The live download check failed: " + str(entry.get("failureCode", "unspecified")))
                 time.sleep(2)
             sim("io", udid, "screenshot", str(OUTPUT / "iphone13-download.png"))
             if complete is None:
-                raise RuntimeError("The optional download check did not finish within 180 seconds")
+                raise RuntimeError("The download check did not finish within 180 seconds")
             downloaded = index.parent / complete["filename"]
             if not downloaded.exists() or downloaded.stat().st_size == 0:
                 raise RuntimeError("A completed download has no audio file")
@@ -162,7 +165,7 @@ if __name__ == "__main__":
             }, indent=2))
             if not streamed or not played_download:
                 raise RuntimeError("Native playback did not advance; inspect playback diagnostic artifacts")
-        (OUTPUT / "device.json").write_text(json.dumps({"device": "iPhone 13 simulator", "runtime": runtime, "launch": launch, "limitations": "Simulator launch and appearance review; see download-check.json when the optional live transfer check runs. Physical-device behavior remains unverified."}, indent=2))
+        (OUTPUT / "device.json").write_text(json.dumps({"device": "iPhone 13 simulator", "runtime": runtime, "launch": launch, "limitations": "Simulator launch, appearance, streaming and download review. Physical-device behavior remains unverified."}, indent=2))
     finally:
         if "container" in locals():
             for filename in ("potoken-review.json", "provider-failure.json"):

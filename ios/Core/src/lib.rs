@@ -434,7 +434,7 @@ async fn execute(request: Request) -> Result<Value> {
                 search_artists(&api, query),
             );
             Ok(json!({
-                "liked_songs": songs?.into_iter().filter_map(serialize_track).collect::<Vec<_>>(),
+                "songs": songs?.into_iter().filter_map(serialize_track).collect::<Vec<_>>(),
                 "albums": albums.unwrap_or_default().into_iter().map(serialize_album).collect::<Vec<_>>(),
                 "playlists": playlists.unwrap_or_default().into_iter().map(serialize_playlist).collect::<Vec<_>>(),
                 "artists": artists.unwrap_or_default(),
