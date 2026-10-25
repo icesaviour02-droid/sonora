@@ -85,6 +85,9 @@ struct NowPlayingView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(CatalogStore.self) private var catalog
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     @State private var mode: Mode = .artwork
     @State private var queueMode: QueueListMode = .upNext
@@ -92,50 +95,68 @@ struct NowPlayingView: View {
     @State private var isSeeking = false
     @State private var lyrics = LyricsStore()
 
+    init(initialMode: String = "artwork") {
+        _mode = State(initialValue: initialMode == "lyrics" ? .lyrics : (initialMode == "queue" ? .queue : .artwork))
+    }
+
     var body: some View {
-        ZStack {
-            atmosphericBackground
-
-            VStack(spacing: Layout.spacing) {
-                grabberHeader
-
-                if let error = playback.error {
-                    errorBanner(error)
-                }
-
-                Group {
-                    switch mode {
-                    case .artwork:
-                        artworkStage
-                    case .lyrics:
-                        lyricsStage
-                    case .queue:
-                        queueStage
+        GeometryReader { geometry in
+            let side = min(geometry.size.width - Layout.playerMargin * 2,
+                           max(Layout.playerMinimumArtwork, geometry.size.height - Layout.playerChrome))
+            ZStack {
+                atmosphericBackground
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                if textSize.isAccessibilitySize {
+                    ScrollView {
+                        playerContent(artworkSide: min(side, Layout.accessibleArtwork), expands: false)
                     }
+                } else {
+                    playerContent(artworkSide: side, expands: true)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                scrubberSection
-                transportControls
-                volumeSection
-                bottomModeBar
             }
-            .padding(.horizontal, Layout.spacing * 1.25)
-            .padding(.top, Layout.compact)
-            .padding(.bottom, Layout.spacing)
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .preferredColorScheme(.dark)
+        .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
+        .sensoryFeedback(.selection, trigger: mode)
         .onAppear { loadLyricsIfNeeded() }
         .onChange(of: playback.current?.id) { _, _ in loadLyricsIfNeeded() }
         .onDisappear { lyrics.cancel() }
+    }
+
+    /// Keeps the artwork and every control within the sheet, even with accessibility text sizes.
+    private func playerContent(artworkSide: CGFloat, expands: Bool) -> some View {
+        VStack(spacing: Layout.playerSpacing) {
+            grabberHeader
+            if let error = playback.error { errorBanner(error) }
+            Group {
+                switch mode {
+                case .artwork: artworkStage(side: artworkSide)
+                case .lyrics: lyricsStage
+                case .queue: queueStage
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: expands ? nil : Layout.accessibleArtwork,
+                   maxHeight: expands ? .infinity : nil)
+            scrubberSection
+            transportControls
+            volumeSection
+            bottomModeBar
+        }
+        .padding(.horizontal, Layout.playerMargin)
+        .padding(.top, Layout.compact)
+        .padding(.bottom, Layout.spacing)
     }
 
     private var atmosphericBackground: some View {
         ZStack {
             Color(red: 0.09, green: 0.09, blue: 0.12)
                 .ignoresSafeArea()
-            if let url = playback.current?.artworkURL {
+            if !reduceTransparency, let url = playback.current?.artworkURL {
                 AsyncImage(url: url) { image in
                     image
                         .resizable()
@@ -149,9 +170,9 @@ struct NowPlayingView: View {
             }
             LinearGradient(
                 colors: [
-                    Color.black.opacity(0.45),
-                    Color.black.opacity(0.62),
-                    Color.black.opacity(0.82)
+                    Color.black.opacity(0.18),
+                    Color.black.opacity(0.32),
+                    Color.black.opacity(0.54)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -169,7 +190,7 @@ struct NowPlayingView: View {
                 Capsule()
                     .fill(.white.opacity(0.38))
                     .frame(width: 40, height: 5)
-                    .frame(width: Layout.control * 1.5, height: 24)
+                    .frame(width: Layout.control * 1.5, height: Layout.control)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -205,17 +226,17 @@ struct NowPlayingView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private var artworkStage: some View {
+    private func artworkStage(side: CGFloat) -> some View {
         VStack(spacing: Layout.spacing * 1.25) {
             Spacer(minLength: 0)
-            ArtworkView(track: playback.current, side: Layout.artwork, cornerRadius: 16)
+            ArtworkView(track: playback.current, side: side, cornerRadius: Layout.artworkRadius)
                 .scaleEffect((playback.isPlaying || !settings.animatedArtwork) ? 1.0 : 0.82)
                 .shadow(
                     color: .black.opacity(playback.isPlaying ? 0.50 : 0.25),
                     radius: playback.isPlaying ? 26 : 12,
                     y: playback.isPlaying ? 14 : 6
                 )
-                .animation(.spring(response: 0.42, dampingFraction: 0.78), value: playback.isPlaying)
+                .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 1), value: playback.isPlaying)
                 .accessibilityHidden(true)
             Spacer(minLength: 0)
             trackHeaderRow
@@ -250,7 +271,7 @@ struct NowPlayingView: View {
                     Image(systemName: catalog.isLiked(current) ? "star.fill" : "star")
                         .font(.body.weight(.semibold))
                         .foregroundStyle(catalog.isLiked(current) ? .yellow : .white.opacity(0.88))
-                        .frame(width: 34, height: 34)
+                        .frame(width: Layout.control, height: Layout.control)
                         .background(.white.opacity(0.14), in: Circle())
                 }
                 .buttonStyle(.plain)
@@ -264,7 +285,7 @@ struct NowPlayingView: View {
     private var compactTrackHeader: some View {
         HStack(spacing: Layout.compact + 2) {
             Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
                     mode = .artwork
                 }
             } label: {
@@ -370,7 +391,7 @@ struct NowPlayingView: View {
             Image(systemName: "ellipsis")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.88))
-                .frame(width: 34, height: 34)
+                .frame(width: Layout.control, height: Layout.control)
                 .background(.white.opacity(0.14), in: Circle())
         }
         .buttonStyle(.plain)
@@ -470,7 +491,8 @@ struct NowPlayingView: View {
                     ForEach(lines) { line in
                         let isActive = line.id == activeID
                         Button {
-                            playback.seek(to: line.start_seconds)
+                            guard let start = line.start_seconds else { return }
+                            playback.seek(to: start)
                             if !playback.isPlaying { playback.resume() }
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
@@ -488,7 +510,7 @@ struct NowPlayingView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .scaleEffect(isActive ? 1.01 : 0.98, anchor: .leading)
-                            .animation(.easeOut(duration: 0.24), value: isActive)
+                            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: isActive)
                         }
                         .buttonStyle(.plain)
                         .id(line.id)
@@ -504,7 +526,7 @@ struct NowPlayingView: View {
             }
             .onChange(of: activeID) { _, id in
                 guard let id else { return }
-                withAnimation(.easeInOut(duration: 0.32)) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
                     proxy.scrollTo(id, anchor: .center)
                 }
             }
@@ -513,7 +535,7 @@ struct NowPlayingView: View {
 
     private func activeLyricsLineID(in lines: [LyricsLineItem]) -> Int? {
         let time = playback.elapsed
-        if let match = lines.last(where: { time >= $0.start_seconds }) {
+        if let match = lines.last(where: { $0.start_seconds.map { time >= $0 } ?? false }) {
             return match.id
         }
         return lines.first?.id
@@ -608,7 +630,7 @@ struct NowPlayingView: View {
                                 } label: {
                                     Image(systemName: "minus.circle.fill")
                                         .foregroundStyle(.white.opacity(0.5))
-                                        .frame(width: 32, height: 32)
+                                        .frame(width: Layout.control, height: Layout.control)
                                 }
                                 .buttonStyle(.plain)
                             } else if queueMode == .history {
@@ -617,7 +639,7 @@ struct NowPlayingView: View {
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(.white.opacity(0.5))
-                                        .frame(width: 32, height: 32)
+                                        .frame(width: Layout.control, height: Layout.control)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -752,14 +774,14 @@ struct NowPlayingView: View {
     private var bottomModeBar: some View {
         HStack {
             Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
                     mode = (mode == .lyrics) ? .artwork : .lyrics
                 }
             } label: {
                 Image(systemName: mode == .lyrics ? "quote.bubble.fill" : "quote.bubble")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(mode == .lyrics ? Color.black : Color.white.opacity(0.82))
-                    .frame(width: 48, height: 36)
+                    .frame(width: Layout.control, height: Layout.control)
                     .background(mode == .lyrics ? Color.white : Color.clear, in: Capsule())
             }
             .buttonStyle(.plain)
@@ -773,7 +795,7 @@ struct NowPlayingView: View {
             Spacer()
 
             Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
                     mode = (mode == .queue) ? .artwork : .queue
                 }
             } label: {
@@ -781,7 +803,7 @@ struct NowPlayingView: View {
                     Image(systemName: "list.bullet")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(mode == .queue ? Color.black : Color.white.opacity(0.82))
-                        .frame(width: 48, height: 36)
+                        .frame(width: Layout.control, height: Layout.control)
                         .background(mode == .queue ? Color.white : Color.clear, in: Capsule())
                     if playback.isShuffled || playback.repeatMode != .off {
                         Circle()

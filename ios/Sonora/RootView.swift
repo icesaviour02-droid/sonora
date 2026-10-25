@@ -15,6 +15,7 @@ struct RootView: View {
     @State private var showImporter = false
     @State private var showSettings = false
     @State private var showPlayer = false
+    @State private var playerMode = "artwork"
     @State private var didHandleLaunchURL = false
 
     var body: some View {
@@ -45,9 +46,10 @@ struct RootView: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .modifier(PlayerAccessory(open: { showPlayer = true }))
+        .tint(.pink)
         .preferredColorScheme(settings.theme.colorScheme)
         .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(isPresented: $showPlayer) { NowPlayingView() }
+        .sheet(isPresented: $showPlayer) { NowPlayingView(initialMode: playerMode) }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             switch result {
             case .success(let urls): Task { await library.importFiles(urls) }
@@ -112,9 +114,22 @@ struct RootView: View {
                 id: "youtube:" + id,
                 title: String((value("title") ?? id).prefix(200)),
                 artist: String((value("artist") ?? "").prefix(200)),
-                filename: "", addedAt: .now, youtubeID: id
+                filename: "", addedAt: .now, youtubeID: id,
+                artworkURL: value("artwork").flatMap(URL.init(string:)).flatMap { url in
+                    let host = url.host ?? ""
+                    return url.scheme == "https" && (host.hasSuffix(".googleusercontent.com") || host.hasSuffix(".ytimg.com") || host.hasSuffix(".ggpht.com")) ? url : nil
+                }
             )
+            #if DEBUG
+            if url.host == "review" {
+                playerMode = value("mode") ?? "artwork"
+                playback.prepareReview(track)
+                showPlayer = true
+                return
+            }
+            #endif
             if url.host == "play" {
+                playerMode = "artwork"
                 playback.play(track, in: [track])
                 showPlayer = true
             } else if url.host == "download" {
@@ -483,6 +498,9 @@ struct LibraryView: View {
                         } label: {
                             Label("ios-songs", systemImage: "music.note")
                         }
+                        NavigationLink { DownloadsView() } label: {
+                            Label("ios-downloaded", systemImage: "arrow.down.circle")
+                        }
                         NavigationLink {
                             HistoryCollectionView()
                         } label: {
@@ -633,12 +651,7 @@ struct PlaylistsCollectionView: View {
             NavigationStack {
                 Form {
                     TextField("ios-playlist-title", text: $title)
-                    TextField("ios-playlist-description", text: $description)
-                    Picker("ios-playlist-privacy", selection: $privacy) {
-                        Text("ios-privacy-private").tag("PRIVATE")
-                        Text("ios-privacy-unlisted").tag("UNLISTED")
-                        Text("ios-privacy-public").tag("PUBLIC")
-                    }
+                    Text("ios-private-playlist-description").foregroundStyle(.secondary)
                 }
                 .navigationTitle("ios-create-playlist")
                 .navigationBarTitleDisplayMode(.inline)
@@ -649,14 +662,16 @@ struct PlaylistsCollectionView: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("ios-create") {
                             let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let desc = description
-                            let priv = privacy
                             showCreate = false
                             title = ""
                             description = ""
                             Task {
-                                _ = try? await NativeProvider.createPlaylist(title: name, description: desc, privacy: priv)
-                                catalog.loadLibrary(isSignedIn: account.name != nil)
+                                do {
+                                    _ = try await NativeProvider.createPlaylist(title: name)
+                                    catalog.loadLibrary(isSignedIn: account.name != nil)
+                                } catch {
+                                    catalog.libraryError = String(localized: "ios-provider-error")
+                                }
                             }
                         }
                         .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -2088,8 +2103,18 @@ struct ArtworkView: View {
     let side: CGFloat
     var cornerRadius: CGFloat = Layout.compact
 
+    /// Requests a display-sized Google artwork rendition instead of enlarging a tiny row thumbnail.
+    private var artworkURL: URL? {
+        guard let original = track?.artworkURL, let host = original.host,
+              host == "lh3.googleusercontent.com" || host.hasSuffix(".ggpht.com") else { return track?.artworkURL }
+        let pixels = Int(ceil(side * 3))
+        let value = original.absoluteString.replacingOccurrences(
+            of: "=w[0-9]+-h[0-9]+", with: "=w\(pixels)-h\(pixels)", options: .regularExpression)
+        return URL(string: value) ?? original
+    }
+
     var body: some View {
-        AsyncImage(url: track?.artworkURL) { image in
+        AsyncImage(url: artworkURL) { image in
             image.resizable().scaledToFill()
         } placeholder: {
             Image(systemName: "music.note")

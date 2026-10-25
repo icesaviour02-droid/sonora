@@ -23,6 +23,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The iPhone Home, album, artist, playlist and lyrics screens can decode provider data correctly.
+- The expanded iPhone player keeps artwork inside the screen and scrolls at large text sizes.
+  Foreground artwork requests a display-sized image independently from the blurred background.
+- iPhone playlist and artist actions now send the provider's expected request fields.
+
 - The iPhone player capsule stays hidden until a track is selected, and empty screens can
   scroll at large accessibility text sizes so actions remain reachable above the tab bar.
 

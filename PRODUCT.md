@@ -52,3 +52,11 @@ under implementation; the app does not meet the final release gates.
 
 Physical-device installation/playback results and account sign-in behavior remain unverified.
 The authorized GitHub fork is https://github.com/icesaviour02-droid/sonora.
+
+## Current implementation guidance
+
+The user rejected Impeccable for this work. Use Emil Kowalski's apple-design skill and the official
+reference pack in ios/References/AppleMusic. Fix Home/lyrics decoding, bounded player geometry and
+sharp foreground artwork before further presentation polish. The user has installed build 3 and
+reported broken Home/lyrics and a zoomed, blurry player on the actual iPhone. System Safari sign-in
+requires an OAuth-compatible provider; the current cookie-only adapter cannot read Safari cookies.

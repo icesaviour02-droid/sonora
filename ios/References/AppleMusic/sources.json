@@ -1,0 +1,50 @@
+[
+  {
+    "file": "S3109_musicMiniPlayer_iPhone.png",
+    "url": "https://help.apple.com/assets/69F8EBBDF3B89A4F6E0C704C/69F8EBC43862495245036393/en_US/f9b21a5528b84168a6b8568b07a54758.png",
+    "description": "The Library tab, showing the MiniPlayer near the bottom. The MiniPlayer shows the title of the song that\u2019s playing. The Pause and Next Track buttons are to the right of the song title. Tap the MiniPlayer to open the Now Playing screen.",
+    "source_page": "https://support.apple.com/guide/iphone/use-the-music-player-controls-iph676daac9b/26/ios/26"
+  },
+  {
+    "file": "S3101_musicNowPlaying_iPhone.png",
+    "url": "https://help.apple.com/assets/69F8EBBDF3B89A4F6E0C704C/69F8EBC43862495245036393/en_US/ecc6b5e1fcd60042aecc5d2127c9203e.png",
+    "description": "The Now Playing screen showing the various controls and buttons.",
+    "source_page": "https://support.apple.com/guide/iphone/use-the-music-player-controls-iph676daac9b/26/ios/26"
+  },
+  {
+    "file": "app-store-1.png",
+    "url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/09/d2/62/09d262c5-7fb2-0e48-6545-4a3e16dffb14/iPhone6p9-iOS26-USEN-Music-Wrapper1.png/1290x2796bb.png",
+    "source_page": "https://apps.apple.com/us/app/apple-music/id1108187390?uo=4",
+    "description": "Official Apple Music App Store screenshot; inspect to identify the screen."
+  },
+  {
+    "file": "app-store-2.png",
+    "url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/62/61/29/626129da-b55a-c00a-7629-da095e947ba9/iPhone6p9-iOS26-USEN-Music-Wrapper2.png/1290x2796bb.png",
+    "source_page": "https://apps.apple.com/us/app/apple-music/id1108187390?uo=4",
+    "description": "Official Apple Music App Store screenshot; inspect to identify the screen."
+  },
+  {
+    "file": "app-store-3.png",
+    "url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/66/f9/e7/66f9e733-0174-ee61-1963-0ce4ceb518a6/iPhone6p9-iOS26-USEN-Music-Wrapper3.png/1290x2796bb.png",
+    "source_page": "https://apps.apple.com/us/app/apple-music/id1108187390?uo=4",
+    "description": "Official Apple Music App Store screenshot; inspect to identify the screen."
+  },
+  {
+    "file": "app-store-4.png",
+    "url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/c5/f0/46/c5f046ff-4e33-2395-2c4f-9ae04149801b/iPhone6p9-iOS26-USEN-Music-Wrapper4.png/1290x2796bb.png",
+    "source_page": "https://apps.apple.com/us/app/apple-music/id1108187390?uo=4",
+    "description": "Official Apple Music App Store screenshot; inspect to identify the screen."
+  },
+  {
+    "file": "app-store-5.png",
+    "url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/c7/aa/89/c7aa89f7-b2c0-58de-bc20-8a710dc90671/iPhone6p9-iOS26-USEN-Music-Wrapper5.png/1290x2796bb.png",
+    "source_page": "https://apps.apple.com/us/app/apple-music/id1108187390?uo=4",
+    "description": "Official Apple Music App Store screenshot; inspect to identify the screen."
+  },
+  {
+    "file": "app-store-6.png",
+    "url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/67/04/a6/6704a634-d243-e850-2b93-fd38c1915e62/iPhone6p9-iOS26-USEN-Music-Wrapper6.png/1290x2796bb.png",
+    "source_page": "https://apps.apple.com/us/app/apple-music/id1108187390?uo=4",
+    "description": "Official Apple Music App Store screenshot; inspect to identify the screen."
+  }
+]

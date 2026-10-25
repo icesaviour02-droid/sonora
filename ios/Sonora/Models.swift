@@ -94,8 +94,8 @@ struct LyricsLineItem: Codable, Identifiable, Hashable {
     let id: Int
     let text: String
     let romanized: String?
-    let start_seconds: Double
-    let end_seconds: Double
+    let start_seconds: Double?
+    let end_seconds: Double?
 }
 
 /// Playback repeat behavior, stored with the queue rather than with a screen.
@@ -241,6 +241,12 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable {
 
 /// One set of layout metrics shared by the native Apple Music-style surfaces.
 enum Layout {
+    static let playerMargin: CGFloat = 24
+    static let playerSpacing: CGFloat = 12
+    static let playerChrome: CGFloat = 410
+    static let playerMinimumArtwork: CGFloat = 140
+    static let accessibleArtwork: CGFloat = 200
+    static let artworkRadius: CGFloat = 12
     static let spacing: CGFloat = 16
     static let compact: CGFloat = 8
     static let control: CGFloat = 44

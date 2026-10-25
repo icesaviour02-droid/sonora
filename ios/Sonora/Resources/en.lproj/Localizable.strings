@@ -134,6 +134,7 @@
 "ios-privacy-private" = "Private";
 "ios-privacy-public" = "Public";
 "ios-privacy-unlisted" = "Unlisted";
+"ios-private-playlist-description" = "New playlists are private.";
 "ios-provider-error" = "YouTube Music could not serve this request. Check your connection and try again.";
 "ios-provider-sign-in-required" = "YouTube requires a signed-in account for this request. Open Settings to sign in.";
 "ios-provider-timeout" = "YouTube Music took too long to respond. Try again.";

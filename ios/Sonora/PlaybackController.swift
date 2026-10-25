@@ -27,6 +27,7 @@ final class PlaybackController {
     @ObservationIgnored private var notifications: [NSObjectProtocol] = []
     @ObservationIgnored private var commands: [(MPRemoteCommand, Any)] = []
     @ObservationIgnored private var originalQueue: [MusicTrack] = []
+    @ObservationIgnored private var radioTask: Task<Void, Never>?
     @ObservationIgnored private var resolutionTask: Task<Void, Never>?
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
@@ -130,6 +131,16 @@ final class PlaybackController {
         select(first, autoplay: true)
     }
 
+    #if DEBUG
+    /// Lets the CLI review real track metadata without depending on successful audio authorization.
+    func prepareReview(_ track: MusicTrack) {
+        didRestore = true
+        originalQueue = [track]
+        queue = [track]
+        select(track, autoplay: false)
+    }
+    #endif
+
     func playNext(_ track: MusicTrack) {
         guard track.available != false else { return }
         if current == nil || queue.isEmpty {
@@ -180,18 +191,15 @@ final class PlaybackController {
         saveQueue()
     }
 
+    /// Moves the selected queue entries in the order displayed, without dropping any tracks.
     func moveQueue(fromOffsets source: IndexSet, toOffset destination: Int) {
-        let count = queue.count
-        var indices = Array(0..<count)
-        let moving = source.map { indices[$0] }
-        for index in source.sorted(by: >) {
-            queue.remove(at: index)
-        }
+        let moving = source.sorted().compactMap { queue.indices.contains($0) ? queue[$0] : nil }
+        for index in source.sorted(by: >) where queue.indices.contains(index) { queue.remove(at: index) }
         let target = min(max(0, destination - source.filter { $0 < destination }.count), queue.count)
-        let items = moving.compactMap { $0 < originalQueue.count ? originalQueue[$0] : nil }
-        _ = items
+        queue.insert(contentsOf: moving, at: target)
+        originalQueue = queue
+        isShuffled = false
         saveQueue()
-        _ = target
     }
 
     func removeFromQueue(_ track: MusicTrack) {
@@ -219,8 +227,10 @@ final class PlaybackController {
             return
         }
         play(track, in: [track])
-        Task { [weak self] in
-            guard let self, let radioTracks = try? await NativeProvider.radio(videoID: videoID), !radioTracks.isEmpty else { return }
+        radioTask?.cancel()
+        radioTask = Task { [weak self] in
+            guard let self, let radioTracks = try? await NativeProvider.radio(videoID: videoID),
+                  !Task.isCancelled, self.current?.id == track.id, !radioTracks.isEmpty else { return }
             var combined = [track]
             for item in radioTracks where item.id != track.id {
                 combined.append(item)
@@ -327,6 +337,8 @@ final class PlaybackController {
     }
 
     func pause() {
+        radioTask?.cancel()
+        radioTask = nil
         resolutionTask?.cancel()
         resolutionTask = nil
         player.pause()
@@ -398,9 +410,11 @@ final class PlaybackController {
 
     private func extendWithRadio(videoID: String, after currentTrack: MusicTrack) {
         isLoading = true
-        Task { [weak self] in
+        radioTask?.cancel()
+        radioTask = Task { [weak self] in
             guard let self else { return }
             let tracks = (try? await NativeProvider.radio(videoID: videoID)) ?? []
+            guard !Task.isCancelled, self.current?.id == currentTrack.id else { return }
             let existing = Set(self.queue.map(\.id))
             let fresh = tracks.filter { !existing.contains($0.id) && $0.available != false }
             guard let first = fresh.first, self.current?.id == currentTrack.id else {

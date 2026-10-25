@@ -1532,3 +1532,5 @@ ios-scrobble-enable = Enable Scrobbling
 ios-listenbrainz-token = ListenBrainz User Token
 ios-maloja-url = Maloja Server URL
 ios-maloja-key = Maloja API Key
+
+ios-private-playlist-description = New playlists are private.

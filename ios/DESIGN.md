@@ -50,3 +50,16 @@ Settings opens from the top toolbar and organizes all desktop Sonora capabilitie
 - Use Dynamic Type, semantic foreground styles, native VoiceOver labels and system back/sheet gestures.
 - Never manufacture fake tracks, artwork, completion or playback status.
 - Mode: Operate.
+
+## Verified reference and implementation contract (26 October 2026)
+
+Primary visual evidence now lives in References/AppleMusic with per-image sources, rather than an
+approximate remembered Apple Music layout. Use the official sharp artwork composition, native glass
+chrome, compact lyric header, reserved transport/volume region and touch targets of at least 44 pt.
+Use Emil Kowalski's apple-design guidance; Impeccable is no longer the chosen skill for this project.
+
+The player background is decorative and must never determine layout size. Bound it to the viewport,
+keep foreground artwork unblurred, and fit its side to available width and height. Large Dynamic Type
+gets a scrolling layout. Honor Reduce Motion and Reduce Transparency. Never enlarge low-resolution
+row artwork for the hero when the provider can serve a larger rendition. Downloads adapts the native
+Library/Downloaded vocabulary; no exact Apple standalone-download-tab reference has been found.

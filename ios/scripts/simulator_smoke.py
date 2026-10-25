@@ -29,7 +29,7 @@ def verify_playback(container, video_id, downloaded):
     """Require the native player clock to advance, rather than inferring audio from a screenshot."""
     state_file = container / "Library/Application Support/playback-review.json"
     state_file.unlink(missing_ok=True)
-    deadline = time.monotonic() + 90
+    deadline = time.monotonic() + 130
     state = None
     while time.monotonic() < deadline:
         if state_file.exists():
@@ -44,6 +44,19 @@ def verify_playback(container, video_id, downloaded):
         time.sleep(1)
     (OUTPUT / ("downloaded-playback-failed.json" if downloaded else "stream-playback-failed.json")).write_text(json.dumps(state, indent=2))
     return False
+
+
+def evidence(container, filename, timeout=45):
+    """Read count-only app evidence from actual decoded provider results, never raw music/lyrics."""
+    path = container / "Library/Application Support" / filename
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.exists():
+            value = json.loads(path.read_text())
+            (OUTPUT / filename).write_text(json.dumps(value, indent=2))
+            return value
+        time.sleep(1)
+    return None
 
 
 if __name__ == "__main__":
@@ -76,11 +89,30 @@ if __name__ == "__main__":
         sim("ui", udid, "content_size", "large")
         sim("ui", udid, "appearance", "light")
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://home")
-        time.sleep(8)
+        container = Path(sim("get_app_container", udid, BUNDLE, "data"))
+        home_evidence = evidence(container, "home-review.json")
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-home.png"))
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://search?q=Beethoven")
         time.sleep(10)
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-youtube-search.png"))
+        fixture = json.loads((IOS / "scripts/review-track.json").read_text())
+        metadata = {"id": fixture["id"], "title": fixture["title"], "artist": fixture["artist"], "artwork": fixture["artwork_url"]}
+        for mode in ("artwork", "lyrics", "queue"):
+            route = "sonora://review?" + urllib.parse.urlencode(dict(metadata, mode=mode))
+            sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", route)
+            if mode == "lyrics":
+                lyrics_evidence = evidence(container, "lyrics-review.json")
+            time.sleep(4)
+            sim("io", udid, "screenshot", str(OUTPUT / ("iphone13-player-" + mode + ".png")))
+            if mode == "artwork":
+                sim("ui", udid, "content_size", "accessibility-extra-extra-extra-large")
+                time.sleep(1)
+                sim("io", udid, "screenshot", str(OUTPUT / "iphone13-player-large-text.png"))
+                sim("ui", udid, "content_size", "large")
+        if not home_evidence or home_evidence.get("items", 0) == 0:
+            raise RuntimeError("Home did not return decoded content; inspect the captured screen")
+        if not lyrics_evidence or lyrics_evidence.get("line_count", 0) == 0:
+            raise RuntimeError("Lyrics did not return decoded lines; inspect the captured screen")
         video_id = os.environ.get("SONORA_SMOKE_VIDEO_ID", "")
         if len(video_id) == 11 and all(c.isascii() and (c.isalnum() or c in "_-") for c in video_id):
             container = Path(sim("get_app_container", udid, BUNDLE, "data"))

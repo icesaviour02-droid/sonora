@@ -254,7 +254,7 @@ enum NativeProvider {
         var id: String { "\(authuser ?? 0):\(page_id ?? ""):\(name)" }
     }
 
-    private struct Status: Decodable { let ok: Bool }
+    private struct Status: Decodable {}
     private struct SignedOut: Decodable { let signed_out: Bool }
     private struct PoTokenWanted: Decodable { let binding: String? }
     private struct CreatedPlaylist: Decodable { let playlist_id: String }
@@ -351,32 +351,25 @@ enum NativeProvider {
     }
 
     static func rateTrack(videoID: String, liked: Bool?) async throws {
-        var payload: [String: Any] = ["operation": "rate_track", "video_id": videoID]
-        if let liked { payload["liked"] = liked }
+        let payload: [String: Any] = ["operation": "rate_track", "video_id": videoID, "liked": liked ?? false]
         let _: Status = try await request(payload)
     }
 
     static func ratePlaylist(playlistID: String, liked: Bool) async throws {
-        let _: Status = try await request(["operation": "rate_playlist", "playlist_id": playlistID, "liked": liked])
+        let _: Status = try await request(["operation": "rate_playlist", "playlist_id": playlistID, "saved": liked])
     }
 
     static func setArtistSaved(channelID: String, saved: Bool) async throws {
-        let _: Status = try await request(["operation": "set_artist_saved", "channel_id": channelID, "saved": saved])
+        let _: Status = try await request(["operation": "set_artist_saved", "artist_id": channelID, "saved": saved])
     }
 
-    static func createPlaylist(title: String, description: String = "", privacy: String = "PRIVATE") async throws -> String {
-        let created: CreatedPlaylist = try await request([
-            "operation": "create_playlist",
-            "title": title,
-            "description": description,
-            "privacy": privacy
-        ])
+    static func createPlaylist(title: String) async throws -> String {
+        let created: CreatedPlaylist = try await request(["operation": "create_playlist", "title": title])
         return created.playlist_id
     }
 
-    static func renamePlaylist(playlistID: String, title: String, description: String? = nil) async throws {
-        var payload: [String: Any] = ["operation": "rename_playlist", "playlist_id": playlistID, "title": title]
-        if let description { payload["description"] = description }
+    static func renamePlaylist(playlistID: String, title: String) async throws {
+        let payload: [String: Any] = ["operation": "rename_playlist", "playlist_id": playlistID, "title": title]
         let _: Status = try await request(payload)
     }
 
@@ -385,7 +378,7 @@ enum NativeProvider {
     }
 
     static func setPlaylistPrivacy(playlistID: String, privacy: String) async throws {
-        let _: Status = try await request(["operation": "set_playlist_privacy", "playlist_id": playlistID, "privacy": privacy])
+        let _: Status = try await request(["operation": "set_playlist_privacy", "playlist_id": playlistID, "public": privacy == "PUBLIC"])
     }
 
     static func addPlaylistTrack(playlistID: String, videoID: String) async throws {
@@ -447,6 +440,9 @@ final class LyricsStore {
                 guard let self, self.generation == generation else { return }
                 self.sheet = lyrics
                 self.isLoading = false
+                #if DEBUG
+                writeReviewEvidence("lyrics-review.json", ["line_count": lyrics.lines?.count ?? 0, "synced": lyrics.synced ?? false, "has_text": !(lyrics.text ?? "").isEmpty])
+                #endif
             } catch is CancellationError {
             } catch {
                 guard let self, self.generation == generation else { return }
@@ -569,6 +565,9 @@ final class CatalogStore {
                 guard let self, !Task.isCancelled else { return }
                 self.homeSections = payload.sections.map(\.section)
                 self.genres = payload.genres.map(\.genre)
+                #if DEBUG
+                writeReviewEvidence("home-review.json", ["sections": self.homeSections.count, "items": self.homeSections.reduce(0) { $0 + $1.items.count }, "genres": self.genres.count])
+                #endif
                 self.isLoadingHome = false
             } catch is CancellationError {
             } catch {
@@ -637,3 +636,13 @@ final class CatalogStore {
         }
     }
 }
+
+#if DEBUG
+/// Writes only counts for CLI acceptance checks; never stores account secrets, lyrics or stream URLs.
+@MainActor
+private func writeReviewEvidence(_ filename: String, _ values: [String: Any]) {
+    guard ProcessInfo.processInfo.arguments.contains("--sonora-review-url"),
+          let data = try? JSONSerialization.data(withJSONObject: values) else { return }
+    try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent(filename), options: .atomic)
+}
+#endif

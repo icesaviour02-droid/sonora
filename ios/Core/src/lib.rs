@@ -22,7 +22,7 @@ const ROTATION_CHECK: Duration = Duration::from_secs(60);
 const POTOKEN_KEEP: Duration = Duration::from_secs(6 * 60 * 60);
 const POTOKEN_SOONEST: Duration = Duration::from_secs(5);
 const POTOKEN_SLOWEST: Duration = Duration::from_secs(5 * 60);
-const POTOKEN_WARM_WAIT: Duration = Duration::from_secs(2);
+const POTOKEN_WARM_WAIT: Duration = Duration::from_secs(35);
 const POTOKEN_WARM_POLL: Duration = Duration::from_millis(50);
 const HOME_BROWSE_ID: &str = "FEmusic_home";
 const GENRES_BROWSE_ID: &str = "FEmusic_moods_and_genres";
@@ -68,9 +68,6 @@ impl Minter for MobileMinter {
         if let Some(token) = potoken_token(binding) {
             return Some(token);
         }
-        if !potoken_warm() {
-            return None;
-        }
         let deadline = Instant::now() + POTOKEN_WARM_WAIT;
         while Instant::now() < deadline {
             tokio::time::sleep(POTOKEN_WARM_POLL).await;
@@ -99,10 +96,6 @@ fn potoken_token(binding: &str) -> Option<String> {
 
 fn potoken_minted(binding: &str) -> Option<String> {
     potokens().lock().ok()?.fresh(binding)
-}
-
-fn potoken_warm() -> bool {
-    potokens().lock().is_ok_and(|store| store.warm)
 }
 
 impl PoTokenStore {
@@ -295,7 +288,11 @@ pub unsafe extern "C" fn sonora_mobile_request(
     // Rust does not dereference the host context. Only the host callback interprets it.
     let context = context as usize;
     runtime.spawn(async move {
-        let outcome = tokio::time::timeout(DEADLINE, execute(request)).await;
+        let deadline = match request {
+            Request::Resolve { .. } => Duration::from_secs(90),
+            _ => DEADLINE,
+        };
+        let outcome = tokio::time::timeout(deadline, execute(request)).await;
         let response = match outcome {
             Ok(Ok(data)) => json!({ "ok": true, "data": data }),
             Ok(Err(error)) if error.downcast_ref::<ytmusic::SignInRequired>().is_some() => {
@@ -428,7 +425,7 @@ async fn execute(request: Request) -> Result<Value> {
                 search_artists(&api, query),
             );
             Ok(json!({
-                "songs": songs.unwrap_or_default().into_iter().filter_map(serialize_track).collect::<Vec<_>>(),
+                "liked_songs": songs?.into_iter().filter_map(serialize_track).collect::<Vec<_>>(),
                 "albums": albums.unwrap_or_default().into_iter().map(serialize_album).collect::<Vec<_>>(),
                 "playlists": playlists.unwrap_or_default().into_iter().map(serialize_playlist).collect::<Vec<_>>(),
                 "artists": artists.unwrap_or_default(),
@@ -758,7 +755,8 @@ fn serialize_playlist(playlist: ytmusic::Playlist) -> Value {
     json!({
         "id": playlist.id,
         "title": playlist.title,
-        "author": playlist.author,
+        "author": playlist.author.unwrap_or_default(),
+        "editable": playlist.owned,
         "owned": playlist.owned,
         "public": playlist.public.unwrap_or(false),
         "track_count": playlist.track_count,
@@ -824,11 +822,10 @@ async fn fetch_album(api: &Arc<YtMusic>, browse_id: &str) -> Result<Value> {
         .into_iter()
         .filter_map(serialize_track)
         .collect();
-    Ok(json!({
-        "album": album_meta,
-        "description": detail.description,
-        "tracks": tracks,
-    }))
+    let mut response = album_meta;
+    response["description"] = json!(detail.description);
+    response["tracks"] = json!(tracks);
+    Ok(response)
 }
 
 async fn fetch_artist(api: &Arc<YtMusic>, browse_id: &str) -> Result<Value> {
@@ -848,9 +845,10 @@ async fn fetch_artist(api: &Arc<YtMusic>, browse_id: &str) -> Result<Value> {
         "description": artist.description,
         "subscribers": artist.subscribers,
         "artwork_url": artwork,
-        "top_tracks": top_tracks,
+        "top_songs": top_tracks,
         "albums": albums,
         "singles": singles,
+        "related": [],
     }))
 }
 
@@ -863,11 +861,11 @@ async fn fetch_playlist(api: &Arc<YtMusic>, playlist_id: &str) -> Result<Value> 
         .into_iter()
         .filter_map(serialize_track)
         .collect();
-    Ok(json!({
-        "playlist": playlist_meta,
-        "public": detail.public,
-        "tracks": tracks,
-    }))
+    let mut response = playlist_meta;
+    response["public"] = json!(detail.public);
+    response["privacy"] = json!(if detail.public { "PUBLIC" } else { "PRIVATE" });
+    response["tracks"] = json!(tracks);
+    Ok(response)
 }
 
 async fn fetch_radio(api: &YtMusic, video_id: &str) -> Result<Value> {
@@ -901,7 +899,7 @@ async fn fetch_radio(api: &YtMusic, video_id: &str) -> Result<Value> {
 async fn fetch_library_content(api: &Arc<YtMusic>) -> Result<Value> {
     if !api.is_cookie_auth() {
         return Ok(json!({
-            "songs": [],
+            "liked_songs": [],
             "albums": [],
             "playlists": [],
             "artists": [],
@@ -914,7 +912,7 @@ async fn fetch_library_content(api: &Arc<YtMusic>) -> Result<Value> {
         fetch_saved_artists(api),
     );
     Ok(json!({
-        "songs": songs.unwrap_or_default().into_iter().filter_map(serialize_track).collect::<Vec<_>>(),
+        "liked_songs": songs?.into_iter().filter_map(serialize_track).collect::<Vec<_>>(),
         "albums": albums.unwrap_or_default().into_iter().map(serialize_album).collect::<Vec<_>>(),
         "playlists": playlists.unwrap_or_default().into_iter().filter(|p| p.id != "SE").map(serialize_playlist).collect::<Vec<_>>(),
         "artists": artists.unwrap_or_default(),
@@ -1040,7 +1038,7 @@ async fn fetch_home(api: &YtMusic) -> Result<Value> {
                     let button = item.get("musicNavigationButtonRenderer")?;
                     let params = button.str_at(&["clickCommand", "browseEndpoint", "params"])?;
                     let title = button.run_text(&["buttonText"])?;
-                    Some(json!({ "id": params, "title": title }))
+                    Some(json!({ "params": params, "title": title, "color": button.get("solidColor").and_then(Value::as_u64).unwrap_or(0) }))
                 })
                 .collect()
         })
@@ -1059,15 +1057,9 @@ async fn fetch_genre(api: &YtMusic, params: &str) -> Result<Value> {
             json!({ "browseId": GENRE_CATEGORY_ID, "params": params }),
         )
         .await?;
-    let name = answer
-        .run_text(&["header", "musicHeaderRenderer", "title"])
-        .unwrap_or_default();
     let mut sections = Vec::new();
     collect_home_sections(&answer, &mut sections);
-    Ok(json!({
-        "name": name,
-        "sections": sections,
-    }))
+    Ok(Value::Array(sections))
 }
 
 fn collect_home_sections(answer: &Value, sections: &mut Vec<Value>) {
@@ -1100,16 +1092,10 @@ fn collect_home_sections(answer: &Value, sections: &mut Vec<Value>) {
 
 fn parse_shelf_item(node: &Value) -> Option<Value> {
     if let Some(playlist) = ytmusic::parse::two_row_playlist(node) {
-        return Some(json!({
-            "kind": "playlist",
-            "playlist": serialize_playlist(playlist),
-        }));
+        return Some(shelf_item("playlist", serialize_playlist(playlist)));
     }
     if let Some(album) = ytmusic::parse::two_row_album(node) {
-        return Some(json!({
-            "kind": "album",
-            "album": serialize_album(album),
-        }));
+        return Some(shelf_item("album", serialize_album(album)));
     }
     if let Some(renderer) = node.at(&["musicTwoRowItemRenderer"]) {
         let page_type = renderer.str_at(&[
@@ -1126,25 +1112,31 @@ fn parse_shelf_item(node: &Value) -> Option<Value> {
         {
             let artwork = ytmusic::best_thumbnail(&ytmusic::parse::thumbnails(renderer))
                 .map(|thumb| thumb.url.clone());
-            return Some(json!({
-                "kind": "artist",
-                "artist": {
-                    "id": id,
-                    "name": name,
-                    "artwork_url": artwork,
-                }
-            }));
+            return Some(shelf_item(
+                "artist",
+                json!({"id": id, "name": name, "artwork_url": artwork}),
+            ));
         }
     }
     if let Some(track) = ytmusic::parse::list_item_track(node).or_else(|| two_row_track(node))
         && let Some(serialized) = serialize_track(track)
     {
-        return Some(json!({
-            "kind": "track",
-            "track": serialized,
-        }));
+        return Some(shelf_item("song", serialized));
     }
     None
+}
+
+/// Adds the common display fields while preserving typed metadata in the native boundary.
+fn shelf_item(kind: &str, data: Value) -> Value {
+    let mut item = json!({
+        "kind": if kind == "song" { "track" } else { kind },
+        "id": data["id"],
+        "title": data.get("title").or_else(|| data.get("name")).cloned().unwrap_or(json!("")),
+        "subtitle": data.get("artist").or_else(|| data.get("author")).cloned().unwrap_or(json!("")),
+        "artwork_url": data["artwork_url"],
+    });
+    item[kind] = data;
+    item
 }
 
 fn two_row_track(item: &Value) -> Option<ytmusic::Track> {
@@ -1304,6 +1296,7 @@ fn parse_lrc(input: &str) -> Vec<Value> {
         let (start, ref text) = parsed[index];
         let end = parsed.get(index + 1).map(|(next, _)| *next);
         out.push(json!({
+            "id": index,
             "start_seconds": start,
             "end_seconds": end,
             "text": text,
@@ -1317,8 +1310,10 @@ fn plain_lines(text: &str) -> Vec<Value> {
     text.lines()
         .map(str::trim)
         .filter(|line| !line.is_empty())
-        .map(|line| {
+        .enumerate()
+        .map(|(index, line)| {
             json!({
+                "id": index,
                 "start_seconds": null,
                 "end_seconds": null,
                 "text": line,
