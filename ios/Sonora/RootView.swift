@@ -30,9 +30,7 @@ struct RootView: View {
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-        .tabViewBottomAccessory {
-            if playback.current != nil { MiniPlayer(open: { showPlayer = true }) }
-        }
+        .modifier(PlayerAccessory(open: { showPlayer = true }))
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showPlayer) { NowPlayingView() }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
@@ -56,6 +54,36 @@ struct RootView: View {
     }
 }
 
+/// iOS 26.1 can hide the accessory without rebuilding the tab hierarchy. The 26.0 fallback
+/// omits the modifier altogether, since an empty accessory still reserves a glass capsule.
+private struct PlayerAccessory: ViewModifier {
+    @Environment(PlaybackController.self) private var playback
+    let open: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: playback.current != nil) { MiniPlayer(open: open) }
+        } else if playback.current != nil {
+            content.tabViewBottomAccessory { MiniPlayer(open: open) }
+        } else {
+            content
+        }
+    }
+}
+
+/// Centers short native empty states, while letting large accessibility text scroll above
+/// the safe area instead of pushing actions underneath the tab bar.
+private struct ScrollableEmptyState: ViewModifier {
+    func body(content: Content) -> some View {
+        GeometryReader { geometry in
+            ScrollView {
+                content.frame(maxWidth: .infinity, minHeight: geometry.size.height)
+            }
+        }
+    }
+}
+
 struct LibraryView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackController.self) private var playback
@@ -71,6 +99,7 @@ struct LibraryView: View {
                 } actions: {
                     Button("ios-retry") { Task { await library.load() } }
                 }
+                .modifier(ScrollableEmptyState())
             } else if library.tracks.isEmpty {
                 ContentUnavailableView {
                     Label("ios-your-music", systemImage: "music.note")
@@ -80,6 +109,7 @@ struct LibraryView: View {
                     Button("ios-import", systemImage: "plus", action: importAction)
                         .buttonStyle(.glassProminent)
                 }
+                .modifier(ScrollableEmptyState())
             } else {
                 List {
                     ForEach(library.tracks) { track in
@@ -130,8 +160,10 @@ struct SearchView: View {
         Group {
             if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 ContentUnavailableView("ios-search-library", systemImage: "magnifyingglass", description: Text("ios-search-description"))
+                    .modifier(ScrollableEmptyState())
             } else if matches.isEmpty {
                 ContentUnavailableView.search(text: query)
+                    .modifier(ScrollableEmptyState())
             } else {
                 List(matches) { track in
                     TrackRow(track: track) { playback.play(track, in: matches) }
@@ -150,6 +182,7 @@ struct DownloadsView: View {
         } description: {
             Text("ios-downloads-description")
         }
+        .modifier(ScrollableEmptyState())
         .navigationTitle("ios-downloads")
     }
 }

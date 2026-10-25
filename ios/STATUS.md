@@ -26,7 +26,9 @@ ordering cannot overwrite a saved queue before it is restored.
   both device and simulator targets with Xcode.
 - Device IPA packaged/uploaded; downloaded to `build/first-ipa/Sonora-unsigned.ipa`.
 - Downloaded bundle verified as arm64 iPhoneOS, minimum iOS 26.0, with intact ZIP contents.
-- Simulator boot/screenshots were still running when this record was written.
+- Simulator launch and light/dark/maximum-text captures passed on iPhone 13, iOS 26.5.
+- Visual review found an empty player accessory and large-text empty-state overflow; both were
+  corrected in source and require confirmation in the next build.
 
 ## YouTube bridge verified separately
 

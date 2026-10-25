@@ -13,6 +13,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   playback. YouTube Music integration is still in development; an unsigned IPA build workflow
   is included for testing the port.
 
+### Fixed
+
+- The iPhone player capsule stays hidden until a track is selected, and empty screens can
+  scroll at large accessibility text sizes so actions remain reachable above the tab bar.
+
 ## [0.44.2] - 2026-10-25
 
 ### Fixed
