@@ -16,6 +16,7 @@ final class PlaybackController {
     var error: String?
 
     @ObservationIgnored private let player = AVPlayer()
+    @ObservationIgnored private let downloads: DownloadsStore
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
     @ObservationIgnored private var itemObserver: NSKeyValueObservation?
@@ -27,7 +28,8 @@ final class PlaybackController {
     @ObservationIgnored private var didRestore = false
     private let snapshotKey = "sonora.ios.queue.v1"
 
-    init() {
+    init(downloads: DownloadsStore) {
+        self.downloads = downloads
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main
         ) { [weak self] time in
@@ -96,7 +98,9 @@ final class PlaybackController {
         guard queue.contains(track) else { return }
         pause()
         var localItem: AVPlayerItem?
-        if track.youtubeID == nil {
+        if let downloaded = downloads.fileURL(for: track.id) {
+            localItem = AVPlayerItem(url: downloaded)
+        } else if track.youtubeID == nil {
             let url = URL.applicationSupportDirectory.appendingPathComponent("Audio").appendingPathComponent(track.filename)
             guard FileManager.default.fileExists(atPath: url.path) else {
                 error = String(localized: "ios-missing-file")
@@ -132,6 +136,11 @@ final class PlaybackController {
     func resume() {
         guard let current else { return }
         if player.currentItem == nil, let videoID = current.youtubeID {
+            if let downloaded = downloads.fileURL(for: current.id) {
+                install(AVPlayerItem(url: downloaded))
+                startAudio()
+                return
+            }
             resolve(videoID, for: current.id)
             return
         }

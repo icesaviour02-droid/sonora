@@ -22,10 +22,16 @@ That does not establish playback correctness on the physical iPhone.
 
 ## Not implemented
 
-YouTube sign-in, background downloads, lyrics, playlists, scrobbling, equalizer and the other
-streaming providers. Guest search and native AAC stream playback are now implemented, but
-still require the integrated build and device checks. Existing Rust code remains the reference
-for the remaining implementation.
+YouTube sign-in, lyrics, playlists, scrobbling, equalizer and the other streaming providers.
+Guest search, native AAC playback and background downloads are implemented but still require
+the next integrated build and device checks. Existing Rust code remains the reference for the
+remaining implementation.
+
+The download queue persists metadata and iOS transfer identifiers, retries with freshly resolved
+URLs, and verifies byte length and playability before marking a file complete. Completed files
+stay inside the app sandbox with iOS data protection. Playback prefers those files, including
+after an offline cold launch. Cellular downloads are off by default. iOS force-quit behavior and
+provider URL expiration remain platform constraints; failed transfers can be retried in the app.
 
 ## Build an unsigned IPA without owning a Mac
 

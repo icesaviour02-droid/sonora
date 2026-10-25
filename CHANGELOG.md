@@ -14,6 +14,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is included for testing the port.
 - The iPhone search screen can query YouTube Music as a guest, show artwork, and resolve available
   AAC tracks through the shared provider client for native playback.
+- The iPhone download queue can keep guest tracks for offline playback, show transfer progress,
+  retry failed transfers and reconnect to background downloads after relaunch.
 
 ### Fixed
 

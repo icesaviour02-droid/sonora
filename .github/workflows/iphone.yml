@@ -64,7 +64,7 @@ jobs:
         run: |
           xcodebuild -project ios/Sonora.xcodeproj -scheme Sonora \
             -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath ios/build/simulator CODE_SIGNING_ALLOWED=NO build
+            -derivedDataPath ios/build/simulator ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
       - name: Launch on iPhone 13 simulator and capture accessibility appearances
         run: python3 ios/scripts/simulator_smoke.py
       - name: Upload simulator screenshots and device details

@@ -233,21 +233,67 @@ struct SearchView: View {
 }
 
 struct DownloadsView: View {
+    @Environment(DownloadsStore.self) private var downloads
+    @Environment(PlaybackController.self) private var playback
+
     var body: some View {
-        ContentUnavailableView {
-            Label("ios-downloads-empty", systemImage: "arrow.down.circle")
-        } description: {
-            Text("ios-downloads-description")
+        Group {
+            if downloads.isRestoring {
+                ProgressView("ios-restoring-downloads")
+            } else if downloads.entries.isEmpty {
+                ContentUnavailableView {
+                    Label("ios-downloads-empty", systemImage: "arrow.down.circle")
+                } description: {
+                    Text(downloads.error ?? String(localized: "ios-downloads-description"))
+                }.modifier(ScrollableEmptyState())
+            } else {
+                List {
+                    if let error = downloads.error { Text(error).foregroundStyle(.secondary) }
+                    ForEach(downloads.entries) { entry in
+                        VStack(alignment: .leading, spacing: Layout.compact) {
+                            TrackRow(track: entry.track) {
+                                let tracks = downloads.entries.filter { $0.state == .downloaded }.map(\.track)
+                                playback.play(entry.track, in: tracks)
+                            }
+                            .disabled(entry.state != .downloaded)
+                            if entry.state == .downloading {
+                                ProgressView(value: entry.progress).accessibilityLabel(Text("ios-download-progress"))
+                            }
+                            HStack {
+                                Text(stateLabel(entry.state)).font(.caption).foregroundStyle(.secondary)
+                                Spacer()
+                                if entry.state == .failed {
+                                    Button("ios-retry") { downloads.retry(entry.id) }.buttonStyle(.glass)
+                                }
+                            }
+                        }
+                        .swipeActions {
+                            Button("ios-remove-download", role: .destructive) { downloads.remove(entry.id) }
+                        }
+                    }
+                }
+            }
         }
-        .modifier(ScrollableEmptyState())
         .navigationTitle("ios-downloads")
+    }
+
+    private func stateLabel(_ state: DownloadEntry.State) -> LocalizedStringKey {
+        switch state {
+        case .queued: "ios-download-queued"
+        case .resolving: "ios-download-preparing"
+        case .downloading: "ios-downloading"
+        case .downloaded: "ios-downloaded"
+        case .failed: "ios-download-failed"
+        }
     }
 }
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(DownloadsStore.self) private var downloads
 
     var body: some View {
+        @Bindable var downloads = downloads
         NavigationStack {
             List {
                 Section("ios-music-service") {
@@ -255,8 +301,13 @@ struct SettingsView: View {
                     Text("ios-service-description").foregroundStyle(.secondary)
                 }
                 Section("ios-about") {
-                    LabeledContent("ios-version", value: "0.1.0")
+                    LabeledContent("ios-version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                     Text("ios-license").foregroundStyle(.secondary)
+                }
+                Section {
+                    Toggle("ios-cellular-downloads", isOn: $downloads.allowsCellular)
+                } footer: {
+                    Text("ios-cellular-downloads-description")
                 }
             }
             .navigationTitle("ios-settings")
@@ -268,12 +319,14 @@ struct SettingsView: View {
 /// Full-width native row; the content remains visually separate from the glass navigation layer.
 struct TrackRow: View {
     @Environment(PlaybackController.self) private var playback
+    @Environment(DownloadsStore.self) private var downloads
     let track: MusicTrack
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: Layout.spacing) {
+        HStack(spacing: Layout.compact) {
+            Button(action: action) {
+                HStack(spacing: Layout.spacing) {
                 ArtworkView(track: track, side: Layout.control)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading) {
@@ -286,11 +339,28 @@ struct TrackRow: View {
                         .foregroundStyle(.tint)
                         .accessibilityLabel(Text("ios-current-track"))
                 }
+                }
+                .frame(minHeight: Layout.control)
+                .contentShape(Rectangle())
+            }.buttonStyle(.plain)
+            if track.youtubeID != nil {
+                Menu {
+                    if let entry = downloads.entry(for: track.id) {
+                        if entry.state == .failed {
+                            Button("ios-retry", systemImage: "arrow.clockwise") { downloads.retry(track.id) }
+                        }
+                        Button("ios-remove-download", systemImage: "trash", role: .destructive) { downloads.remove(track.id) }
+                    } else {
+                        Button("ios-download", systemImage: "arrow.down.circle") { downloads.enqueue(track) }
+                    }
+                } label: {
+                    Image(systemName: downloads.entry(for: track.id)?.state == .downloaded ? "checkmark.circle" : "ellipsis")
+                        .frame(minWidth: Layout.control, minHeight: Layout.control)
+                }
+                .buttonStyle(.glass)
+                .accessibilityLabel(Text("ios-track-actions"))
             }
-            .frame(minHeight: Layout.control)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
 }
 
