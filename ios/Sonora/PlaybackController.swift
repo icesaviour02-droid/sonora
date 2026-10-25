@@ -36,6 +36,9 @@ final class PlaybackController {
             Task { @MainActor in
                 guard let self else { return }
                 self.elapsed = time.seconds.isFinite ? max(0, time.seconds) : 0
+                #if DEBUG
+                self.writeReviewState()
+                #endif
                 let seconds = self.player.currentItem?.duration.seconds ?? 0
                 let duration = seconds.isFinite ? max(0, seconds) : (self.current?.durationSeconds ?? 0)
                 if self.duration != duration {
@@ -88,6 +91,9 @@ final class PlaybackController {
 
     func play(_ track: MusicTrack, in tracks: [MusicTrack]) {
         guard track.available != false else { return }
+        // Explicit playback wins over a still-pending library/queue restoration.
+        didRestore = true
+        error = nil
         originalQueue = tracks
         queue = tracks.filter { $0.available != false }
         isShuffled = false
@@ -304,6 +310,24 @@ final class PlaybackController {
         }
         commands.append((command, target))
     }
+
+    #if DEBUG
+    /// Records playback advancement for the CLI simulator review, without stream URLs or audio.
+    private func writeReviewState() {
+        guard ProcessInfo.processInfo.arguments.contains("--sonora-review-url"), let current else { return }
+        struct Review: Encodable {
+            let trackID: String
+            let elapsed: Double
+            let isPlaying: Bool
+            let isDownloaded: Bool
+            let hasError: Bool
+        }
+        let state = Review(trackID: current.id, elapsed: elapsed, isPlaying: isPlaying,
+                           isDownloaded: downloads.fileURL(for: current.id) != nil, hasError: error != nil)
+        let url = URL.applicationSupportDirectory.appendingPathComponent("playback-review.json")
+        if let data = try? JSONEncoder().encode(state) { try? data.write(to: url, options: .atomic) }
+    }
+    #endif
 
     private struct Snapshot: Codable {
         let ids: [String]

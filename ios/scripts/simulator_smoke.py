@@ -25,6 +25,25 @@ def sim(*args):
     return run("xcrun", "simctl", *args)
 
 
+def verify_playback(container, video_id, downloaded):
+    """Require the native player clock to advance, rather than inferring audio from a screenshot."""
+    state_file = container / "Library/Application Support/playback-review.json"
+    state_file.unlink(missing_ok=True)
+    deadline = time.monotonic() + 45
+    state = None
+    while time.monotonic() < deadline:
+        if state_file.exists():
+            state = json.loads(state_file.read_text())
+            if state.get("hasError"):
+                raise RuntimeError("The native player reported a playback error")
+            if (state.get("trackID") == "youtube:" + video_id and state.get("isPlaying")
+                    and state.get("elapsed", 0) > 1 and state.get("isDownloaded") == downloaded):
+                (OUTPUT / ("downloaded-playback.json" if downloaded else "stream-playback.json")).write_text(json.dumps(state, indent=2))
+                return
+        time.sleep(1)
+    raise RuntimeError("Native playback did not advance: " + json.dumps(state))
+
+
 if __name__ == "__main__":
     OUTPUT.mkdir(parents=True, exist_ok=True)
     runtimes = json.loads(sim("list", "runtimes", "--json"))["runtimes"]
@@ -60,6 +79,10 @@ if __name__ == "__main__":
         video_id = os.environ.get("SONORA_SMOKE_VIDEO_ID", "")
         if len(video_id) == 11 and all(c.isascii() and (c.isalnum() or c in "_-") for c in video_id):
             container = Path(sim("get_app_container", udid, BUNDLE, "data"))
+            play_url = "sonora://play?" + urllib.parse.urlencode({"id": video_id, "title": video_id})
+            sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", play_url)
+            verify_playback(container, video_id, downloaded=False)
+            sim("io", udid, "screenshot", str(OUTPUT / "iphone13-stream-player.png"))
             sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://download?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
             index = container / "Library/Application Support/Downloads/downloads.json"
             deadline = time.monotonic() + 180
@@ -83,7 +106,7 @@ if __name__ == "__main__":
             if not downloaded.exists() or downloaded.stat().st_size == 0:
                 raise RuntimeError("A completed download has no audio file")
             sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://play?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
-            time.sleep(8)
+            verify_playback(container, video_id, downloaded=True)
             sim("io", udid, "screenshot", str(OUTPUT / "iphone13-downloaded-player.png"))
             (OUTPUT / "download-check.json").write_text(json.dumps({
                 "state": complete["state"], "bytes": downloaded.stat().st_size,
