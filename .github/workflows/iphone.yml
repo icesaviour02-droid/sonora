@@ -34,6 +34,7 @@ jobs:
     env:
       RUSTUP_TOOLCHAIN: stable
       IPHONEOS_DEPLOYMENT_TARGET: '26.0'
+      SONORA_SMOKE_VIDEO_ID: ${{ vars.SONORA_SMOKE_VIDEO_ID }}
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable

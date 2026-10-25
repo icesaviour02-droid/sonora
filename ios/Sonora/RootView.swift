@@ -6,6 +6,7 @@ struct RootView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlaybackController.self) private var playback
     @Environment(YouTubeSearch.self) private var youtube
+    @Environment(DownloadsStore.self) private var downloads
     @State private var selectedTab = Destination.library
     @State private var showImporter = false
     @State private var showSettings = false
@@ -54,13 +55,30 @@ struct RootView: View {
             if library.isLoaded { playback.synchronizeLibrary(with: tracks) }
         }
         .onOpenURL { url in
-            guard url.scheme == "sonora", url.host == "search",
-                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-                  let query = components.queryItems?.first(where: { $0.name == "q" })?.value,
-                  !query.isEmpty, query.utf8.count <= 512 else { return }
-            youtube.query = query
-            selectedTab = .search
-            youtube.submit(query)
+            guard url.scheme == "sonora",
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+            let parameters = components.queryItems ?? []
+            func value(_ name: String) -> String? { parameters.first { $0.name == name }?.value }
+            if url.host == "search", let query = value("q"), !query.isEmpty, query.utf8.count <= 512 {
+                youtube.query = query
+                selectedTab = .search
+                youtube.submit(query)
+            } else if let id = value("id"), id.utf8.count == 11,
+                      id.utf8.allSatisfy({ (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95 }) {
+                let track = youtube.tracks.first { $0.youtubeID == id } ?? MusicTrack(
+                    id: "youtube:" + id,
+                    title: String((value("title") ?? id).prefix(200)),
+                    artist: String((value("artist") ?? "").prefix(200)),
+                    filename: "", addedAt: .now, youtubeID: id
+                )
+                if url.host == "play" {
+                    playback.play(track, in: [track])
+                    showPlayer = true
+                } else if url.host == "download" {
+                    downloads.enqueue(track)
+                    selectedTab = .downloads
+                }
+            }
         }
     }
 

@@ -50,7 +50,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 }
 
 /// Owns the persistent download queue. URLSession, rather than a view or Rust worker, transfers
-/// the bytes while iOS suspends the app. Only two provider requests/transfers run together.
+/// the bytes while iOS suspends the app. Two provider resolutions run together; the OS owns
+/// transfer scheduling after requests are handed off.
 @MainActor @Observable
 final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
     nonisolated static let sessionIdentifier = "org.sonorahq.iphone.downloads.v1"
@@ -140,6 +141,8 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         pump()
     }
 
+    func resumeQueue() { pump() }
+
     /// Cancels unfinished transfers and removes a completed download only when the listener asks.
     func remove(_ id: String) {
         guard let entry = entry(for: id) else { return }
@@ -155,8 +158,8 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
     }
 
     private func pump() {
-        guard !isRestoring, error == nil else { return }
-        let active = entries.filter { $0.state == .resolving || $0.state == .downloading }.count
+        guard !isRestoring, error == nil, UIApplication.shared.applicationState != .background else { return }
+        let active = entries.filter { $0.state == .resolving }.count
         let queued = entries.filter { $0.state == .queued }.prefix(max(0, 2 - active))
         for entry in queued { start(entry) }
     }
@@ -173,6 +176,9 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
                 guard let self, let index = self.entries.firstIndex(where: { $0.filename == entry.filename }) else { return }
                 var request = URLRequest(url: stream.url)
                 request.setValue(stream.user_agent, forHTTPHeaderField: "User-Agent")
+                if let length = stream.content_length, length > 0 {
+                    request.setValue("bytes=0-\(length - 1)", forHTTPHeaderField: "Range")
+                }
                 request.allowsCellularAccess = self.allowsCellular
                 let transfer = self.session.downloadTask(with: request)
                 transfer.taskDescription = entry.filename
@@ -183,6 +189,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
                 self.resolving.removeValue(forKey: entry.id)
                 self.persist()
                 transfer.resume()
+                self.pump()
             } catch is CancellationError {
                 // Removing a queued download owns the cancellation state.
             } catch {

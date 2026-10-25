@@ -2,9 +2,11 @@
 """Launch the built app on an iPhone 13 simulator and capture review evidence, not mockups."""
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import time
+import urllib.parse
 
 IOS = Path(__file__).resolve().parents[1]
 OUTPUT = IOS / "build/review"
@@ -55,6 +57,37 @@ if __name__ == "__main__":
         sim("openurl", udid, "sonora://search?q=Beethoven")
         time.sleep(10)
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-youtube-search.png"))
+        video_id = os.environ.get("SONORA_SMOKE_VIDEO_ID", "")
+        if len(video_id) == 11 and all(c.isascii() and (c.isalnum() or c in "_-") for c in video_id):
+            container = Path(sim("get_app_container", udid, BUNDLE, "data"))
+            sim("openurl", udid, "sonora://download?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
+            index = container / "Library/Application Support/Downloads/downloads.json"
+            deadline = time.monotonic() + 180
+            complete = None
+            while time.monotonic() < deadline:
+                if index.exists():
+                    entries = json.loads(index.read_text())
+                    entry = next((e for e in entries if e["track"].get("youtubeID") == video_id), None)
+                    if entry and entry["state"] == "downloaded":
+                        complete = entry
+                        break
+                    if entry and entry["state"] == "failed":
+                        raise RuntimeError("The optional live download check failed; inspect provider/network behavior")
+                time.sleep(2)
+            sim("io", udid, "screenshot", str(OUTPUT / "iphone13-download.png"))
+            if complete is None:
+                raise RuntimeError("The optional download check did not finish within 180 seconds")
+            downloaded = index.parent / complete["filename"]
+            if not downloaded.exists() or downloaded.stat().st_size == 0:
+                raise RuntimeError("A completed download has no audio file")
+            sim("openurl", udid, "sonora://play?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
+            time.sleep(8)
+            sim("io", udid, "screenshot", str(OUTPUT / "iphone13-downloaded-player.png"))
+            (OUTPUT / "download-check.json").write_text(json.dumps({
+                "state": complete["state"], "bytes": downloaded.stat().st_size,
+                "expected_bytes": complete.get("expectedBytes"),
+                "limitations": "The file was downloaded and validated by the app. Physical-device airplane mode is not verified."
+            }, indent=2))
         (OUTPUT / "device.json").write_text(json.dumps({"device": "iPhone 13 simulator", "runtime": runtime, "launch": launch, "limitations": "Launch/empty-state review only; playback, provider and download functionality are not validated."}, indent=2))
     finally:
         try:
