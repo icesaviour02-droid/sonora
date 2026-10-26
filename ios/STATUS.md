@@ -576,3 +576,12 @@ own Keychain group, with DER encoding retained. This follows the ordinary self-c
 simulator app identity; real device signing remains entirely with iLoader. The prior run does
 not establish any new native feature acceptance. Simulator signing troubleshooting has not
 changed the release app code since the explicit picker fix.
+
+Run 40385596637 at b4111278 again identified Taskgated Invalid Signature before app launch,
+even with minimal ad-hoc entitlements. Manual simulator signing is removed, restoring the
+unsigned headless simulator setup that actually ran 92 native assertions and three touch flows
+at 3921f918. The simulator-entitlement file is removed as well. Keychain checks remain enabled
+and must report their OSStatus/failure honestly; without a supported signing identity they are
+not accepted. No weaker storage fallback or signing-policy bypass has been introduced. The
+physical iPhone's iLoader-provided signature and Keychain still require phone acceptance. These
+signing experiments changed only test infrastructure, not the device build's signature path.
