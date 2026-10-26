@@ -137,7 +137,7 @@ struct LocalPlaylistView: View {
                     }
                     ForEach(playlist.track_ids, id: \.self) { id in
                         Group {
-                            if let track = byID[id] { TrackRow(track: track) { playback.play(track, in: tracks) } }
+                            if let track = byID[id] { TrackRow(track: track) { playback.play(track, in: tracks, source: playlist.title) } }
                             else { Label("ios-track-unavailable", systemImage: "exclamationmark.circle").foregroundStyle(.secondary) }
                         }
                         .deleteDisabled(local.isBusy).moveDisabled(local.isBusy)

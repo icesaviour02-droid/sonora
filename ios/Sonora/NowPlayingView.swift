@@ -6,32 +6,28 @@ import SwiftUI
 struct MiniPlayer: View {
     @Environment(PlaybackController.self) private var playback
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let open: () -> Void
 
     var body: some View {
         HStack(spacing: Layout.compact) {
             Button(action: open) {
                 HStack(spacing: Layout.compact + 2) {
-                    ArtworkView(track: playback.current, side: Layout.miniArtwork, cornerRadius: 8)
+                    ArtworkView(track: playback.current,
+                        side: placement == .inline ? Layout.inlineMiniArtwork : Layout.miniArtwork,
+                        cornerRadius: (placement == .inline ? Layout.inlineMiniArtwork : Layout.miniArtwork) / 5)
                         .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 4) {
-                            Text(playback.current?.title ?? "")
-                                .appFont(.subheadline, weight: .semibold)
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
+                            FadingText(playback.current?.title ?? "", style: .subheadline, weight: .semibold)
                             if playback.current?.explicit == true {
                                 Image(systemName: "e.square.fill")
                                     .appFont(.caption2)
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        if placement != .inline { Text(playback.current?.artist ?? "")
-                            .appFont(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        }
+                        FadingText(playback.current?.artist ?? "", style: .subheadline, color: .secondaryLabel)
                     }
                     Spacer(minLength: 0)
                 }
@@ -39,7 +35,9 @@ struct MiniPlayer: View {
                 .frame(minHeight: Layout.control)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(playback.current?.title ?? "") + Text(", ") + Text(playback.current?.artist ?? ""))
             .accessibilityHint(Text("ios-open-player"))
+            .accessibilityIdentifier("mini-player-open")
 
             Button(action: playback.toggle) {
                 Group {
@@ -48,11 +46,12 @@ struct MiniPlayer: View {
                     } else {
                         Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
                             .appFont(.title3, weight: .semibold)
+                            .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                     }
                 }
                 .frame(minWidth: Layout.control, minHeight: Layout.control)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text((playback.isPlaying || playback.isLoading) ? LocalizedStringKey("ios-pause") : LocalizedStringKey("ios-play")))
 
             if placement == .expanded { Button {
@@ -98,6 +97,8 @@ struct NowPlayingView: View {
     @State private var lyrics = LyricsStore()
     @State private var chooseLocalPlaylist = false
     @State private var addQueueSongs = false
+    @State private var trackHeaderHeight: CGFloat = Layout.playerTitleReserve
+    @Namespace private var playerElements
 
     init(initialMode: String = "artwork") {
         _mode = State(initialValue: initialMode == "lyrics" ? .lyrics : (initialMode == "queue" ? .queue : .artwork))
@@ -105,8 +106,7 @@ struct NowPlayingView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let side = max(1, min(geometry.size.width - Layout.playerMargin * 2,
-                           max(Layout.playerMinimumArtwork, geometry.size.height - Layout.playerChrome)))
+            let side = max(1, geometry.size.width - Layout.playerMargin * 2)
             ZStack {
                 if textSize.isAccessibilitySize {
                     ScrollView {
@@ -151,14 +151,16 @@ struct NowPlayingView: View {
         VStack(spacing: Layout.playerSpacing) {
             grabberHeader
             if let error = playback.error { errorBanner(error) }
+            if mode != .artwork { compactTrackHeader.transition(.opacity) }
             Group {
                 switch mode {
                 case .artwork: artworkStage(side: artworkSide)
-                case .lyrics: lyricsStage
-                case .queue: queueStage
+                case .lyrics: lyricsStage.transition(.opacity)
+                case .queue: queueStage.transition(.opacity)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: expands ? nil : Layout.accessibleArtwork,
+            .frame(maxWidth: .infinity, minHeight: expands ? nil :
+                   (mode == .artwork ? Layout.accessibleArtwork + trackHeaderHeight + Layout.spacing : Layout.accessibleArtwork),
                    maxHeight: expands ? .infinity : nil)
             scrubberSection.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             transportControls.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -213,8 +215,10 @@ struct NowPlayingView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text("ios-done"))
+            .accessibilityIdentifier("player-dismiss")
             Spacer()
         }
+        .frame(height: Layout.grabberHeight)
     }
 
     private func errorBanner(_ message: String) -> some View {
@@ -245,19 +249,24 @@ struct NowPlayingView: View {
     }
 
     private func artworkStage(side: CGFloat) -> some View {
-        VStack(spacing: Layout.spacing * 1.25) {
-            Spacer(minLength: 0)
-            ArtworkView(track: playback.current, side: side, cornerRadius: Layout.artworkRadius)
-                .scaleEffect((playback.isPlaying || !settings.animatedArtwork) ? 1.0 : 0.82)
-                .shadow(
-                    color: .black.opacity(playback.isPlaying ? 0.50 : 0.25),
-                    radius: playback.isPlaying ? 26 : 12,
-                    y: playback.isPlaying ? 14 : 6
-                )
-                .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 1), value: playback.isPlaying)
-                .accessibilityHidden(true)
-            Spacer(minLength: 0)
-            trackHeaderRow
+        GeometryReader { geometry in
+            let boundedSide = min(side, max(1, geometry.size.height - trackHeaderHeight - Layout.spacing))
+            VStack(spacing: Layout.spacing) {
+                ZStack {
+                    ArtworkView(track: playback.current, side: boundedSide, cornerRadius: Layout.artworkRadius)
+                        .matchedGeometryEffect(id: "artwork", in: playerElements, isSource: mode == .artwork)
+                        .scaleEffect((playback.isPlaying || !settings.animatedArtwork) ? 1.0 : 0.82)
+                        .shadow(color: .black.opacity(playback.isPlaying ? 0.50 : 0.25),
+                            radius: playback.isPlaying ? 26 : 12, y: playback.isPlaying ? 14 : 6)
+                        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 1), value: playback.isPlaying)
+                        .accessibilityHidden(true)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                trackHeaderRow
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        if height > 0 { trackHeaderHeight = height }
+                    }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
     }
 
@@ -288,6 +297,7 @@ struct NowPlayingView: View {
                 .appFont(.subheadline).foregroundStyle(.white.opacity(0.75))
                 .lineLimit(textSize.isAccessibilitySize ? 2 : 1)
         }
+        .matchedGeometryEffect(id: "metadata", in: playerElements, isSource: mode == .artwork)
     }
 
     @ViewBuilder
@@ -314,26 +324,24 @@ struct NowPlayingView: View {
     private var compactTrackHeader: some View {
         HStack(spacing: Layout.compact + 2) {
             Button {
-                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
+                withAnimation(reduceMotion ? nil : PlayerMotion.mode) {
                     mode = .artwork
                 }
             } label: {
-                HStack(spacing: Layout.compact + 2) {
-                    ArtworkView(track: playback.current, side: 46, cornerRadius: 8)
+                HStack(spacing: Layout.spacing - Layout.compact / 2) {
+                    ArtworkView(track: playback.current, side: Layout.queueHeaderArtwork, cornerRadius: Layout.compact)
+                        .matchedGeometryEffect(id: "artwork", in: playerElements, isSource: mode != .artwork)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(playback.current?.title ?? "")
-                            .appFont(.subheadline, weight: .semibold)
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                        Text(playback.current?.artist ?? "")
-                            .appFont(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
-                            .lineLimit(1)
+                        FadingText(playback.current?.title ?? "", style: .body, weight: .semibold)
+                        FadingText(playback.current?.artist ?? "", style: .body, color: .secondaryLabel)
                     }
+                    .matchedGeometryEffect(id: "metadata", in: playerElements, isSource: mode != .artwork)
                 }
             }
             .buttonStyle(.plain)
-            Spacer(minLength: Layout.compact)
+            .accessibilityLabel(Text(playback.current?.title ?? "") + Text(", ") + Text(playback.current?.artist ?? ""))
+            .accessibilityHint(Text("ios-open-player"))
+            .accessibilityIdentifier("player-return-artwork")
             favoriteControl
             overflowMenu
         }
@@ -429,18 +437,15 @@ struct NowPlayingView: View {
         .buttonStyle(.plain)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .accessibilityLabel(Text("ios-track-actions"))
+        .accessibilityIdentifier("player-more")
     }
 
     private var lyricsStage: some View {
-        VStack(alignment: .leading, spacing: Layout.compact) {
-            compactTrackHeader
-            LyricsContentView(store: lyrics, retry: loadLyricsIfNeeded)
-        }
+        LyricsContentView(store: lyrics, retry: loadLyricsIfNeeded)
     }
 
     private var queueStage: some View {
         VStack(alignment: .leading, spacing: Layout.spacing) {
-            compactTrackHeader
             HStack(spacing: Layout.compact) {
                 queueModePill(symbol: "shuffle", label: "ios-shuffle", isActive: playback.isShuffled,
                     action: playback.toggleShuffle)
@@ -452,6 +457,13 @@ struct NowPlayingView: View {
             NativeQueueList(upcoming: playback.upcomingItems, history: settings.history,
                 autoplay: settings.autoplayRadio, playback: playback, settings: settings,
                 addSongs: { addQueueSongs = true })
+                .mask(alignment: .bottom) {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: Layout.queueFade)
+                    }
+                }
         }
     }
 
@@ -460,13 +472,14 @@ struct NowPlayingView: View {
             Image(systemName: symbol)
                 .appFont(.subheadline, weight: .semibold)
                 .foregroundStyle(isActive ? Color.black : Color.white)
-                .frame(maxWidth: .infinity, minHeight: 36)
+                .frame(maxWidth: .infinity, minHeight: Layout.queueModeHeight)
                 .background(
                     isActive ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.white.opacity(0.14)),
                     in: Capsule()
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PlayerControlStyle())
+        .accessibilityAddTraits(isActive ? .isSelected : [])
         .accessibilityLabel(Text(label))
     }
 
@@ -522,15 +535,17 @@ struct NowPlayingView: View {
     }
 
     private var transportControls: some View {
-        HStack(spacing: Layout.spacing * 2.5) {
+        HStack(spacing: 0) {
             Button(action: playback.previous) {
                 Image(systemName: "backward.fill")
                     .appFont(.title, weight: .semibold)
                     .foregroundStyle(.white)
                     .frame(width: 56, height: 56)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text("ios-previous"))
+
+            Spacer(minLength: Layout.compact)
 
             Button(action: playback.toggle) {
                 Group {
@@ -540,14 +555,17 @@ struct NowPlayingView: View {
                             .scaleEffect(1.3)
                     } else {
                         Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
+                            .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                             .font(.system(size: 40, weight: .bold))
                             .foregroundStyle(.white)
                     }
                 }
                 .frame(width: 68, height: 68)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text((playback.isPlaying || playback.isLoading) ? LocalizedStringKey("ios-pause") : LocalizedStringKey("ios-play")))
+
+            Spacer(minLength: Layout.compact)
 
             Button {
                 playback.next()
@@ -557,9 +575,11 @@ struct NowPlayingView: View {
                     .foregroundStyle(.white)
                     .frame(width: 56, height: 56)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text("ios-next"))
         }
+        .padding(.horizontal, Layout.spacing)
+        .frame(height: mode == .artwork ? Layout.control + Layout.playerMargin : Layout.transportHeight)
     }
 
     private var volumeSection: some View {
@@ -578,7 +598,7 @@ struct NowPlayingView: View {
     private var bottomModeBar: some View {
         HStack {
             Button {
-                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
+                withAnimation(reduceMotion ? nil : PlayerMotion.mode) {
                     mode = (mode == .lyrics) ? .artwork : .lyrics
                 }
             } label: {
@@ -588,8 +608,10 @@ struct NowPlayingView: View {
                     .frame(width: Layout.control, height: Layout.control)
                     .background(mode == .lyrics ? Color.white : Color.clear, in: Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text("ios-lyrics"))
+            .accessibilityIdentifier("player-lyrics")
+            .accessibilityAddTraits(mode == .lyrics ? .isSelected : [])
 
             Spacer()
 
@@ -599,7 +621,7 @@ struct NowPlayingView: View {
             Spacer()
 
             Button {
-                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
+                withAnimation(reduceMotion ? nil : PlayerMotion.mode) {
                     mode = (mode == .queue) ? .artwork : .queue
                 }
             } label: {
@@ -617,8 +639,10 @@ struct NowPlayingView: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text("ios-queue"))
+            .accessibilityIdentifier("player-queue")
+            .accessibilityAddTraits(mode == .queue ? .isSelected : [])
         }
         .padding(.horizontal, Layout.spacing)
     }

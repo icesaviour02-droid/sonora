@@ -123,7 +123,7 @@ struct DownloadedSongsView: View {
             CollectionPlayShuffleHeader(playAction: { if let first = tracks.first { playback.play(first, in: tracks) } },
                 shuffleAction: { playback.playShuffled(tracks) }).disabled(tracks.isEmpty).listRowSeparator(.hidden)
             ForEach(tracks) { track in
-                TrackRow(track: track) { playback.play(track, in: tracks) }
+                TrackRow(track: track) { playback.play(track, in: tracks, source: String(localized: "ios-downloads")) }
                     .swipeActions { Button("ios-remove-download", role: .destructive) { downloads.remove(track.id) } }
             }
         }
@@ -205,7 +205,7 @@ struct DownloadedCollectionView: View {
             MusicCollectionHeader(title: title, subtitle: subtitle, artworkURL: artwork, tracks: tracks,
                 description: String(localized: "ios-offline-songs-only"))
             ForEach(tracks) { track in
-                TrackRow(track: track) { playback.play(track, in: tracks) }
+                TrackRow(track: track) { playback.play(track, in: tracks, source: title) }
                     .swipeActions { Button("ios-remove-download", role: .destructive) { downloads.remove(track.id) } }
             }
         }.listStyle(.plain).navigationBarTitleDisplayMode(.inline)

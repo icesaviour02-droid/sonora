@@ -49,6 +49,7 @@
 "ios-cellular-downloads-description" = "New downloads use Wi-Fi by default. Enable this to also allow cellular data; your carrier’s data charges may apply.";
 "ios-clear" = "Clear";
 "ios-clear-cache" = "Clear Stream Cache";
+"ios-continue-playing" = "Continue Playing";
 "ios-copy-lyrics" = "Copy Lyrics";
 "ios-create" = "Create";
 "ios-create-playlist" = "New Playlist";
@@ -219,6 +220,7 @@
 "ios-quality-normal" = "Normal (AAC 128 kbps)";
 "ios-queue" = "Queue";
 "ios-queue-empty" = "No upcoming songs. Add music with Play Next or Add to Queue.";
+"ios-queue-source" = "From %@";
 "ios-recently-added" = "Recently Added";
 "ios-recently-downloaded" = "Recently Downloaded";
 "ios-recently-played" = "Recently Played";

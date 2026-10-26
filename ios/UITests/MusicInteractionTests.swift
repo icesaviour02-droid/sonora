@@ -2,6 +2,27 @@ import XCTest
 
 /// Exercises real touch gestures against the same native queue used by the app.
 final class MusicInteractionTests: XCTestCase {
+    func testPlayerModesMenusAndReturnToMiniPlayer() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--sonora-review-url", "sonora://review?id=jfKfPfyJRdk&title=Sonora%20Player%20Interaction&artist=Sonora%20Artist&mode=artwork"]
+        app.launch()
+        XCTAssertTrue(app.buttons["player-queue"].waitForExistence(timeout: 30))
+        app.buttons["player-queue"].tap()
+        XCTAssertTrue(app.buttons["queue-add-songs"].waitForExistence(timeout: 8))
+        app.buttons["player-lyrics"].tap()
+        XCTAssertTrue(app.buttons["player-return-artwork"].waitForExistence(timeout: 8))
+        app.buttons["player-return-artwork"].tap()
+        app.buttons["player-more"].tap()
+        XCTAssertTrue(app.buttons["Add to Queue"].firstMatch.waitForExistence(timeout: 8))
+        app.buttons["Add to Queue"].firstMatch.tap()
+        app.buttons["player-dismiss"].tap()
+        XCTAssertTrue(app.buttons["mini-player-open"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["mini-player-open"].label.contains("Sonora Artist"))
+        app.buttons["mini-player-open"].tap()
+        XCTAssertTrue(app.buttons["player-queue"].waitForExistence(timeout: 8))
+    }
+
     func testLocalPlaylistRenameThroughItsMenu() {
         continueAfterFailure = false
         let app = XCUIApplication()

@@ -21,6 +21,8 @@ struct RootView: View {
     @State private var showPlayer = false
     @State private var playerMode = "artwork"
     @State private var didHandleLaunchURL = false
+    @Namespace private var playerTransition
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if DEBUG
     @State private var guestProbe = GuestAcceptanceProbe()
     @State private var localLyricsProbe = LyricsStore()
@@ -55,7 +57,7 @@ struct RootView: View {
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-        .modifier(PlayerAccessory(open: { showPlayer = true }))
+        .modifier(PlayerAccessory(namespace: playerTransition, open: { showPlayer = true }))
         .preferredColorScheme(settings.theme.colorScheme)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showSoundProfiles) { NavigationStack { SoundProfilesView() } }
@@ -67,7 +69,13 @@ struct RootView: View {
                 }
             }
         }
-        .sheet(isPresented: $showPlayer) { NowPlayingView(initialMode: playerMode) }
+        .sheet(isPresented: $showPlayer) {
+            if reduceMotion { NowPlayingView(initialMode: playerMode) }
+            else {
+                NowPlayingView(initialMode: playerMode)
+                    .navigationTransition(.zoom(sourceID: "sonora-now-playing", in: playerTransition))
+            }
+        }
         .modifier(LocalLibraryReviewSheet(presentation: localReviewBinding))
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             switch result {
@@ -254,14 +262,19 @@ struct RootView: View {
 /// omits the modifier altogether, since an empty accessory still reserves a glass capsule.
 private struct PlayerAccessory: ViewModifier {
     @Environment(PlaybackController.self) private var playback
+    let namespace: Namespace.ID
     let open: () -> Void
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.1, *) {
-            content.tabViewBottomAccessory(isEnabled: playback.current != nil) { MiniPlayer(open: open) }
+            content.tabViewBottomAccessory(isEnabled: playback.current != nil) {
+                MiniPlayer(open: open).matchedTransitionSource(id: "sonora-now-playing", in: namespace)
+            }
         } else if playback.current != nil {
-            content.tabViewBottomAccessory { MiniPlayer(open: open) }
+            content.tabViewBottomAccessory {
+                MiniPlayer(open: open).matchedTransitionSource(id: "sonora-now-playing", in: namespace)
+            }
         } else {
             content
         }
@@ -1081,7 +1094,7 @@ struct AlbumDetailView: View {
                 Text(error).foregroundStyle(.secondary)
             } else {
                 ForEach(tracks) { track in
-                    TrackRow(track: track) { playback.play(track, in: tracks) }
+                    TrackRow(track: track) { playback.play(track, in: tracks, source: detail?.title ?? fallbackTitle) }
                 }
             }
         }
@@ -1169,7 +1182,7 @@ struct PlaylistDetailView: View {
                 Text(error).foregroundStyle(.secondary)
             } else {
                 ForEach(tracks) { track in
-                    TrackRow(track: track) { playback.play(track, in: tracks) }
+                    TrackRow(track: track) { playback.play(track, in: tracks, source: detail?.title ?? fallbackTitle) }
                         .swipeActions {
                             if detail?.editable == true,
                                let videoID = track.youtubeID,

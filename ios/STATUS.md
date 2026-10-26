@@ -509,3 +509,25 @@ A quick backup-provider assessment found that the desktop Apple Music path uses 
 has no equivalent wired into this native bridge. Subsonic requires a server/account, and Spotify,
 Deezer and Tidal also need distinct account/playback integrations. No cosmetic provider entry or
 unusable fallback has been added. Local imported audio and completed downloads remain available.
+
+Build 13's signed-in Linux check also passed after restoring the desktop cookie jar through the
+new same-identity migration path. Account verification, Home, Search, stream resolution, all
+expected download bytes, full decoding, precise duration and absence of a doubled silent tail
+passed. Credentials remained local and were not uploaded. The first iOS 27 run (40360499506,
+fee7d5c3) compiled both native targets but timed out installing into the cold simulator before
+launch. Cold install now has a 300-second bound; feature assertions have not been reduced.
+
+The user's new Apple Music screenshots are recorded in References/AppleMusic/README.md.
+The collapsed accessory retains both title and artist, uses a 30-point inline cover and only
+Play/Pause, and clips overflow with a direction-aware native label alpha fade. Short text is not
+faded; the full metadata stays accessible. The queue uses a 72-point current cover, larger row
+metadata and a bottom fade into transport. Collection playback carries/persists real source
+names for Continue Playing/From labels, without invented queue context.
+
+Native zoom anchors the Now Playing sheet to the accessory and reverses on dismissal. A single
+compact header is shared between lyrics/queue, while artwork/metadata morph from the artwork
+stage with matched geometry. Artwork uses measured remaining space rather than a fixed chrome
+height. System menus/submenus and native collection row drag/swipe behavior are retained.
+Reduce Motion remains respected. A fourth touch flow checks mode changes, menus, dismissal and
+reopening. No appearance screenshots are requested or analyzed. Exact animation parity cannot
+be certified from static screenshots, and unsupported AutoMix/crossfade buttons are not faked.

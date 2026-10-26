@@ -15,6 +15,7 @@ final class PlaybackController {
     }
     private var currentQueueIndex: Int? { queueItems.firstIndex { $0.id == currentQueueID } }
     private(set) var current: MusicTrack?
+    private(set) var queueSource: String?
     private(set) var isPlaying = false
     private(set) var isLoading = false
     private(set) var elapsed: Double = 0
@@ -119,6 +120,7 @@ final class PlaybackController {
         originalQueue = snapshot.original?.filter { surviving.contains($0.id) } ?? queueItems
         isShuffled = snapshot.shuffled ?? false
         repeatMode = snapshot.repeatMode ?? .off
+        queueSource = snapshot.source
         if let item = queueItems.first(where: { $0.id == snapshot.currentEntry })
             ?? queueItems.first(where: { $0.track.id == snapshot.current }) {
             selectQueueItem(item.id, autoplay: false)
@@ -131,10 +133,11 @@ final class PlaybackController {
         else { restore(from: tracks) }
     }
 
-    func play(_ track: MusicTrack, in tracks: [MusicTrack]) {
+    func play(_ track: MusicTrack, in tracks: [MusicTrack], source: String? = nil) {
         guard track.available != false else { return }
         // Explicit playback wins over a still-pending library/queue restoration.
         didRestore = true
+        queueSource = source
         error = nil
         let playable = tracks.filter { $0.available != false }
         originalQueue = (playable.isEmpty ? [track] : playable).map { QueuedTrack(track: $0) }
@@ -143,10 +146,11 @@ final class PlaybackController {
         select(track, autoplay: true)
     }
 
-    func playShuffled(_ tracks: [MusicTrack]) {
+    func playShuffled(_ tracks: [MusicTrack], source: String? = nil) {
         let playable = tracks.filter { $0.available != false }.map { QueuedTrack(track: $0) }
         guard let first = playable.randomElement() else { return }
         didRestore = true
+        queueSource = source
         error = nil
         originalQueue = playable
         isShuffled = true
@@ -206,6 +210,7 @@ final class PlaybackController {
     /// Lets the CLI review real track metadata without depending on successful audio authorization.
     func prepareReview(_ track: MusicTrack) {
         didRestore = true
+        queueSource = nil
         originalQueue = [QueuedTrack(track: track)]
         queueItems = originalQueue
         select(track, autoplay: false)
@@ -366,7 +371,7 @@ final class PlaybackController {
             play(track, in: [track])
             return
         }
-        play(track, in: [track])
+        play(track, in: [track], source: track.title)
         radioTask?.cancel()
         radioTask = Task { [weak self] in
             guard let self, let radioTracks = try? await NativeProvider.radio(videoID: videoID),
@@ -676,6 +681,7 @@ final class PlaybackController {
     /// Drops account-backed queue data when the active provider identity changes.
     func clearRemoteQueue() {
         if current?.youtubeID != nil {
+            queueSource = nil
             pause()
             player.replaceCurrentItem(with: nil)
             audioEffects.detach()
@@ -845,12 +851,13 @@ final class PlaybackController {
         var currentEntry: UUID? = nil
         var shuffled: Bool? = nil
         var repeatMode: RepeatMode? = nil
+        var source: String? = nil
     }
 
     private func saveQueue() {
         let value = Snapshot(ids: queue.map(\.id), current: current?.id, tracks: queue,
             entries: queueItems, original: originalQueue, currentEntry: currentQueueID,
-            shuffled: isShuffled, repeatMode: repeatMode)
+            shuffled: isShuffled, repeatMode: repeatMode, source: queueSource)
         if let data = try? JSONEncoder().encode(value) { UserDefaults.standard.set(data, forKey: snapshotKey) }
     }
 }

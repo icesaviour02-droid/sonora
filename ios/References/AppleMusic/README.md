@@ -50,3 +50,17 @@ iOS APIs: continuous gestures, interruptible springs, native materials and acces
 Keep real YouTube Music data and local-file playback. Downloads uses Apple's Library/Downloaded
 row and native progress-list vocabulary; an exact standalone Apple Music Downloads-tab screenshot
 has not been found. Do not fabricate an exact reference or claim every screen has been verified.
+
+## User-provided reference update (26 October 2026)
+
+The user supplied these original screenshots for this checkout:
+- /home/icesaviour/Downloads/WhatsApp Image 2026-10-26 at 22.06.33.jpeg — minimized tab bar: 30-point cover, title above artist, trailing text fade, Play/Pause only.
+- /home/icesaviour/Downloads/WhatsApp Image 2026-10-26 at 22.06.34.jpeg — queue: 72-point current cover, compact metadata/actions, mode capsules, queue source, transparent song rows, native grips and bottom fade into transport.
+
+The implementation uses native TabView accessory minimization and source-anchored zoom:
+https://developer.apple.com/documentation/swiftui/navigationtransition/zoom(sourceid:in:)
+https://developer.apple.com/documentation/swiftui/view/matchedtransitionsource(id:in:)
+Menus, submenus and nested sheets keep system presentation; artwork/metadata mode changes use
+matched geometry and interruptible springs with Reduce Motion support. Still images establish
+layout, not exact timing of every Apple Music animation. Unsupported crossfade/AutoMix controls
+are not represented as working features. References are not bundled as app artwork.

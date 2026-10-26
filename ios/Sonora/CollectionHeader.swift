@@ -25,8 +25,8 @@ struct MusicCollectionHeader: View {
                 }
             }
             CollectionPlayShuffleHeader(
-                playAction: { if let first = tracks.first { playback.play(first, in: tracks) } },
-                shuffleAction: { playback.playShuffled(tracks) })
+                playAction: { if let first = tracks.first { playback.play(first, in: tracks, source: title) } },
+                shuffleAction: { playback.playShuffled(tracks, source: title) })
                 .disabled(tracks.isEmpty)
         }
         .padding(.vertical, Layout.spacing)

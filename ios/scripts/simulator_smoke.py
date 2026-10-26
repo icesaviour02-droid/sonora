@@ -21,7 +21,7 @@ def run(*args):
     print("Running: " + " ".join(args), flush=True)
     # Initial simulator migration can be slow on a fresh hosted Mac. Bound it so failures
     # produce artifacts and diagnostics instead of consuming the entire job allowance.
-    limit = 600 if "bootstatus" in args else 240 if "launch" in args and "--terminate-running-process" not in args else 120
+    limit = 600 if "bootstatus" in args else 300 if "install" in args else 240 if "launch" in args and "--terminate-running-process" not in args else 120
     return subprocess.check_output(args, text=True, timeout=limit).strip()
 
 

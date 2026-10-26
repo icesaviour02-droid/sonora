@@ -34,6 +34,7 @@ struct NativeQueueList: UIViewRepresentable {
         private var tracks: [Entry: MusicTrack] = [:]
         private var didPositionQueue = false
         private var lastTypeface: String?
+        private var lastSource: String?
 
         init(parent: NativeQueueList) { self.parent = parent }
 
@@ -97,9 +98,11 @@ struct NativeQueueList: UIViewRepresentable {
             let old = dataSource.snapshot()
             let changes = entries.filter { updated[$0] != tracks[$0] }
             let fontChanged = lastTypeface != parent.typeface
+            let sourceChanged = lastSource != parent.playback.queueSource
+            lastSource = parent.playback.queueSource
             lastTypeface = parent.typeface
             tracks = updated
-            if old.itemIdentifiers == entries && changes.isEmpty && !fontChanged { return }
+            if old.itemIdentifiers == entries && changes.isEmpty && !fontChanged && !sourceChanged { return }
             var snapshot = NSDiffableDataSourceSnapshot<Int, Entry>()
             snapshot.appendSections([0])
             snapshot.appendItems(entries)
@@ -170,7 +173,9 @@ struct NativeQueueList: UIViewRepresentable {
                     } label: { QueueSongLabel(track: track) }.buttonStyle(.plain)
                 }
             case .queueHeader:
-                header("ios-queue", identifier: "queue-clear", disabled: parent.playback.upcomingItems.isEmpty) { [weak self] in self?.parent.playback.clearUpcomingQueue() }
+                header(parent.playback.queueSource == nil ? "ios-queue" : "ios-continue-playing",
+                    identifier: "queue-clear", disabled: parent.playback.upcomingItems.isEmpty,
+                    subtitle: parent.playback.queueSource.map { String(format: String(localized: "ios-queue-source"), $0) }) { [weak self] in self?.parent.playback.clearUpcomingQueue() }
             case .historyHeader:
                 header("ios-history", identifier: "queue-clear-history", disabled: parent.settings.history.isEmpty) { [weak self] in self?.parent.settings.clearHistory() }
             case .add:
@@ -191,9 +196,12 @@ struct NativeQueueList: UIViewRepresentable {
             }
         }
 
-        private func header(_ title: LocalizedStringKey, identifier: String, disabled: Bool, action: @escaping () -> Void) -> some View {
-            HStack {
-                Text(title).appFont(.headline)
+        private func header(_ title: LocalizedStringKey, identifier: String, disabled: Bool, subtitle: String? = nil, action: @escaping () -> Void) -> some View {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: Layout.compact / 2) {
+                    Text(title).appFont(.headline)
+                    if let subtitle { Text(subtitle).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1) }
+                }
                 Spacer()
                 Button("ios-clear", action: action).appFont(.subheadline)
                     .frame(minHeight: Layout.control).disabled(disabled).accessibilityIdentifier(identifier)
@@ -215,8 +223,8 @@ private struct QueueSongLabel: View {
         HStack(spacing: Layout.compact) {
             ArtworkView(track: track, side: Layout.rowArtwork).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Layout.compact / 2) {
-                Text(track.title).appFont(.subheadline, weight: .medium).foregroundStyle(.white).lineLimit(1)
-                Text(track.artist).appFont(.caption).foregroundStyle(.white.opacity(0.68)).lineLimit(1)
+                Text(track.title).appFont(.body).foregroundStyle(.white).lineLimit(1)
+                Text(track.artist).appFont(.subheadline).foregroundStyle(.white.opacity(0.68)).lineLimit(1)
             }
             Spacer(minLength: Layout.compact)
         }
