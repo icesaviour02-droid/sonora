@@ -184,3 +184,17 @@ Swift syntax passes. Apple compilation and the new eight-check native import/cac
 are pending; word-highlight motion and touch-driven interactions still require runtime review.
 Per-script romanization controls, exact Apple Music highlight effects and actual phone acceptance
 are not complete. No two-hour automation remains; the user requested continuous active work.
+
+## Listening and durable submissions (26 October 2026)
+
+The fifteen-second playhead trigger has been replaced with listening-time accounting. Pauses,
+buffering, restore positions and seeks do not earn listens. Tracks under thirty seconds do not
+count; other tracks require half their duration or four minutes. Each repeat/queue occurrence has
+its own listen ID and original start timestamp. History begins when native output starts.
+
+ListenBrainz now-playing and completed-listen payloads and Maloja artists/length/time fields now
+match the desktop protocol. A per-service durable outbox keeps unsuccessful submissions, applies
+backoff, isolates changed accounts by credential digest, and retries on foreground/relaunch.
+Credentials remain in Keychain; queue files contain no tokens. The settings screen shows pending
+listens and offers retry. These changes and sixteen native acceptance checks are pending Apple
+compilation/runtime evidence. Last.fm/Libre.fm linking and real-account acceptance remain missing.

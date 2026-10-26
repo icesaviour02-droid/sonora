@@ -45,7 +45,9 @@ final class PlaybackController {
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
     @ObservationIgnored private var artworkTrackID: String?
-    @ObservationIgnored private var scrobbledTrackID: String?
+    @ObservationIgnored private var listen = ListeningProgress()
+    @ObservationIgnored private var listenID = UUID()
+    @ObservationIgnored private var announcedListen = false
     @ObservationIgnored private var interruptedWhilePlaying = false
     @ObservationIgnored private var didRestore = false
     @ObservationIgnored private var wantsToPlay = false
@@ -69,10 +71,6 @@ final class PlaybackController {
                     self.pause()
                     return
                 }
-                if self.isPlaying, let current = self.current, self.scrobbledTrackID != current.id, self.elapsed >= 15 {
-                    self.scrobbledTrackID = current.id
-                    self.settings.submitScrobble(current)
-                }
                 #if DEBUG
                 self.writeReviewState()
                 #endif
@@ -82,12 +80,14 @@ final class PlaybackController {
                     self.duration = duration
                     self.publishNowPlaying()
                 }
+                self.trackListen()
             }
         }
         statusObserver = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
             Task { @MainActor in
                 guard let self else { return }
                 self.isPlaying = self.player.timeControlStatus == .playing
+                self.trackListen()
                 if self.resolutionTask == nil {
                     self.isLoading = self.wantsToPlay && (self.audioEffects.isPreparing || self.player.timeControlStatus == .waitingToPlayAtSpecifiedRate)
                 }
@@ -344,7 +344,9 @@ final class PlaybackController {
         }
         current = track
         currentQueueID = id
-        scrobbledTrackID = nil
+        listen = ListeningProgress()
+        listenID = UUID()
+        announcedListen = false
         elapsed = 0
         duration = track.durationSeconds ?? 0
         itemObserver = nil
@@ -355,10 +357,7 @@ final class PlaybackController {
         saveQueue()
         loadLockScreenArtwork(for: track)
         publishNowPlaying()
-        if autoplay {
-            settings.recordHistory(track)
-            resume()
-        }
+        if autoplay { resume() }
     }
 
     func applyAudioGain() {
@@ -391,6 +390,20 @@ final class PlaybackController {
         }
     }
 
+    /// History and submissions begin only after the native player actually starts output.
+    private func trackListen() {
+        guard let current else { return }
+        listen.sample(position: presentationElapsed, uptime: ProcessInfo.processInfo.systemUptime, playing: isPlaying)
+        if isPlaying && !announcedListen {
+            announcedListen = true
+            settings.recordHistory(current)
+            settings.announceNowPlaying(current, duration: duration)
+        }
+        if listen.earn(duration: duration), let started = listen.startedAt {
+            settings.submitScrobble(current, id: listenID, startedAt: started, duration: duration)
+        }
+    }
+
     func toggle() { (isPlaying || isLoading) ? pause() : resume() }
 
     func resume() {
@@ -401,7 +414,6 @@ final class PlaybackController {
             audioEffects.detach()
             player.replaceCurrentItem(with: nil)
         }
-        settings.recordHistory(current)
         if player.currentItem == nil, let videoID = current.youtubeID {
             if let downloaded = downloads.fileURL(for: current.id) {
                 streamBadge = String(localized: "ios-downloaded")
@@ -422,7 +434,10 @@ final class PlaybackController {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .default, policy: .longFormAudio, options: [])
             try session.setActive(true)
-            if duration > 0 && elapsed >= duration { seek(to: 0) }
+            if duration > 0 && elapsed >= duration {
+                listen = ListeningProgress(); listenID = UUID(); announcedListen = false
+                seek(to: 0)
+            }
             applyAudioGain()
             player.play()
         } catch {
@@ -432,6 +447,8 @@ final class PlaybackController {
     }
 
     func pause() {
+        trackListen()
+        listen.rebase()
         wantsToPlay = false
         radioTask?.cancel()
         radioTask = nil
@@ -479,6 +496,8 @@ final class PlaybackController {
     }
 
     func seek(to seconds: Double) {
+        trackListen()
+        listen.rebase()
         let target = min(max(0, seconds), duration)
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
         elapsed = target
@@ -492,7 +511,11 @@ final class PlaybackController {
             return
         }
         guard let current, let index = currentQueueIndex else { return }
-        if automatically && repeatMode == .one { seek(to: 0); resume(); return }
+        if automatically && repeatMode == .one {
+            seek(to: 0)
+            listen = ListeningProgress(); listenID = UUID(); announcedListen = false
+            resume(); return
+        }
         if index + 1 < queueItems.count {
             selectQueueItem(queueItems[index + 1].id)
         } else if repeatMode == .all, let first = queueItems.first {

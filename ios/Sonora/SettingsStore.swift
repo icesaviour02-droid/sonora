@@ -121,22 +121,30 @@ final class SettingsStore {
         didSet { UserDefaults.standard.set(animatedArtwork, forKey: "sonora.settings.animatedArtwork") }
     }
     var scrobbleEnabled: Bool {
-        didSet { UserDefaults.standard.set(scrobbleEnabled, forKey: "sonora.settings.scrobbleEnabled") }
+        didSet { UserDefaults.standard.set(scrobbleEnabled, forKey: "sonora.settings.scrobbleEnabled"); retryScrobbles() }
     }
     var listenBrainzToken: String {
-        didSet { ScrobbleKeychain.save(listenBrainzToken.trimmingCharacters(in: .whitespacesAndNewlines), account: "listenbrainz") }
+        didSet { ScrobbleKeychain.save(listenBrainzToken.trimmingCharacters(in: .whitespacesAndNewlines), account: "listenbrainz"); retryScrobbles() }
     }
     var malojaURL: String {
-        didSet { UserDefaults.standard.set(malojaURL.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "sonora.settings.malojaURL") }
+        didSet { UserDefaults.standard.set(malojaURL.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "sonora.settings.malojaURL"); retryScrobbles() }
     }
     var malojaKey: String {
-        didSet { ScrobbleKeychain.save(malojaKey.trimmingCharacters(in: .whitespacesAndNewlines), account: "maloja") }
+        didSet { ScrobbleKeychain.save(malojaKey.trimmingCharacters(in: .whitespacesAndNewlines), account: "maloja"); retryScrobbles() }
     }
 
     private(set) var pins: [PinnedItem] = []
     private(set) var history: [MusicTrack] = []
     private(set) var cacheBytes: UInt64 = 0
     @ObservationIgnored private var lyricsCleanupTask: Task<Void, Never>?
+    @ObservationIgnored private var scrobbleTask: Task<Void, Never>?
+    #if DEBUG
+    @ObservationIgnored private var scrobbleReviewTask: Task<Void, Never>?
+    #endif
+    @ObservationIgnored private var nowPlayingTask: Task<Void, Never>?
+    @ObservationIgnored private var scrobbleSubmissions: [UUID: Task<Void, Never>] = [:]
+    private(set) var pendingScrobbles = 0
+    private(set) var scrobbleError: String?
 
     private static var stateRoot: URL {
         URL.applicationSupportDirectory.appendingPathComponent("State", isDirectory: true)
@@ -304,6 +312,11 @@ final class SettingsStore {
                 }
             }
         }
+        let lyrics = URL.applicationSupportDirectory.appendingPathComponent("Lyrics")
+        let saved = (try? FileManager.default.contentsOfDirectory(at: lyrics, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+        for url in saved where url.lastPathComponent.hasPrefix("cache-") {
+            if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize { total += UInt64(max(0, size)) }
+        }
         cacheBytes = total
     }
 
@@ -323,46 +336,103 @@ final class SettingsStore {
         }
     }
 
-    func submitScrobble(_ track: MusicTrack) {
-        guard scrobbleEnabled else { return }
-        let timestamp = Int(Date().timeIntervalSince1970)
-        let lbToken = listenBrainzToken.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !lbToken.isEmpty, let url = URL(string: "https://api.listenbrainz.org/1/submit-listens") {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("Token \(lbToken)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            let payload: [String: Any] = [
-                "listen_type": "single",
-                "payload": [[
-                    "listened_at": timestamp,
-                    "track_metadata": [
-                        "artist_name": track.artist,
-                        "track_name": track.title,
-                        "release_name": track.albumTitle ?? ""
-                    ]
-                ]]
-            ]
-            request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
-            Task.detached { _ = try? await URLSession.shared.data(for: request) }
-        }
-        let mURL = malojaURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let mKey = malojaKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !mURL.isEmpty, !mKey.isEmpty, let url = URL(string: "\(mURL)/apis/mlj_1/newscrobble") {
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            let payload: [String: Any] = [
-                "key": mKey,
-                "artist": track.artist,
-                "title": track.title,
-                "album": track.albumTitle ?? "",
-                "time": timestamp
-            ]
-            request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
-            Task.detached { _ = try? await URLSession.shared.data(for: request) }
+    private var scrobbleTargets: [ScrobbleTarget] {
+        guard scrobbleEnabled else { return [] }
+        return ScrobbleConfiguration(listenBrainzToken: listenBrainzToken.trimmingCharacters(in: .whitespacesAndNewlines),
+            malojaURL: malojaURL, malojaKey: malojaKey.trimmingCharacters(in: .whitespacesAndNewlines)).targets
+    }
+
+    /// Rechecks the outbox at launch, foregrounding, credential changes and after an earned listen.
+    func retryScrobbles(force: Bool = false) {
+        scrobbleTask?.cancel()
+        scrobbleTask = nil
+        guard !scrobbleTargets.isEmpty else { pendingScrobbles = 0; return }
+        let targets = scrobbleTargets
+        scrobbleTask = Task { [weak self] in
+            var forceNext = force
+            while !Task.isCancelled {
+                do {
+                    let count = try await ScrobbleOutbox.shared.flush(targets: targets, force: forceNext)
+                    forceNext = false
+                    try Task.checkCancellation()
+                    self?.pendingScrobbles = count
+                    self?.scrobbleError = nil
+                    if count == 0 { return }
+                    try await Task.sleep(for: .seconds(60))
+                } catch is CancellationError { return }
+                catch { self?.scrobbleError = String(localized: "ios-scrobble-storage-error"); return }
+            }
         }
     }
+
+    func announceNowPlaying(_ track: MusicTrack, duration: Double) {
+        nowPlayingTask?.cancel()
+        guard !track.artist.isEmpty, !track.title.isEmpty else { return }
+        let targets = scrobbleTargets
+        let listen = ScrobbleListen(id: UUID(), artist: track.artist, title: track.title,
+            album: track.albumTitle, duration: max(0, duration), startedAt: .now)
+        nowPlayingTask = Task { await ScrobbleOutbox.shared.nowPlaying(listen, targets: targets) }
+    }
+
+    /// Persists a separate submission per linked service; a new song cannot cancel the previous save.
+    func submitScrobble(_ track: MusicTrack, id: UUID, startedAt: Date, duration: Double) {
+        let targets = scrobbleTargets
+        guard !targets.isEmpty, !track.artist.isEmpty, !track.title.isEmpty, duration.isFinite, duration >= 30 else { return }
+        let listen = ScrobbleListen(id: id, artist: track.artist, title: track.title,
+            album: track.albumTitle, duration: duration, startedAt: startedAt)
+        guard scrobbleSubmissions[id] == nil else { return }
+        scrobbleSubmissions[id] = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await ScrobbleOutbox.shared.enqueue(listen, targets: targets)
+                    self?.retryScrobbles()
+                    self?.scrobbleSubmissions.removeValue(forKey: id)
+                    return
+                } catch {
+                    self?.scrobbleError = String(localized: "ios-scrobble-storage-error")
+                    // Retain the earned listen in memory while storage is temporarily unavailable.
+                    do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                }
+            }
+        }
+    }
+
+    #if DEBUG
+    func reviewScrobbling() {
+        scrobbleReviewTask?.cancel()
+        scrobbleReviewTask = Task {
+            var checks = await ScrobbleOutbox.review()
+            var progress = ListeningProgress()
+            progress.sample(position: 0, uptime: 0, playing: true)
+            progress.sample(position: 14, uptime: 14, playing: true)
+            checks["fifteen_seconds_not_earned"] = !progress.earn(duration: 200)
+            progress.rebase()
+            progress.sample(position: 180, uptime: 15, playing: true)
+            checks["seek_not_earned"] = !progress.earn(duration: 200)
+            progress.sample(position: 190, uptime: 25, playing: false)
+            progress.sample(position: 190, uptime: 125, playing: true)
+            checks["pause_excluded"] = progress.heard == 24
+            progress.sample(position: 270, uptime: 205, playing: true)
+            checks["half_track_earned_once"] = progress.earn(duration: 200) && !progress.earn(duration: 200)
+            var long = ListeningProgress()
+            long.sample(position: 0, uptime: 0, playing: true)
+            long.sample(position: 240, uptime: 240, playing: true)
+            checks["four_minute_threshold"] = long.earn(duration: 900)
+            var short = ListeningProgress()
+            short.sample(position: 0, uptime: 0, playing: true)
+            short.sample(position: 30, uptime: 30, playing: true)
+            checks["short_track_rejected"] = !short.earn(duration: 29) && !short.earn(duration: 0)
+            var restored = ListeningProgress()
+            restored.sample(position: 190, uptime: 0, playing: false)
+            restored.sample(position: 190, uptime: 20, playing: true)
+            checks["restore_position_not_earned"] = restored.heard == 0 && !restored.earn(duration: 200)
+            let result: [String: Any] = ["passed": checks.count == 16 && checks.values.allSatisfy { $0 }, "checks": checks]
+            if let data = try? JSONSerialization.data(withJSONObject: result, options: .prettyPrinted) {
+                try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("scrobble-review.json"), options: .atomic)
+            }
+        }
+    }
+    #endif
 
     private func savePins() {
         if let data = try? JSONEncoder().encode(pins) {

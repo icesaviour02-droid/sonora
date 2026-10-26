@@ -30,6 +30,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- iPhone listening history starts when audio actually plays. Scrobbles count listening time rather than seeks and wait in a saved retry queue when a service is offline.
+
 - iPhone equalizer presets and bass/treble now use the same frequency filters as desktop Sonora,
   replacing the earlier volume-only approximation. Automatic headroom and manual preamp are configurable.
 - The iPhone queue keeps repeated songs as separate entries, supports reordering Playing Next,

@@ -120,6 +120,10 @@ struct RootView: View {
             guestProbe.start(playback: playback) { playerMode = "artwork"; showPlayer = true }
             return
         }
+        if url.host == "scrobblereview" {
+            settings.reviewScrobbling()
+            return
+        }
         if url.host == "lyricsstorereview" {
             localLyricsProbe.review(settings: settings)
             return
@@ -1977,6 +1981,11 @@ struct SettingsView: View {
 
                 Section("ios-scrobbling") {
                     Toggle("ios-scrobble-enable", isOn: $settings.scrobbleEnabled)
+                    if settings.pendingScrobbles > 0 {
+                        LabeledContent("ios-scrobble-pending", value: settings.pendingScrobbles.formatted())
+                        Button("ios-scrobble-retry") { settings.retryScrobbles(force: true) }
+                    }
+                    if let error = settings.scrobbleError { Text(error).foregroundStyle(.red) }
                     SecureField("ios-listenbrainz-token", text: $settings.listenBrainzToken)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()

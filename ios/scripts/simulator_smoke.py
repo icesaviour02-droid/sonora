@@ -120,6 +120,10 @@ if __name__ == "__main__":
         lyrics_store = evidence(container, "lyrics-store-review.json", timeout=90)
         if not lyrics_store or not lyrics_store.get("passed"):
             raise RuntimeError("Lyrics import/timing/source/cache/restoration checks failed")
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://scrobblereview")
+        scrobbling = evidence(container, "scrobble-review.json", timeout=90)
+        if not scrobbling or not scrobbling.get("passed"):
+            raise RuntimeError("Listening thresholds, durable scrobble retry or account isolation failed")
         fixture = json.loads((IOS / "scripts/review-track.json").read_text())
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://soundprofilesreview")
         sound_profiles = evidence(container, "sound-profiles-review.json", timeout=90)

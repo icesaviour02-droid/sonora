@@ -48,10 +48,12 @@ struct SonoraApp: App {
                 }
                 .task {
                     poTokenMinter.start()
+                    settings.retryScrobbles()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active {
                         downloads.resumeQueue()
+                        settings.retryScrobbles()
                         account.rotateCookiesIfSignedIn()
                     }
                 }

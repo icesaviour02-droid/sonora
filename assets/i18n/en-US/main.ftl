@@ -1622,3 +1622,7 @@ ios-lyrics-import-error = These lyrics could not be imported. Choose an LRC, TTM
 ios-lyrics-word-timing = Word Timing
 ios-lyrics-synced-format = Synced Lines
 ios-lyrics-plain-format = Plain Text
+
+ios-scrobble-pending = Saved Listens Waiting to Send
+ios-scrobble-retry = Retry Submissions
+ios-scrobble-storage-error = Saved listens could not be updated. Your existing queue has been kept.

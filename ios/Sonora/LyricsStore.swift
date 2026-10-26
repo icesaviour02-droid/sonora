@@ -183,13 +183,17 @@ final class LyricsStore {
                 restored.load(nil, title: "Sonora", artist: "Sonora Review", sources: ["Local"], cacheID: id, savedOnly: true)
                 await restored.waitForReviewLoad()
                 checks["invalid_import_preserves_saved"] = restored.sheet?.lines?.count == 3
+                await Self.clearCachedSheets()
+                restored.load(nil, title: "Sonora", artist: "Sonora Review", sources: ["Local"], cacheID: id, savedOnly: true)
+                await restored.waitForReviewLoad()
+                checks["clear_cache_preserves_import"] = restored.usingSaved && restored.sheet?.source == "Local" && restored.sheet?.lines?.count == 3
                 let original = settings.lyricsSources
                 settings.lyricsSources = Array(original.reversed()).map { LyricsSourcePreference(source: $0.source, enabled: $0.source == .local) }
                 let secondSettings = SettingsStore()
                 checks["source_preferences_restore"] = secondSettings.lyricsSources == settings.lyricsSources && secondSettings.enabledLyricsSources == ["Local"]
                 settings.lyricsSources = original
                 await self.files.removeReviewFiles(id: id)
-                let payload: [String: Any] = ["passed": checks.count == 8 && checks.values.allSatisfy { $0 }, "checks": checks]
+                let payload: [String: Any] = ["passed": checks.count == 9 && checks.values.allSatisfy { $0 }, "checks": checks]
                 try JSONSerialization.data(withJSONObject: payload, options: .prettyPrinted).write(to: URL.applicationSupportDirectory.appendingPathComponent("lyrics-store-review.json"), options: .atomic)
             } catch {
                 let payload: [String: Any] = ["passed": false, "checks": checks]

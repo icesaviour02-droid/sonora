@@ -144,7 +144,7 @@ private struct LyricsLineView: View {
     var body: some View {
         VStack(alignment: counter ? .trailing : .leading, spacing: Layout.compact / 2) {
             LyricsTimedText(text: line.text, words: line.words ?? [], active: active)
-                .appFont(active ? .title2 : .title3, weight: .bold, scale: settings.lyricsScale)
+                .appFont(.title2, weight: .bold, scale: settings.lyricsScale)
             if settings.romanizedLyrics, let text = line.romanized {
                 Text(text).appFont(.subheadline, weight: .medium, scale: settings.lyricsScale)
                     .foregroundStyle(.white.opacity(active ? 0.8 : 0.4))
