@@ -88,11 +88,12 @@ rounded system design without redistributing Apple's desktop font files. Shared 
 across screens now resolve the user's font choice. Native system navigation keeps system styling.
 Appearance also supports artwork-derived contrast-adjusted accent colors and named system accents.
 Simulator checks for font registration, selection persistence and screenshots are added; their
-Apple compilation/runtime result is pending. This does not resolve Guest audio verification.
+Apple results are recorded below. This does not resolve Guest audio verification.
 
 Apple run 40255941831 compiled device and simulator targets and passed font availability,
-selection and relaunch checks for SF Pro Rounded and Inter. The run subsequently failed at
-the already-known Guest verification gate. Its font screenshots are retained for visual review.
+selection and relaunch checks for SF Pro Rounded and Inter (5 registered faces). The two captured
+font settings screens were visually inspected: the selected font changes the preview and body
+text, with no clipping. The run subsequently failed at the already-known Guest verification gate.
 
 ## Queue and local-file repair batch (26 October 2026)
 
@@ -108,3 +109,6 @@ without any video ID returned 37 synced LRCLIB lines. Disabled local lookup now 
 Imported local files retain album and duration metadata. A generated WAV simulator check now
 exercises actual import, advancing playback, pause, seek/resume and deletion before attempting
 network-dependent Guest audio. Source syntax and Rust Clippy/build checks pass; Apple results pending.
+Apple run 40256955207 is the exact queue/local repair snapshot at da48eede and must be checked
+before making further acceptance claims. Inspect queue-review.json, local-playback-review.json
+and local-lyrics-review.json, plus the actual duplicate-entry queue screenshot. The goal remains active.

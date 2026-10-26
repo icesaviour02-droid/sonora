@@ -21,13 +21,13 @@ whose behavior can be used as a separate reference.
 
 | Desktop behavior | iPhone status | Required acceptance |
 |---|---|---|
-| Guest YouTube song search, metadata/artwork | Earlier simulator search verified; catalog response repair verified on Linux, Apple confirmation pending | Empty/error/retry, Unicode, long results, unavailable songs; repeat on iOS 27 |
+| Guest YouTube song search, metadata/artwork | Catalog response repair verified on Linux and iOS 26.5 simulator | Empty/error/retry, Unicode, long results, unavailable songs; repeat on iOS 27 |
 | YouTube AAC streaming | Implemented; latest simulator resolution blocked by Google's bot-verification response | Audible playback, advancing clock, pause/resume, long tracks, network/error recovery |
 | Offline downloads | Implemented; latest simulator cannot resolve Guest audio | Exact byte count, playable file, progress, cancel/retry/remove, queued concurrency, interrupted recovery |
 | Offline relaunch | Implemented file selection; unverified | Cold launch in airplane mode, play/seek/queue downloaded tracks without provider requests |
 | Local audio import/search/delete | Implemented; unverified | Supported formats, corrupt files, large/multiple imports, durable metadata, deletion during playback |
 | Queue, next/previous, shuffle, repeat, seek | Implemented subset; unverified | Order changes, boundaries, repeated tracks, unavailable tracks, restore without autoplay |
-| Queue editing, play-next/append, radio/autoplay | Implemented subset; reorder UI not wired, repeat-track identity needs review | Reorder/remove/append, radio continuation and queue persistence |
+| Queue editing, play-next/append, radio/autoplay | Native reorder/removal and per-occurrence UUIDs implemented; runtime checks in Apple run 40256955207 | Reorder/remove/append, radio continuation and queue persistence |
 | Background audio, lock-screen commands, AirPlay | Implemented; unverified on hardware | Screen lock, long background session, headphones/Bluetooth, calls/interruption, route loss |
 | Gapless playback | Missing | Consecutive tracks with measured gap behavior |
 | Audio normalization, quality selection | Implemented; runtime unverified | Provider loudness handling, level consistency, supported quality fallback |
@@ -42,11 +42,11 @@ whose behavior can be used as a separate reference.
 | Listening history/play counts, provider reporting | Local history implemented; provider reporting incomplete/unverified | Start/pause/seek/stop reporting and completed-listen rules |
 | Pins/favorites and sharing/deep links | Implemented subset; runtime acceptance missing | Pin persistence, share destinations, malformed links and account changes |
 | Plain YouTube lyrics | Implemented; Swift supports nullable timing fields | Correct track, loading/empty/retry, cancellation and provider attribution |
-| Synced/karaoke lyrics, background vocals, romanization | Synced lines and UI decode verified in simulator; word timing/backing vocals incomplete, local-file lookup needs repair | Playback timing/seek synchronization, alternate sources/languages and fallback |
+| Synced/karaoke lyrics, background vocals, romanization | Synced lines/UI decode verified in simulator; local metadata lookup repaired and verified on Linux; word timing/backing vocals incomplete | Playback timing/seek synchronization, alternate sources/languages and fallback |
 | LastFM/ListenBrainz/LibreFM/Maloja scrobbling | Basic ListenBrainz/Maloja calls implemented; 15-second trigger does not establish full parity | Auth, now-playing, completed listens, offline retry and duplicate prevention |
 | Apple Music/Spotify/Deezer/Tidal/Subsonic/Navidrome | Missing | Each provider's supported sign-in, catalog, playback, library and download capabilities |
 | Local albums/artists/playlists, folders/tag editing | Missing / platform review | Files security scope, metadata editing, indexes and rescan behavior |
-| Appearance/fonts/icons/themes/layout customization | Settings subset implemented; full desktop customization missing | iPhone-safe equivalents with persistent settings |
+| Appearance/fonts/icons/themes/layout customization | Native SF Pro Rounded/Inter selection, registration and relaunch verified in simulator; custom imports and artwork accents implemented; fuller customization missing | Import/remove/preview and persistence, Dynamic Type across screens, theme contrast, motion and desktop option inventory |
 | Storage/cache management | Partial download removal only | Usage counts, clearing, low storage, damaged indexes and interrupted writes |
 | Localization/accessibility | English native strings; initial visual review verified | VoiceOver, large text across populated screens, contrast, reduced motion/transparency |
 | Discord Rich Presence/tray/dock/MPRIS/window/fullscreen | Platform review | Document iOS-supported equivalents; desktop IPC/window features cannot be assumed portable |
