@@ -314,8 +314,9 @@ enum NativeProvider {
         try await request(["operation": "resolve", "video_id": id, "quality": quality.rawValue])
     }
 
-    static func lyrics(_ id: String, title: String? = nil, artist: String? = nil) async throws -> Lyrics {
-        var payload: [String: Any] = ["operation": "lyrics", "video_id": id]
+    static func lyrics(_ id: String?, title: String? = nil, artist: String? = nil) async throws -> Lyrics {
+        var payload: [String: Any] = ["operation": "lyrics"]
+        if let id { payload["video_id"] = id }
         if let title, !title.isEmpty { payload["title"] = title }
         if let artist, !artist.isEmpty { payload["artist"] = artist }
         return try await request(payload)
@@ -435,7 +436,7 @@ final class LyricsStore {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var generation = UUID()
 
-    func load(_ id: String, title: String? = nil, artist: String? = nil) {
+    func load(_ id: String?, title: String? = nil, artist: String? = nil) {
         cancel()
         let generation = UUID()
         self.generation = generation
@@ -449,7 +450,7 @@ final class LyricsStore {
                 self.sheet = lyrics
                 self.isLoading = false
                 #if DEBUG
-                writeReviewEvidence("lyrics-review.json", ["line_count": lyrics.lines?.count ?? 0, "synced": lyrics.synced ?? false, "has_text": !(lyrics.text ?? "").isEmpty])
+                writeReviewEvidence(id == nil ? "local-lyrics-review.json" : "lyrics-review.json", ["line_count": lyrics.lines?.count ?? 0, "synced": lyrics.synced ?? false, "has_text": !(lyrics.text ?? "").isEmpty, "has_video_id": id != nil])
                 #endif
             } catch is CancellationError {
             } catch {
@@ -464,6 +465,13 @@ final class LyricsStore {
         task?.cancel()
         generation = UUID()
         isLoading = false
+    }
+
+    /// Clears a prior song when local lookups are disabled or the queue becomes empty.
+    func clear() {
+        cancel()
+        sheet = nil
+        error = nil
     }
 }
 

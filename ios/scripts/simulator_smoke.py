@@ -2,11 +2,14 @@
 """Launch the built app on an iPhone 13 simulator and capture review evidence, not mockups."""
 
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
+import struct
 import time
 import urllib.parse
+import wave
 
 IOS = Path(__file__).resolve().parents[1]
 OUTPUT = IOS / "build/review"
@@ -115,6 +118,12 @@ if __name__ == "__main__":
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-youtube-search.png"))
         fixture = json.loads((IOS / "scripts/review-track.json").read_text())
         metadata = {"id": fixture["id"], "title": fixture["title"], "artist": fixture["artist"], "artwork": fixture["artwork_url"]}
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://queuereview?" + urllib.parse.urlencode(metadata))
+        queue_review = evidence(container, "queue-review.json")
+        if not queue_review or not queue_review.get("passed"):
+            raise RuntimeError("Queue occurrence, reorder or restoration checks failed")
+        time.sleep(2)
+        sim("io", udid, "screenshot", str(OUTPUT / "iphone13-queue-duplicates.png"))
         for mode in ("artwork", "lyrics", "queue"):
             route = "sonora://review?" + urllib.parse.urlencode(dict(metadata, mode=mode))
             sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", route)
@@ -133,6 +142,21 @@ if __name__ == "__main__":
             raise RuntimeError("Catalog Search did not return decoded songs; inspect the captured screen")
         if not lyrics_evidence or lyrics_evidence.get("line_count", 0) == 0:
             raise RuntimeError("Lyrics did not return decoded lines; inspect the captured screen")
+        # This synthetic file checks native import and audio independently from provider authorization.
+        tone = container / "Library/Caches/sonora-review-tone.wav"
+        tone.parent.mkdir(parents=True, exist_ok=True)
+        rate = 22_050
+        with wave.open(str(tone), "wb") as output:
+            output.setparams((1, 2, rate, 0, "NONE", "not compressed"))
+            output.writeframes(b"".join(struct.pack("<h", int(2_000 * math.sin(2 * math.pi * 220 * i / rate))) for i in range(rate * 16)))
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://localreview")
+        local_review = evidence(container, "local-playback-review.json", timeout=60)
+        if not local_review or not local_review.get("passed"):
+            raise RuntimeError("Local import, playback, pause, seek or removal checks failed")
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://locallyrics?" + urllib.parse.urlencode({"title": fixture["title"], "artist": fixture["artist"]}))
+        local_lyrics = evidence(container, "local-lyrics-review.json")
+        if not local_lyrics or local_lyrics.get("has_video_id") or local_lyrics.get("line_count", 0) == 0:
+            raise RuntimeError("Local-file metadata lyrics did not decode without a provider ID")
         # A fork without repository variables must still verify real audio before publishing.
         video_id = os.environ.get("SONORA_SMOKE_VIDEO_ID") or fixture["id"]
         if video_id:

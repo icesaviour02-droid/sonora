@@ -20,6 +20,12 @@ struct MusicTrack: Codable, Identifiable, Hashable {
     var setVideoID: String? = nil
 }
 
+/// Each occurrence has its own identity, so the same song can appear several times in a queue.
+struct QueuedTrack: Codable, Identifiable, Hashable {
+    var id = UUID()
+    let track: MusicTrack
+}
+
 /// Album summary returned by YouTube Music search, home shelves, artist pages, and library.
 struct CatalogAlbum: Codable, Identifiable, Hashable {
     let id: String

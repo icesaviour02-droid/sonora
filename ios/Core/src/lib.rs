@@ -196,7 +196,7 @@ enum Request {
         quality: Option<String>,
     },
     Lyrics {
-        video_id: String,
+        video_id: Option<String>,
         title: Option<String>,
         artist: Option<String>,
     },
@@ -481,8 +481,21 @@ async fn execute(request: Request) -> Result<Value> {
             title,
             artist,
         } => {
-            validate_video_id(&video_id)?;
-            resolve_lyrics(&api, &video_id, title.as_deref(), artist.as_deref()).await
+            if let Some(id) = video_id.as_deref() {
+                validate_video_id(id)?;
+            }
+            for value in [title.as_deref(), artist.as_deref()].into_iter().flatten() {
+                if value.len() > MAX_QUERY {
+                    bail!("lyrics metadata is too long");
+                }
+            }
+            resolve_lyrics(
+                &api,
+                video_id.as_deref(),
+                title.as_deref(),
+                artist.as_deref(),
+            )
+            .await
         }
         Request::Home {} => fetch_home(&api).await,
         Request::Genre { params } => fetch_genre(&api, &params).await,
@@ -1194,7 +1207,7 @@ fn two_row_track(item: &Value) -> Option<ytmusic::Track> {
 /// Resolves synced LRC lyrics via LRCLIB when metadata is present, falling back to YouTube Music.
 async fn resolve_lyrics(
     api: &YtMusic,
-    id: &str,
+    id: Option<&str>,
     title: Option<&str>,
     artist: Option<&str>,
 ) -> Result<Value> {
@@ -1204,7 +1217,12 @@ async fn resolve_lyrics(
     {
         return Ok(lrc);
     }
-    youtube_lyrics(api, id).await
+    match id {
+        Some(id) => youtube_lyrics(api, id).await,
+        None => Ok(json!({
+            "text": null, "lines": [], "synced": false, "instrumental": false, "source": "LRCLIB",
+        })),
+    }
 }
 
 #[derive(Deserialize)]

@@ -20,6 +20,7 @@ struct RootView: View {
     @State private var didHandleLaunchURL = false
     #if DEBUG
     @State private var guestProbe = GuestAcceptanceProbe()
+    @State private var localLyricsProbe = LyricsStore()
     #endif
 
     var body: some View {
@@ -115,10 +116,18 @@ struct RootView: View {
             guestProbe.start(playback: playback) { playerMode = "artwork"; showPlayer = true }
             return
         }
+        if url.host == "localreview" {
+            library.reviewLocalPlayback(playback)
+            return
+        }
         #endif
         let parameters = components.queryItems ?? []
         func value(_ name: String) -> String? { parameters.first { $0.name == name }?.value }
         #if DEBUG
+        if url.host == "locallyrics" {
+            localLyricsProbe.load(nil, title: value("title"), artist: value("artist"))
+            return
+        }
         if url.host == "fonts" {
             if let face = value("font"), ["system", "rounded", "Inter-Regular"].contains(face) {
                 settings.typefaceID = face
@@ -146,6 +155,12 @@ struct RootView: View {
                 }
             )
             #if DEBUG
+            if url.host == "queuereview" {
+                playback.reviewQueue(track)
+                playerMode = "queue"
+                showPlayer = true
+                return
+            }
             if url.host == "review" {
                 playerMode = value("mode") ?? "artwork"
                 playback.prepareReview(track)

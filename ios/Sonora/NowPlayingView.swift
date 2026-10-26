@@ -130,6 +130,7 @@ struct NowPlayingView: View {
         .sensoryFeedback(.selection, trigger: mode)
         .onAppear { loadLyricsIfNeeded() }
         .onChange(of: playback.current?.id) { _, _ in loadLyricsIfNeeded() }
+        .onChange(of: settings.localFileLyrics) { _, _ in loadLyricsIfNeeded() }
         .onDisappear { lyrics.cancel() }
     }
 
@@ -437,7 +438,7 @@ struct NowPlayingView: View {
                             .appFont(.subheadline)
                             .foregroundStyle(.white.opacity(0.7))
                             .multilineTextAlignment(.center)
-                        Button("ios-retry") { loadLyricsIfNeeded(force: true) }
+                        Button("ios-retry") { loadLyricsIfNeeded() }
                             .buttonStyle(.glass)
                         Spacer()
                     }
@@ -586,7 +587,7 @@ struct NowPlayingView: View {
                 }
                 .pickerStyle(.segmented)
 
-                if queueMode == .upNext && playback.queue.count > 1 {
+                if queueMode == .upNext && !playback.upcomingItems.isEmpty {
                     Button("ios-clear") {
                         playback.clearUpcomingQueue()
                     }
@@ -601,66 +602,58 @@ struct NowPlayingView: View {
                 }
             }
 
-            ScrollView {
-                LazyVStack(spacing: Layout.compact) {
-                    let tracks = queueMode == .upNext ? playback.queue : settings.history
-                    ForEach(tracks) { track in
-                        HStack(spacing: Layout.compact + 2) {
-                            Button {
-                                if queueMode == .upNext {
-                                    playback.select(track)
-                                } else {
-                                    playback.play(track, in: settings.history)
-                                }
-                            } label: {
-                                HStack(spacing: Layout.compact + 2) {
-                                    ArtworkView(track: track, side: 42, cornerRadius: 8)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(track.title)
-                                            .appFont(.subheadline, weight: .medium)
-                                            .foregroundStyle(.white)
-                                            .lineLimit(1)
-                                        Text(track.artist)
-                                            .appFont(.caption)
-                                            .foregroundStyle(.white.opacity(0.68))
-                                            .lineLimit(1)
-                                    }
-                                    Spacer(minLength: 4)
-                                    if playback.current?.id == track.id {
-                                        Image(systemName: playback.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
-                                            .appFont(.caption)
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-
-                            if queueMode == .upNext && playback.current?.id != track.id {
-                                Button {
-                                    playback.removeFromQueue(track)
-                                } label: {
-                                    Image(systemName: "minus.circle.fill")
-                                        .foregroundStyle(.white.opacity(0.5))
-                                        .frame(width: Layout.control, height: Layout.control)
-                                }
-                                .buttonStyle(.plain)
-                            } else if queueMode == .history {
-                                Button {
-                                    settings.removeFromHistory(track)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.white.opacity(0.5))
-                                        .frame(width: Layout.control, height: Layout.control)
-                                }
-                                .buttonStyle(.plain)
-                            }
+            List {
+                if queueMode == .upNext {
+                    ForEach(playback.upcomingItems) { item in
+                        queueRow(item.track) { playback.selectQueueItem(item.id) }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
+                    .onMove(perform: playback.moveUpcoming)
+                    .onDelete { offsets in
+                        let entries = playback.upcomingItems
+                        for index in offsets where entries.indices.contains(index) {
+                            playback.removeQueueItem(entries[index].id)
                         }
-                        .padding(.vertical, 4)
+                    }
+                    if playback.upcomingItems.isEmpty {
+                        Text("ios-queue-empty").foregroundStyle(.white.opacity(0.75))
+                            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    }
+                } else {
+                    ForEach(settings.history) { track in
+                        queueRow(track) { playback.play(track, in: settings.history) }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .swipeActions {
+                                Button("ios-delete", role: .destructive) { settings.removeFromHistory(track) }
+                            }
                     }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.editMode, .constant(queueMode == .upNext ? .active : .inactive))
         }
+    }
+
+    /// Shares queue/history metadata while each caller selects the correct queue occurrence.
+    private func queueRow(_ track: MusicTrack, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Layout.compact) {
+                ArtworkView(track: track, side: Layout.rowArtwork, cornerRadius: Layout.compact)
+                VStack(alignment: .leading, spacing: Layout.compact / 2) {
+                    Text(track.title).appFont(.subheadline, weight: .medium)
+                        .foregroundStyle(.white).lineLimit(1)
+                    Text(track.artist).appFont(.caption)
+                        .foregroundStyle(.white.opacity(0.68)).lineLimit(1)
+                }
+                Spacer(minLength: Layout.compact)
+            }
+            .frame(minHeight: Layout.control)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func queueModePill(symbol: String, label: LocalizedStringKey, isActive: Bool, action: @escaping () -> Void) -> some View {
@@ -839,14 +832,14 @@ struct NowPlayingView: View {
         }
     }
 
-    private func loadLyricsIfNeeded(force: Bool = false) {
-        guard let current = playback.current else { return }
+    private func loadLyricsIfNeeded() {
+        guard let current = playback.current else { lyrics.clear(); return }
         if let id = current.youtubeID {
             lyrics.load(id, title: current.title, artist: current.artist)
         } else if settings.localFileLyrics {
-            lyrics.load(current.id, title: current.title, artist: current.artist)
-        } else if force {
-            lyrics.cancel()
+            lyrics.load(nil, title: current.title, artist: current.artist)
+        } else {
+            lyrics.clear()
         }
     }
 

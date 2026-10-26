@@ -40,7 +40,10 @@ struct SonoraApp: App {
                 .font(InterfaceTypography.font(.body, typeface: settings.typefaceID))
                 .tint(appearance.color(for: settings.accent))
                 .onChange(of: playback.current?.artworkURL, initial: true) { _, url in
-                    appearance.updateArtwork(url)
+                    appearance.updateArtwork(settings.accent == .artwork ? url : nil)
+                }
+                .onChange(of: settings.accent) { _, accent in
+                    appearance.updateArtwork(accent == .artwork ? playback.current?.artworkURL : nil)
                 }
                 .task {
                     poTokenMinter.start()

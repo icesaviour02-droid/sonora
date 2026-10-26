@@ -6,7 +6,14 @@ import UIKit
 /// Owns the player and queue for the app lifetime; views only send playback actions.
 @MainActor @Observable
 final class PlaybackController {
-    private(set) var queue: [MusicTrack] = []
+    private(set) var queueItems: [QueuedTrack] = []
+    private(set) var currentQueueID: UUID?
+    var queue: [MusicTrack] { queueItems.map(\.track) }
+    var upcomingItems: [QueuedTrack] {
+        guard let index = currentQueueIndex else { return queueItems }
+        return Array(queueItems.dropFirst(index + 1))
+    }
+    private var currentQueueIndex: Int? { queueItems.firstIndex { $0.id == currentQueueID } }
     private(set) var current: MusicTrack?
     private(set) var isPlaying = false
     private(set) var isLoading = false
@@ -26,7 +33,7 @@ final class PlaybackController {
     @ObservationIgnored private var itemObserver: NSKeyValueObservation?
     @ObservationIgnored private var notifications: [NSObjectProtocol] = []
     @ObservationIgnored private var commands: [(MPRemoteCommand, Any)] = []
-    @ObservationIgnored private var originalQueue: [MusicTrack] = []
+    @ObservationIgnored private var originalQueue: [QueuedTrack] = []
     @ObservationIgnored private var radioTask: Task<Void, Never>?
     @ObservationIgnored private var resolutionTask: Task<Void, Never>?
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
@@ -93,12 +100,16 @@ final class PlaybackController {
         guard let data = UserDefaults.standard.data(forKey: snapshotKey),
               let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
         let byID = Dictionary(uniqueKeysWithValues: tracks.map { ($0.id, $0) })
-        queue = (snapshot.tracks ?? snapshot.ids.compactMap { byID[$0] }).filter {
-            $0.youtubeID != nil || byID[$0.id] != nil
+        queueItems = (snapshot.entries ?? (snapshot.tracks ?? snapshot.ids.compactMap { byID[$0] }).map { QueuedTrack(track: $0) }).filter {
+            $0.track.youtubeID != nil || byID[$0.track.id] != nil
         }
-        originalQueue = queue
-        if let id = snapshot.current, let track = queue.first(where: { $0.id == id }) {
-            select(track, autoplay: false)
+        let surviving = Set(queueItems.map(\.id))
+        originalQueue = snapshot.original?.filter { surviving.contains($0.id) } ?? queueItems
+        isShuffled = snapshot.shuffled ?? false
+        repeatMode = snapshot.repeatMode ?? .off
+        if let item = queueItems.first(where: { $0.id == snapshot.currentEntry })
+            ?? queueItems.first(where: { $0.track.id == snapshot.current }) {
+            selectQueueItem(item.id, autoplay: false)
         }
     }
 
@@ -114,30 +125,74 @@ final class PlaybackController {
         didRestore = true
         error = nil
         let playable = tracks.filter { $0.available != false }
-        originalQueue = playable.isEmpty ? [track] : playable
-        queue = originalQueue
+        originalQueue = (playable.isEmpty ? [track] : playable).map { QueuedTrack(track: $0) }
+        queueItems = originalQueue
         isShuffled = false
         select(track, autoplay: true)
     }
 
     func playShuffled(_ tracks: [MusicTrack]) {
-        let playable = tracks.filter { $0.available != false }
+        let playable = tracks.filter { $0.available != false }.map { QueuedTrack(track: $0) }
         guard let first = playable.randomElement() else { return }
         didRestore = true
         error = nil
         originalQueue = playable
         isShuffled = true
-        queue = [first] + playable.filter { $0.id != first.id }.shuffled()
-        select(first, autoplay: true)
+        queueItems = [first] + playable.filter { $0.id != first.id }.shuffled()
+        selectQueueItem(first.id, autoplay: true)
     }
 
     #if DEBUG
     /// Lets the CLI review real track metadata without depending on successful audio authorization.
     func prepareReview(_ track: MusicTrack) {
         didRestore = true
-        originalQueue = [track]
-        queue = [track]
+        originalQueue = [QueuedTrack(track: track)]
+        queueItems = originalQueue
         select(track, autoplay: false)
+    }
+
+    /// Exercises queue edits against repeated real metadata without starting provider audio.
+    func reviewQueue(_ track: MusicTrack) {
+        prepareReview(track)
+        repeatMode = .off
+        isShuffled = false
+        let active = currentQueueID
+        addToQueue(track)
+        addToQueue(track)
+        var checks: [String: Bool] = [:]
+        checks["duplicates_distinct"] = queueItems.count == 3 && Set(queueItems.map(\.id)).count == 3
+        let before = upcomingItems.map(\.id)
+        moveUpcoming(fromOffsets: IndexSet(integer: 0), toOffset: 2)
+        checks["move_preserves_current"] = currentQueueID == active && upcomingItems.map(\.id) == Array(before.reversed())
+        if let removed = upcomingItems.first { removeQueueItem(removed.id) }
+        checks["remove_one_occurrence"] = queueItems.count == 2 && currentQueueID == active
+        let later = queueItems.last?.id
+        if let later { selectQueueItem(later, autoplay: false) }
+        checks["select_later_copy"] = currentQueueID == later && currentQueueID != active
+        let identities = Set(queueItems.map(\.id))
+        toggleShuffle()
+        toggleShuffle()
+        checks["shuffle_preserves_entries"] = Set(queueItems.map(\.id)) == identities && currentQueueID == later
+        cycleRepeat()
+        addToQueue(track)
+        clearUpcomingQueue()
+        checks["clear_keeps_past"] = queueItems.count == 2 && currentQueueID == later && upcomingItems.isEmpty
+        didRestore = false
+        queueItems = []
+        originalQueue = []
+        current = nil
+        currentQueueID = nil
+        restore(from: [])
+        checks["restore_without_autoplay"] = queueItems.count == 2 && currentQueueID == later && !isPlaying && !isLoading
+        checks["repeat_persisted"] = repeatMode == .all
+        let values: [String: Any] = ["passed": checks.values.allSatisfy { $0 }, "checks": checks]
+        if let data = try? JSONSerialization.data(withJSONObject: values) {
+            try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("queue-review.json"), options: .atomic)
+        }
+        repeatMode = .off
+        prepareReview(track)
+        addToQueue(track)
+        addToQueue(track)
     }
     #endif
 
@@ -147,17 +202,16 @@ final class PlaybackController {
             play(track, in: [track])
             return
         }
-        queue.removeAll { $0.id == track.id && $0.id != current?.id }
-        originalQueue.removeAll { $0.id == track.id && $0.id != current?.id }
-        if let current, let index = queue.firstIndex(of: current) {
-            queue.insert(track, at: min(index + 1, queue.count))
+        let item = QueuedTrack(track: track)
+        if let index = currentQueueIndex {
+            queueItems.insert(item, at: index + 1)
         } else {
-            queue.insert(track, at: 0)
+            queueItems.insert(item, at: 0)
         }
-        if let current, let index = originalQueue.firstIndex(of: current) {
-            originalQueue.insert(track, at: min(index + 1, originalQueue.count))
+        if let index = originalQueue.firstIndex(where: { $0.id == currentQueueID }) {
+            originalQueue.insert(item, at: index + 1)
         } else {
-            originalQueue.append(track)
+            originalQueue.append(item)
         }
         saveQueue()
     }
@@ -168,12 +222,9 @@ final class PlaybackController {
             play(track, in: [track])
             return
         }
-        if !queue.contains(where: { $0.id == track.id }) {
-            queue.append(track)
-        }
-        if !originalQueue.contains(where: { $0.id == track.id }) {
-            originalQueue.append(track)
-        }
+        let item = QueuedTrack(track: track)
+        queueItems.append(item)
+        originalQueue.append(item)
         saveQueue()
     }
 
@@ -184,40 +235,52 @@ final class PlaybackController {
             play(first, in: playable)
             return
         }
-        for track in playable {
-            if !queue.contains(where: { $0.id == track.id }) { queue.append(track) }
-            if !originalQueue.contains(where: { $0.id == track.id }) { originalQueue.append(track) }
-        }
+        let entries = playable.map { QueuedTrack(track: $0) }
+        queueItems.append(contentsOf: entries)
+        originalQueue.append(contentsOf: entries)
         saveQueue()
     }
 
     /// Moves the selected queue entries in the order displayed, without dropping any tracks.
     func moveQueue(fromOffsets source: IndexSet, toOffset destination: Int) {
-        let moving = source.sorted().compactMap { queue.indices.contains($0) ? queue[$0] : nil }
-        for index in source.sorted(by: >) where queue.indices.contains(index) { queue.remove(at: index) }
-        let target = min(max(0, destination - source.filter { $0 < destination }.count), queue.count)
-        queue.insert(contentsOf: moving, at: target)
-        originalQueue = queue
+        let moving = source.sorted().compactMap { queueItems.indices.contains($0) ? queueItems[$0] : nil }
+        for index in source.sorted(by: >) where queueItems.indices.contains(index) { queueItems.remove(at: index) }
+        let target = min(max(0, destination - source.filter { $0 < destination }.count), queueItems.count)
+        queueItems.insert(contentsOf: moving, at: target)
+        originalQueue = queueItems
         isShuffled = false
         saveQueue()
     }
 
     func removeFromQueue(_ track: MusicTrack) {
-        guard track.id != current?.id else { return }
-        queue.removeAll { $0.id == track.id }
-        originalQueue.removeAll { $0.id == track.id }
+        guard let item = queueItems.first(where: { $0.track.id == track.id && $0.id != currentQueueID }) else { return }
+        removeQueueItem(item.id)
+    }
+
+    /// Removes exactly one occurrence without interrupting the active entry.
+    func removeQueueItem(_ id: UUID) {
+        guard id != currentQueueID else { return }
+        queueItems.removeAll { $0.id == id }
+        originalQueue.removeAll { $0.id == id }
         saveQueue()
     }
 
+    /// Converts native List offsets in Playing Next to positions in the complete queue.
+    func moveUpcoming(fromOffsets source: IndexSet, toOffset destination: Int) {
+        let start = (currentQueueIndex.map { $0 + 1 }) ?? 0
+        moveQueue(fromOffsets: IndexSet(source.map { $0 + start }), toOffset: destination + start)
+    }
+
     func clearUpcomingQueue() {
-        guard let current else {
-            queue = []
+        guard let index = currentQueueIndex else {
+            queueItems = []
             originalQueue = []
             saveQueue()
             return
         }
-        queue = [current]
-        originalQueue = [current]
+        queueItems = Array(queueItems.prefix(index + 1))
+        let surviving = Set(queueItems.map(\.id))
+        originalQueue.removeAll { !surviving.contains($0.id) }
         saveQueue()
     }
 
@@ -235,14 +298,22 @@ final class PlaybackController {
             for item in radioTracks where item.id != track.id {
                 combined.append(item)
             }
-            self.originalQueue = combined
-            self.queue = combined
+            guard let active = self.queueItems.first(where: { $0.id == self.currentQueueID }) else { return }
+            self.queueItems = [active] + combined.dropFirst().map { QueuedTrack(track: $0) }
+            self.originalQueue = self.queueItems
             self.saveQueue()
         }
     }
 
     func select(_ track: MusicTrack, autoplay: Bool = true) {
-        guard queue.contains(track) else { return }
+        guard let item = queueItems.first(where: { $0.track == track }) else { return }
+        selectQueueItem(item.id, autoplay: autoplay)
+    }
+
+    /// Selects an occurrence rather than the first copy of a repeated song.
+    func selectQueueItem(_ id: UUID, autoplay: Bool = true) {
+        guard let item = queueItems.first(where: { $0.id == id }) else { return }
+        let track = item.track
         pause()
         var localItem: AVPlayerItem?
         currentLoudnessDB = nil
@@ -261,6 +332,7 @@ final class PlaybackController {
             streamBadge = nil
         }
         current = track
+        currentQueueID = id
         scrobbledTrackID = nil
         elapsed = 0
         duration = track.durationSeconds ?? 0
@@ -400,12 +472,12 @@ final class PlaybackController {
             pause()
             return
         }
-        guard let current, let index = queue.firstIndex(of: current) else { return }
+        guard let current, let index = currentQueueIndex else { return }
         if automatically && repeatMode == .one { seek(to: 0); resume(); return }
-        if index + 1 < queue.count {
-            select(queue[index + 1])
-        } else if repeatMode == .all, let first = queue.first {
-            select(first)
+        if index + 1 < queueItems.count {
+            selectQueueItem(queueItems[index + 1].id)
+        } else if repeatMode == .all, let first = queueItems.first {
+            selectQueueItem(first.id)
         } else if automatically, settings.autoplayRadio, let videoID = current.youtubeID {
             extendWithRadio(videoID: videoID, after: current)
         } else {
@@ -422,43 +494,45 @@ final class PlaybackController {
             guard !Task.isCancelled, self.current?.id == currentTrack.id else { return }
             let existing = Set(self.queue.map(\.id))
             let fresh = tracks.filter { !existing.contains($0.id) && $0.available != false }
-            guard let first = fresh.first, self.current?.id == currentTrack.id else {
+            guard !fresh.isEmpty, self.current?.id == currentTrack.id else {
                 self.isLoading = false
                 self.pause()
                 return
             }
-            self.queue.append(contentsOf: fresh)
-            self.originalQueue.append(contentsOf: fresh)
+            let entries = fresh.map { QueuedTrack(track: $0) }
+            self.queueItems.append(contentsOf: entries)
+            self.originalQueue.append(contentsOf: entries)
             self.saveQueue()
-            self.select(first, autoplay: true)
+            if let entry = entries.first { self.selectQueueItem(entry.id, autoplay: true) }
         }
     }
 
     func previous() {
-        guard let current, let index = queue.firstIndex(of: current) else { return }
+        guard let index = currentQueueIndex else { return }
         if elapsed > 3 || index == 0 { seek(to: 0) }
-        else { select(queue[index - 1]) }
+        else { selectQueueItem(queueItems[index - 1].id) }
     }
 
     func toggleShuffle() {
         isShuffled.toggle()
-        if isShuffled, let current {
-            queue = [current] + originalQueue.filter { $0.id != current.id }.shuffled()
-        } else { queue = originalQueue }
+        if isShuffled, let current = queueItems.first(where: { $0.id == currentQueueID }) {
+            queueItems = [current] + originalQueue.filter { $0.id != current.id }.shuffled()
+        } else { queueItems = originalQueue }
         saveQueue()
     }
 
-    func cycleRepeat() { repeatMode = repeatMode.next }
+    func cycleRepeat() { repeatMode = repeatMode.next; saveQueue() }
 
     /// Removes deleted library entries from both queue orders and stops a deleted current item.
     func reconcile(with tracks: [MusicTrack]) {
         let ids = Set(tracks.map(\.id))
-        queue.removeAll { $0.youtubeID == nil && !ids.contains($0.id) }
-        originalQueue.removeAll { $0.youtubeID == nil && !ids.contains($0.id) }
+        queueItems.removeAll { $0.track.youtubeID == nil && !ids.contains($0.track.id) }
+        originalQueue.removeAll { $0.track.youtubeID == nil && !ids.contains($0.track.id) }
         if let current, current.youtubeID == nil, !ids.contains(current.id) {
             pause()
             player.replaceCurrentItem(with: nil)
             self.current = nil
+            currentQueueID = nil
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         }
         saveQueue()
@@ -470,10 +544,11 @@ final class PlaybackController {
             pause()
             player.replaceCurrentItem(with: nil)
             current = nil
+            currentQueueID = nil
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         }
-        queue.removeAll { $0.youtubeID != nil }
-        originalQueue.removeAll { $0.youtubeID != nil }
+        queueItems.removeAll { $0.track.youtubeID != nil }
+        originalQueue.removeAll { $0.track.youtubeID != nil }
         saveQueue()
     }
 
@@ -595,10 +670,17 @@ final class PlaybackController {
         let ids: [String]
         let current: String?
         var tracks: [MusicTrack]? = nil
+        var entries: [QueuedTrack]? = nil
+        var original: [QueuedTrack]? = nil
+        var currentEntry: UUID? = nil
+        var shuffled: Bool? = nil
+        var repeatMode: RepeatMode? = nil
     }
 
     private func saveQueue() {
-        let value = Snapshot(ids: queue.map(\.id), current: current?.id, tracks: queue)
+        let value = Snapshot(ids: queue.map(\.id), current: current?.id, tracks: queue,
+            entries: queueItems, original: originalQueue, currentEntry: currentQueueID,
+            shuffled: isShuffled, repeatMode: repeatMode)
         if let data = try? JSONEncoder().encode(value) { UserDefaults.standard.set(data, forKey: snapshotKey) }
     }
 }

@@ -10,6 +10,9 @@ final class LibraryStore {
     private(set) var isLoaded = false
     var error: String?
     private let files = LibraryFiles()
+    #if DEBUG
+    @ObservationIgnored private var reviewTask: Task<Void, Never>?
+    #endif
 
     func load() async {
         guard !isLoaded else { return }
@@ -46,6 +49,52 @@ final class LibraryStore {
     func url(for track: MusicTrack) -> URL {
         LibraryFiles.root.appendingPathComponent(track.filename)
     }
+
+    #if DEBUG
+    /// Imports the runner's generated WAV, checks the real player clock and removes that import.
+    func reviewLocalPlayback(_ playback: PlaybackController) {
+        reviewTask?.cancel()
+        reviewTask = Task { [weak self] in
+            guard let self else { return }
+            let before = Set(self.tracks.map(\.id))
+            let source = URL.cachesDirectory.appendingPathComponent("sonora-review-tone.wav")
+            await self.importFiles([source])
+            var checks: [String: Bool] = [:]
+            if let track = self.tracks.first(where: { !before.contains($0.id) }) {
+                checks["imported_playable_file"] = FileManager.default.fileExists(atPath: self.url(for: track).path)
+                checks["duration_imported"] = (track.durationSeconds ?? 0) > 10
+                playback.play(track, in: [track])
+                checks["clock_advanced"] = await self.waitForClock(playback, beyond: 1)
+                playback.pause()
+                try? await Task.sleep(for: .milliseconds(350))
+                let paused = playback.elapsed
+                try? await Task.sleep(for: .milliseconds(700))
+                checks["pause_stable"] = !playback.isPlaying && abs(playback.elapsed - paused) < 0.2
+                playback.seek(to: 5)
+                playback.resume()
+                checks["seek_resume"] = await self.waitForClock(playback, beyond: 6)
+                playback.pause()
+                await self.remove(track)
+                playback.reconcile(with: self.tracks)
+                checks["remove_import"] = Set(self.tracks.map(\.id)) == before && !FileManager.default.fileExists(atPath: self.url(for: track).path)
+            } else { checks["imported_playable_file"] = false }
+            let result: [String: Any] = ["passed": checks.values.allSatisfy { $0 }, "checks": checks, "fixture": "generated WAV test tone"]
+            if let data = try? JSONSerialization.data(withJSONObject: result) {
+                try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("local-playback-review.json"), options: .atomic)
+            }
+        }
+    }
+
+    private func waitForClock(_ playback: PlaybackController, beyond threshold: Double) async -> Bool {
+        for _ in 0..<150 {
+            if Task.isCancelled { return false }
+            if playback.error != nil { return false }
+            if playback.isPlaying && playback.elapsed > threshold { return true }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return false
+    }
+    #endif
 }
 
 /// Serializes index mutations and keeps slow file/metadata work off the UI thread.
@@ -77,6 +126,7 @@ private actor LibraryFiles {
             guard try await asset.load(.isPlayable) else { throw CocoaError(.fileReadCorruptFile) }
             var title = source.deletingPathExtension().lastPathComponent
             var artist = String(localized: "ios-unknown-artist")
+            var album: String?
             if let metadata = try? await asset.load(.commonMetadata) {
                 for item in metadata {
                     if item.commonKey == .commonKeyTitle, let value = try? await item.load(.stringValue) {
@@ -85,9 +135,15 @@ private actor LibraryFiles {
                     if item.commonKey == .commonKeyArtist, let value = try? await item.load(.stringValue) {
                         artist = value
                     }
+                    if item.commonKey == .commonKeyAlbumName, let value = try? await item.load(.stringValue) {
+                        album = value
+                    }
                 }
             }
-            let track = MusicTrack(id: id.uuidString, title: title, artist: artist, filename: filename, addedAt: .now)
+            let seconds = (try? await asset.load(.duration))?.seconds
+            let duration = seconds.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+            let track = MusicTrack(id: id.uuidString, title: title, artist: artist, filename: filename,
+                addedAt: .now, albumTitle: album, durationSeconds: duration)
             var next = tracks
             next.append(track)
             try save(next)

@@ -159,6 +159,7 @@
 "ios-quality-low" = "Data Saver (HE-AAC 48 kbps)";
 "ios-quality-normal" = "Normal (AAC 128 kbps)";
 "ios-queue" = "Queue";
+"ios-queue-empty" = "No upcoming songs. Add music with Play Next or Add to Queue.";
 "ios-recently-added" = "Recently Added";
 "ios-recently-played" = "Recently Played";
 "ios-remove-all-downloads" = "Remove All Downloads";

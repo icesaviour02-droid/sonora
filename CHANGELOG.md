@@ -26,6 +26,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The iPhone queue keeps repeated songs as separate entries, supports reordering Playing Next,
+  and preserves the selected occurrence, shuffle order and repeat mode when restoring the queue.
+- Local-file lyrics can search by song and artist without a YouTube video ID. Disabling these
+  lookups clears lyrics left over from the previous song.
+- Imported iPhone audio now retains album and duration metadata when present.
 - The iPhone Home, album, artist, playlist and lyrics screens can decode provider data correctly.
 - The expanded iPhone player keeps artwork inside the screen and scrolls at large text sizes.
   Foreground artwork requests a display-sized image independently from the blurred background.

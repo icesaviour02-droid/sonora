@@ -1552,3 +1552,4 @@ ios-accent-blue = Blue
 ios-accent-purple = Purple
 ios-accent-orange = Orange
 ios-accent-green = Green
+ios-queue-empty = No upcoming songs. Add music with Play Next or Add to Queue.

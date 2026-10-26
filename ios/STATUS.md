@@ -89,3 +89,22 @@ across screens now resolve the user's font choice. Native system navigation keep
 Appearance also supports artwork-derived contrast-adjusted accent colors and named system accents.
 Simulator checks for font registration, selection persistence and screenshots are added; their
 Apple compilation/runtime result is pending. This does not resolve Guest audio verification.
+
+Apple run 40255941831 compiled device and simulator targets and passed font availability,
+selection and relaunch checks for SF Pro Rounded and Inter. The run subsequently failed at
+the already-known Guest verification gate. Its font screenshots are retained for visual review.
+
+## Queue and local-file repair batch (26 October 2026)
+
+Queue occurrences now carry distinct UUIDs, so repeated songs can be selected/removed/reordered
+individually. Playing Next uses a native List with reorder handles and removal, and only shows
+upcoming entries. Queue snapshots retain entry identity, the selected occurrence, original order,
+shuffle and repeat, with migration from old track-only snapshots. Clear Upcoming retains the past.
+Debug simulator checks exercise repeated entries, moves, removal, shuffle, restore without autoplay
+and repeat persistence. These checks still need Apple runtime acceptance.
+
+Local-file lyrics no longer validate an app UUID as a YouTube ID. A live Linux boundary request
+without any video ID returned 37 synced LRCLIB lines. Disabled local lookup now clears stale lyrics.
+Imported local files retain album and duration metadata. A generated WAV simulator check now
+exercises actual import, advancing playback, pause, seek/resume and deletion before attempting
+network-dependent Guest audio. Source syntax and Rust Clippy/build checks pass; Apple results pending.
