@@ -432,3 +432,11 @@ and provider have been removed. Two model checks cover accepted and rejected nat
 Primary SDK references: https://developer.apple.com/documentation/uikit/uicellaccessory-swift.struct/reorder(displayed:options:)
 and https://developer.apple.com/documentation/uikit/uicollectionviewdiffabledatasource-9tqpa/reorderinghandlers-swift.property .
 Native touch acceptance for this replacement is still pending.
+
+Run 40336060273 at 8e37d227 compiled the UIKit queue for device and simulator. Its simulator run
+never reached any review route: installation took about a minute and the initial simctl launch
+timed out after 120 seconds, followed by slow shutdown. This does not establish a queue pass or
+a queue runtime failure. The next build allows 240 seconds for cold initial launch, retaining
+existing bounded warm-route and test timeouts. Native labels now receive the selected appTypeface
+environment and reconfigure on font changes. Bottom scroll inset keeps Queue initially at the
+top even when only a couple of songs follow it; history stays above and is revealed by scrolling.

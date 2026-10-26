@@ -3,12 +3,19 @@ import UIKit
 
 /// UIKit owns row lifting, auto-scroll, cancellation and swipe actions. Playback owns every edit.
 struct NativeQueueList: UIViewRepresentable {
+    @Environment(\.appTypeface) private var typeface
     let upcoming: [QueuedTrack]
     let history: [MusicTrack]
     let autoplay: Bool
     let playback: PlaybackController
     let settings: SettingsStore
     let addSongs: () -> Void
+
+    init(upcoming: [QueuedTrack], history: [MusicTrack], autoplay: Bool, playback: PlaybackController,
+         settings: SettingsStore, addSongs: @escaping () -> Void) {
+        self.upcoming = upcoming; self.history = history; self.autoplay = autoplay
+        self.playback = playback; self.settings = settings; self.addSongs = addSongs
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
     func makeUIView(context: Context) -> UICollectionView { context.coordinator.makeCollection() }
@@ -26,6 +33,7 @@ struct NativeQueueList: UIViewRepresentable {
         private var dataSource: UICollectionViewDiffableDataSource<Int, Entry>!
         private var tracks: [Entry: MusicTrack] = [:]
         private var didPositionQueue = false
+        private var lastTypeface: String?
 
         init(parent: NativeQueueList) { self.parent = parent }
 
@@ -46,7 +54,7 @@ struct NativeQueueList: UIViewRepresentable {
                 guard let self else { return }
                 cell.backgroundConfiguration = .clear()
                 cell.contentConfiguration = UIHostingConfiguration { [weak self] in
-                    if let self { self.row(entry).environment(self.parent.settings) }
+                    if let self { self.row(entry).environment(self.parent.settings).environment(\.appTypeface, self.parent.typeface) }
                 }.margins(.all, 0)
                 if case .song = entry { cell.accessories = [.reorder(displayed: .always)] }
                 else { cell.accessories = [] }
@@ -88,24 +96,32 @@ struct NativeQueueList: UIViewRepresentable {
             if parent.settings.autoplayRadio { entries.append(.autoplay) }
             let old = dataSource.snapshot()
             let changes = entries.filter { updated[$0] != tracks[$0] }
+            let fontChanged = lastTypeface != parent.typeface
+            lastTypeface = parent.typeface
             tracks = updated
-            if old.itemIdentifiers == entries && changes.isEmpty { return }
+            if old.itemIdentifiers == entries && changes.isEmpty && !fontChanged { return }
             var snapshot = NSDiffableDataSourceSnapshot<Int, Entry>()
             snapshot.appendSections([0])
             snapshot.appendItems(entries)
-            snapshot.reconfigureItems(changes.filter { old.indexOfItem($0) != nil })
             // Headers have changing disabled states, independent of the song metadata.
-            snapshot.reconfigureItems([.queueHeader, .historyHeader].filter { entries.contains($0) && old.indexOfItem($0) != nil })
+            let reconfigure = Set(fontChanged ? entries : changes).union([.queueHeader, .historyHeader])
+            snapshot.reconfigureItems(entries.filter { reconfigure.contains($0) && old.indexOfItem($0) != nil })
             dataSource.apply(snapshot, animatingDifferences: didPositionQueue && !UIAccessibility.isReduceMotionEnabled) { [weak self] in
                 self?.positionQueue()
             }
         }
 
         private func positionQueue() {
-            guard !didPositionQueue, let collection, collection.bounds.width > 0, collection.bounds.height > 0,
-                  let index = dataSource?.indexPath(for: .queueHeader) else { return }
-            didPositionQueue = true
-            collection.scrollToItem(at: index, at: .top, animated: false)
+            guard let collection, collection.bounds.width > 0, collection.bounds.height > 0,
+                  let index = dataSource?.indexPath(for: .queueHeader),
+                  let attributes = collection.layoutAttributesForItem(at: index) else { return }
+            let tail = collection.contentSize.height - attributes.frame.minY
+            let padding = max(0, collection.bounds.height - tail)
+            if collection.contentInset.bottom != padding { collection.contentInset.bottom = padding }
+            if !didPositionQueue {
+                didPositionQueue = true
+                collection.scrollToItem(at: index, at: .top, animated: false)
+            }
         }
 
         /// History, headers and Add Songs never become destinations for an upcoming song.
