@@ -1626,3 +1626,8 @@ ios-lyrics-plain-format = Plain Text
 ios-scrobble-pending = Saved Listens Waiting to Send
 ios-scrobble-retry = Retry Submissions
 ios-scrobble-storage-error = Saved listens could not be updated. Your existing queue has been kept.
+
+ios-sound-response = Frequency Response
+ios-sound-response-description = Calculated at 48 kHz with the profile’s preamp. Your changes apply after saving.
+ios-sound-response-error = The response cannot be shown until the filter values are valid.
+ios-response-db = Output Level (dB)

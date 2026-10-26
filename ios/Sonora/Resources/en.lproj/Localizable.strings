@@ -212,6 +212,7 @@
 "ios-repeat" = "Repeat";
 "ios-repeat-all" = "Repeat all";
 "ios-repeat-one" = "Repeat one";
+"ios-response-db" = "Output Level (dB)";
 "ios-restoring-downloads" = "Restoring downloads…";
 "ios-retry" = "Try again";
 "ios-romanized-lyrics" = "Romanized Pronunciation";
@@ -269,6 +270,9 @@
 "ios-sound-profiles-description" = "Edit filters, save separate sounds and share profiles through Files.";
 "ios-sound-profiles-empty" = "Create a profile from a preset or import an Equalizer APO file.";
 "ios-sound-profiles-load-error" = "Saved sound profiles could not be loaded. The original file has been preserved.";
+"ios-sound-response" = "Frequency Response";
+"ios-sound-response-description" = "Calculated at 48 kHz with the profile’s preamp. Your changes apply after saving.";
+"ios-sound-response-error" = "The response cannot be shown until the filter values are valid.";
 "ios-start-radio" = "Create Station";
 "ios-storage-downloads" = "Downloads & Storage";
 "ios-streaming-quality" = "Streaming Quality";

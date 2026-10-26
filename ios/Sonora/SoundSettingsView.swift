@@ -192,6 +192,7 @@ struct SoundProfileEditor: View {
 
     var body: some View {
         Form {
+            Section { SoundResponseView(profile: draft) }
             Section {
                 TextField("ios-sound-profile-name", text: $draft.name)
                 Toggle("ios-equalizer-auto-preamp", isOn: $draft.autoPreamp)

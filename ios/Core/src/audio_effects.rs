@@ -94,9 +94,32 @@ fn describe_inner(
         json!({ "kind": filter.kind().id(), "frequency": filter.frequency(), "gain": filter.gain(),
             "width_unit": width_unit, "width": width, "enabled": filter.enabled() })
     }).collect();
+    let response = curve.response(48_000);
+    let preamp_db = curve.preamp_db();
+    let mut frequencies: Vec<f64> = (0..=240)
+        .map(|step| 20.0 * 1_000.0_f64.powf(f64::from(step) / 240.0))
+        .chain(
+            curve
+                .filters()
+                .iter()
+                .filter(|filter| filter.enabled())
+                .map(|filter| filter.frequency()),
+        )
+        .filter(|frequency| (20.0..=20_000.0).contains(frequency))
+        .collect();
+    frequencies.sort_by(f64::total_cmp);
+    frequencies.dedup_by(|a, b| (*a - *b).abs() < 1e-8);
+    let points: Vec<Value> = frequencies
+        .into_iter()
+        .map(|frequency| {
+            let db = response.db(frequency) + preamp_db;
+            json!({ "frequency": frequency, "output_db": if db.is_finite() { db } else { -180.0 } })
+        })
+        .collect();
     Ok(
         json!({ "filters": filters, "auto_preamp": matches!(preamp, Preamp::Auto),
-        "preamp_db": curve.preamp_db(), "profile": apo::export(&curve), "skipped_lines": skipped }),
+        "preamp_db": preamp_db, "profile": apo::export(&curve), "skipped_lines": skipped,
+        "sample_rate": 48_000, "response": points }),
     )
 }
 

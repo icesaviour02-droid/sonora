@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iPhone sound-profile editors show the frequency response calculated by the audio filters before a profile is saved.
+
 - Imported iPhone music can show embedded cover art and lyrics, and local albums appear in Library with album-artist grouping and disc/track ordering.
 
 - iPhone lyrics can use the desktop lyrics sources, import timed lyric files, save sheets for offline reading, and display word timing and backing vocals. Sources and text size can be adjusted in Settings.

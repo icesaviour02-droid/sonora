@@ -39,6 +39,8 @@ enum NativeProvider {
         let preamp_db: Double
         let profile: String
         let skipped_lines: [Int]
+        let response: [SoundResponsePoint]
+        let sample_rate: Int
     }
 
     static func describeEqualizer(_ payload: [String: Any]) async throws -> EqualizerDescription {

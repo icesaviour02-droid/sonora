@@ -110,6 +110,12 @@ def check(path):
     assert imported["filter_count"] == 1 and not imported["skipped_lines"]
     at_peak = tone(1_000)
     prior_sound = dsp.process([at_peak])[0]
+    graph = dsp.request(dict(operation="equalizer_describe", preset="flat", profile=imported["profile"]))
+    assert graph["ok"] and graph["data"]["sample_rate"] == 48_000
+    points = graph["data"]["response"]
+    assert len(points) >= 241 and all(20 <= p["frequency"] <= 20_000 and math.isfinite(p["output_db"]) for p in points)
+    at_center = next(p["output_db"] for p in points if abs(p["frequency"] - 1_000) < 1e-6)
+    assert abs(at_center - gain_db(at_peak, prior_sound)) < 0.02, "graph disagrees with rendered audio"
     notch = dict(kind="notch", frequency=1_000, gain=0, width_unit="q", width=4, enabled=True)
     description = dsp.request(dict(operation="equalizer_describe", preset="flat", filters=[notch]))
     assert description["ok"] and description["data"]["filters"][0]["kind"] == "notch"
@@ -134,7 +140,7 @@ def check(path):
                   preset_headroom_db=preset["preamp_db"], profile_import=True,
                   parametric_notch_db=notch_db, profile_preview_preserves_sound=True,
                   invalid_filters_rejected=True, import_warnings=True, profile_roundtrip=True,
-                  stale_configuration_ignored=True, normalization_gain_db=gain_db(low, normalized))
+                  graph_matches_native_pcm=True, stale_configuration_ignored=True, normalization_gain_db=gain_db(low, normalized))
     output = IOS / "build/audio-effects-check.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2))

@@ -220,3 +220,22 @@ and inactive/active line typography now has a stable size. Actual generated-WAV 
 the native DSP still passed all seven checks. Shared core run 40267418289 passed Apple host tests,
 boundary checks and both release libraries. Guest resolution alone still failed with verification
 required. This is not final IPA acceptance.
+
+## Native listening acceptance and response preview (26 October 2026)
+
+Run 40268417184 at fdab598b compiled both Apple targets and passed all sixteen listening/outbox
+checks. Downloaded scrobble-review.json confirms actual timestamp preservation, correct payloads,
+per-service acknowledgement, durable backoff/relaunch, account isolation and secret-free storage.
+The expanded lyrics store passed nine checks, including keeping imported lyrics when clearing cache.
+Guest verification still failed; service account authentication and actual scrobble delivery are
+not established by the injectable transport checks.
+
+Run 40269539723 at 71bc1938 compiled local artwork/albums changes and reached only the remaining
+Guest-resolution failure after the extended native tagged-audio acceptance sequence. The count-only
+artifacts are being retrieved for direct inspection. Shared-core run 40269539628 also passed.
+
+Sound-profile editors now preview a logarithmic frequency-response chart. Points and preamp come
+from the exact desktop Curve response, including filter centre frequencies. A Linux boundary check
+compares the graph at the test filter's centre to actual rendered PCM within 0.02 dB; it passes,
+along with Clippy and Swift syntax. Previewing still leaves playing audio unchanged. Apple graph
+compilation, rendering and accessibility review remain pending.
