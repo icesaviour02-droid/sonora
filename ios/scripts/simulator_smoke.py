@@ -201,6 +201,10 @@ if __name__ == "__main__":
             raise RuntimeError("Local playlist/media/favorites did not survive actual app relaunch")
         time.sleep(2)
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-local-playlist-restored.png"))
+        test_run = next((IOS / "build/simulator/Build/Products").glob("*.xctestrun"))
+        subprocess.run(["xcodebuild", "test-without-building", "-xctestrun", str(test_run),
+            "-destination", "id=" + udid, "-parallel-testing-enabled", "NO",
+            "-resultBundlePath", str(OUTPUT / "MusicInteractions.xcresult")], check=True, timeout=360)
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://locallyrics?" + urllib.parse.urlencode({"title": fixture["title"], "artist": fixture["artist"]}))
         local_lyrics = evidence(container, "local-lyrics-review.json")
         if not local_lyrics or local_lyrics.get("has_video_id") or local_lyrics.get("line_count", 0) == 0:

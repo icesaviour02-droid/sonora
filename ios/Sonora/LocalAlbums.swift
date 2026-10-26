@@ -47,7 +47,7 @@ struct LocalAlbumView: View {
                 .listStyle(.plain)
             } else { ContentUnavailableView("ios-albums", systemImage: "square.stack") }
         }
-        .navigationTitle(album?.title ?? "")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

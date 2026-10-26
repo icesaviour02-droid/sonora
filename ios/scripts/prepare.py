@@ -152,7 +152,30 @@ def project():
     project_list = add("project.configs", "XCConfigurationList", buildConfigurations=project_configs, defaultConfigurationIsVisible="0", defaultConfigurationName="Release")
     target_list = add("target.configs", "XCConfigurationList", buildConfigurations=target_configs, defaultConfigurationIsVisible="0", defaultConfigurationName="Release")
     target = add("target", "PBXNativeTarget", buildConfigurationList=target_list, buildPhases=[sources, frameworks, resource_phase], buildRules=[], dependencies=[], name="Sonora", productName="Sonora", productReference=app, productType="com.apple.product-type.application")
-    root = add("project", "PBXProject", attributes={"LastUpgradeCheck": "2600"}, buildConfigurationList=project_list, compatibilityVersion="Xcode 14.0", developmentRegion="en", hasScannedForEncodings="0", knownRegions=["en", "Base"], mainGroup=main_group, productRefGroup=products, projectDirPath="", projectRoot="", targets=[target])
+    test_refs, test_builds = [], []
+    for path in sorted((IOS / "UITests").glob("*.swift")):
+        relative = str(path.relative_to(IOS))
+        ref = add(relative, "PBXFileReference", lastKnownFileType="sourcecode.swift", path=relative, sourceTree="SOURCE_ROOT")
+        test_refs.append(ref)
+        test_builds.append(add(relative + ".build", "PBXBuildFile", fileRef=ref))
+    test_group = add("tests.group", "PBXGroup", children=test_refs, name="UITests", sourceTree="<group>")
+    objects[main_group]["children"].append(test_group)
+    test_product = add("tests.product", "PBXFileReference", explicitFileType="wrapper.cfbundle", path="SonoraUITests.xctest", sourceTree="BUILT_PRODUCTS_DIR")
+    objects[products]["children"].append(test_product)
+    test_configs = []
+    for name in ["Debug", "Release"]:
+        test_configs.append(add("tests." + name, "XCBuildConfiguration", name=name, buildSettings={
+            "PRODUCT_NAME": "SonoraUITests", "PRODUCT_BUNDLE_IDENTIFIER": "org.sonorahq.iphone.uitests",
+            "GENERATE_INFOPLIST_FILE": "YES", "TARGETED_DEVICE_FAMILY": "1",
+            "SUPPORTED_PLATFORMS": "iphonesimulator", "CODE_SIGNING_ALLOWED": "NO",
+            "TEST_TARGET_NAME": "Sonora", "SWIFT_VERSION": "5.0",
+        }))
+    test_list = add("tests.configs", "XCConfigurationList", buildConfigurations=test_configs, defaultConfigurationIsVisible="0", defaultConfigurationName="Debug")
+    test_sources = add("tests.sources", "PBXSourcesBuildPhase", buildActionMask="2147483647", files=test_builds, runOnlyForDeploymentPostprocessing="0")
+    proxy = add("tests.proxy", "PBXContainerItemProxy", containerPortal=identifier("project"), proxyType="1", remoteGlobalIDString=target, remoteInfo="Sonora")
+    dependency = add("tests.dependency", "PBXTargetDependency", target=target, targetProxy=proxy)
+    test_target = add("tests.target", "PBXNativeTarget", buildConfigurationList=test_list, buildPhases=[test_sources], buildRules=[], dependencies=[dependency], name="SonoraUITests", productName="SonoraUITests", productReference=test_product, productType="com.apple.product-type.bundle.ui-testing")
+    root = add("project", "PBXProject", attributes={"LastUpgradeCheck": "2600", "TargetAttributes": {test_target: {"TestTargetID": target}}}, buildConfigurationList=project_list, compatibilityVersion="Xcode 14.0", developmentRegion="en", hasScannedForEncodings="0", knownRegions=["en", "Base"], mainGroup=main_group, productRefGroup=products, projectDirPath="", projectRoot="", targets=[target, test_target])
     write_if_changed(IOS / "Sonora.xcodeproj/project.pbxproj", "// !$*UTF8*$!\n" + plist({"archiveVersion": "1", "classes": {}, "objectVersion": "56", "objects": objects, "rootObject": root}) + "\n")
     write_if_changed(IOS / "Sonora.xcodeproj/xcshareddata/xcschemes/Sonora.xcscheme", f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="2600" version="1.3">
@@ -160,7 +183,13 @@ def project():
     <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
       <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="Sonora.app" BlueprintName="Sonora" ReferencedContainer="container:Sonora.xcodeproj"/>
     </BuildActionEntry>
+    <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="NO">
+      <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{test_target}" BuildableName="SonoraUITests.xctest" BlueprintName="SonoraUITests" ReferencedContainer="container:Sonora.xcodeproj"/>
+    </BuildActionEntry>
   </BuildActionEntries></BuildAction>
+  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB">
+    <Testables><TestableReference skipped="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{test_target}" BuildableName="SonoraUITests.xctest" BlueprintName="SonoraUITests" ReferencedContainer="container:Sonora.xcodeproj"/></TestableReference></Testables>
+  </TestAction>
   <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugServiceExtension="internal" allowLocationSimulation="YES">
     <BuildableProductRunnable runnableDebuggingMode="0"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="Sonora.app" BlueprintName="Sonora" ReferencedContainer="container:Sonora.xcodeproj"/></BuildableProductRunnable>
   </LaunchAction>

@@ -1662,3 +1662,7 @@ ios-title = Title
 ios-downloaded-playlists-description = Download a playlist from its menu to keep its songs together here.
 
 ios-offline-songs-only = Only songs available offline are shown.
+
+ios-edit-playlist = Edit Playlist
+
+ios-delete-from-iphone = Delete from iPhone

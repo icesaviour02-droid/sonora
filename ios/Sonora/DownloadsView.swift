@@ -5,15 +5,23 @@ struct DownloadsView: View {
     @Environment(DownloadsStore.self) private var downloads
     private var tracks: [MusicTrack] { downloads.completedTracks }
     private var pending: [DownloadEntry] { downloads.entries.filter { $0.state != .downloaded } }
+    private var recentCollections: [MusicTrack] {
+        var seen = Set<String>()
+        return Array(tracks.reversed().filter { track in
+            let title = (track.albumTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let key = title.isEmpty ? track.id : (track.albumID ?? title.lowercased() + "\0" + (track.albumArtist ?? track.artist).lowercased())
+            return seen.insert(key).inserted
+        }.prefix(8))
+    }
 
     var body: some View {
         List {
             if !tracks.isEmpty {
                 Section {
-                    NavigationLink { DownloadedPlaylistsView() } label: { Label("ios-playlists", systemImage: "music.note.list") }
-                    NavigationLink { DownloadedArtistsView() } label: { Label("ios-artists", systemImage: "music.mic") }
-                    NavigationLink { DownloadedAlbumsView() } label: { Label("ios-albums", systemImage: "square.stack") }
-                    NavigationLink { DownloadedSongsView() } label: { Label("ios-songs", systemImage: "music.note") }
+                    NavigationLink { DownloadedPlaylistsView() } label: { Label("ios-playlists", systemImage: "music.note.list") }.accessibilityIdentifier("download-playlists")
+                    NavigationLink { DownloadedArtistsView() } label: { Label("ios-artists", systemImage: "music.mic") }.accessibilityIdentifier("download-artists")
+                    NavigationLink { DownloadedAlbumsView() } label: { Label("ios-albums", systemImage: "square.stack") }.accessibilityIdentifier("download-albums")
+                    NavigationLink { DownloadedSongsView() } label: { Label("ios-songs", systemImage: "music.note") }.accessibilityIdentifier("download-songs")
                 }.appFont(.title3)
             }
             if !pending.isEmpty {
@@ -26,10 +34,9 @@ struct DownloadsView: View {
             }
             if !tracks.isEmpty {
                 Section("ios-recently-downloaded") {
-                    let recent = Array(tracks.suffix(8).reversed())
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardArtwork), spacing: Layout.spacing)],
                               alignment: .leading, spacing: Layout.spacing) {
-                        ForEach(recent) { track in
+                        ForEach(recentCollections) { track in
                             NavigationLink {
                                 DownloadedCollectionView(title: track.albumTitle ?? track.title, subtitle: track.artist,
                                     artwork: track.displayArtworkURL, trackIDs: albumTracks(for: track).map(\.id))

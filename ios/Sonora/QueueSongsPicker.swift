@@ -33,7 +33,7 @@ struct QueueSongsPicker: View {
                 Button("ios-add") {
                     playback.addToQueue(songs.filter { selected.contains($0.id) })
                     dismiss()
-                }.disabled(selected.isEmpty)
+                }.disabled(selected.isEmpty).accessibilityIdentifier("queue-picker-confirm")
             }
         }
         .overlay { if songs.isEmpty { ContentUnavailableView("ios-songs", systemImage: "music.note") } }

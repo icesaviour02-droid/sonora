@@ -4,7 +4,13 @@
     <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
       <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="34A04005BCAF206EEC990BD9" BuildableName="Sonora.app" BlueprintName="Sonora" ReferencedContainer="container:Sonora.xcodeproj"/>
     </BuildActionEntry>
+    <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="NO">
+      <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="FCB9FFCF92721B6137FB62E5" BuildableName="SonoraUITests.xctest" BlueprintName="SonoraUITests" ReferencedContainer="container:Sonora.xcodeproj"/>
+    </BuildActionEntry>
   </BuildActionEntries></BuildAction>
+  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB">
+    <Testables><TestableReference skipped="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="FCB9FFCF92721B6137FB62E5" BuildableName="SonoraUITests.xctest" BlueprintName="SonoraUITests" ReferencedContainer="container:Sonora.xcodeproj"/></TestableReference></Testables>
+  </TestAction>
   <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugServiceExtension="internal" allowLocationSimulation="YES">
     <BuildableProductRunnable runnableDebuggingMode="0"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="34A04005BCAF206EEC990BD9" BuildableName="Sonora.app" BlueprintName="Sonora" ReferencedContainer="container:Sonora.xcodeproj"/></BuildableProductRunnable>
   </LaunchAction>

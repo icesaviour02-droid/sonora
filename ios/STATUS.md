@@ -312,7 +312,7 @@ player actions reuse shared song/artwork components. Local bootstrap now runs be
 restoration and the root no longer disables all local controls while sign-in is pending. Home is
 refreshed after account restoration. Physical airplane-mode startup remains unverified.
 Thirteen Swift state checks and four actual app-relaunch checks, using real imported generated AAC
-files and a review-only database, are added; Apple compilation/runtime evidence is pending.
+files and a review-only database, passed on the iPhone 13 simulator at 9cabc6ce (run 40297091255).
 Build 10 remains frozen for the user; these new changes belong to the next build.
 
 Known next authentication issue: pinned ytmusic-rs persist_cookies explicitly replaces freshly
@@ -350,3 +350,11 @@ downloaded songs are preserved but cannot retroactively recover playlist members
 show only completed songs. Playlist, downloaded-collection and local-album heroes share responsive
 cover sizing, title hierarchy and transport controls. Native visual and touch acceptance is pending;
 this work does not establish an exact copy of every Apple Music page.
+
+Follow-up interface review adds a simulator-only XCUITest target and real queue gestures (drag,
+swipe removal, picker selection, clear). The target is excluded from device running/archive builds.
+Queue uses ordinary List mode so swipe actions remain available; long-press reordering comes from
+onMove, with an SF Symbol grip matching the reference. Actual touch acceptance remains pending.
+The Library Recently Added section groups imported albums into covers; per-song deletion remains
+available from the shared song menu. Local playlist titles collapse into the navigation bar on
+scroll; Edit lives in its More menu. Online albums share the same collection header as playlists.

@@ -27,10 +27,11 @@ struct MiniPlayer: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        Text(playback.current?.artist ?? "")
+                        if placement != .inline { Text(playback.current?.artist ?? "")
                             .appFont(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                        }
                     }
                     Spacer(minLength: 0)
                 }
@@ -468,9 +469,11 @@ struct NowPlayingView: View {
                     }
                     Section {
                         ForEach(playback.upcomingItems) { item in
-                            queueRow(item.track) { playback.selectQueueItem(item.id) }
+                            queueRow(item.track, reorderable: true) { playback.selectQueueItem(item.id) }
+                                .accessibilityIdentifier("queue-row-" + item.id.uuidString)
                                 .swipeActions {
                                     Button("ios-remove-from-queue", role: .destructive) { playback.removeQueueItem(item.id) }
+                                        .accessibilityIdentifier("queue-remove-" + item.id.uuidString)
                                 }
                         }
                         .onMove(perform: playback.moveUpcoming)
@@ -482,12 +485,13 @@ struct NowPlayingView: View {
                                     .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: Layout.compact))
                                 Text("ios-add-songs-to-queue").appFont(.body)
                             }.foregroundStyle(.white)
-                        }.buttonStyle(.plain)
+                        }.buttonStyle(.plain).accessibilityIdentifier("queue-add-songs")
                     } header: {
                         HStack {
                             Text("ios-queue").appFont(.headline)
                             Spacer()
                             Button("ios-clear") { playback.clearUpcomingQueue() }
+                                .accessibilityIdentifier("queue-clear")
                                 .disabled(playback.upcomingItems.isEmpty)
                         }
                         .foregroundStyle(.white).textCase(nil)
@@ -507,14 +511,16 @@ struct NowPlayingView: View {
                 .listRowSpacing(Layout.compact / 2)
                 .scrollContentBackground(.hidden)
                 .listSectionSeparator(.hidden)
-                .environment(\.editMode, .constant(.active))
-                .onAppear { proxy.scrollTo("queue-start", anchor: .top) }
+                .task {
+                    await Task.yield()
+                    proxy.scrollTo("queue-start", anchor: .top)
+                }
             }
         }
     }
 
     /// Shares queue/history metadata while each caller selects the correct queue occurrence.
-    private func queueRow(_ track: MusicTrack, action: @escaping () -> Void) -> some View {
+    private func queueRow(_ track: MusicTrack, reorderable: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: Layout.compact) {
                 ArtworkView(track: track, side: Layout.rowArtwork, cornerRadius: Layout.compact)
@@ -525,6 +531,10 @@ struct NowPlayingView: View {
                         .foregroundStyle(.white.opacity(0.68)).lineLimit(1)
                 }
                 Spacer(minLength: Layout.compact)
+                if reorderable {
+                    Image(systemName: "line.3.horizontal").foregroundStyle(.white.opacity(0.4))
+                        .frame(width: Layout.control, height: Layout.control).accessibilityHidden(true)
+                }
             }
             .frame(minHeight: Layout.control)
             .contentShape(Rectangle())

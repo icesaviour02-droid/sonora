@@ -55,6 +55,7 @@
 "ios-current-track" = "Current track";
 "ios-delete" = "Delete";
 "ios-delete-error" = "The track could not be removed. Try again.";
+"ios-delete-from-iphone" = "Delete from iPhone";
 "ios-delete-playlist" = "Delete Playlist";
 "ios-done" = "Done";
 "ios-download" = "Download";
@@ -74,6 +75,7 @@
 "ios-downloads-description" = "Choose Download from a song’s menu to keep it here for offline listening. Downloads use Wi-Fi unless you enable cellular data in Settings.";
 "ios-downloads-empty" = "No downloads yet";
 "ios-downloads-space" = "Downloaded Audio";
+"ios-edit-playlist" = "Edit Playlist";
 "ios-eq-acoustic" = "Acoustic";
 "ios-eq-bass-boost" = "Bass Boost";
 "ios-eq-bass-reducer" = "Bass Reducer";

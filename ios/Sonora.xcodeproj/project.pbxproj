@@ -353,13 +353,13 @@
 		};
 		"0A3E27B8CA818264D75C8D81" = {
 			"isa" = "PBXGroup";
-			"children" = ("A172CEDCAE47474B615C54D5");
+			"children" = ("A172CEDCAE47474B615C54D5", "2F7092C16EBE1A501385D76D");
 			"name" = "Products";
 			"sourceTree" = "<group>";
 		};
 		"716E7ADD7BD0AABA913A3D61" = {
 			"isa" = "PBXGroup";
-			"children" = ("BA159D738938AB16638C246F", "0A3E27B8CA818264D75C8D81");
+			"children" = ("BA159D738938AB16638C246F", "0A3E27B8CA818264D75C8D81", "25C5FE2CF314E600678AE193");
 			"sourceTree" = "<group>";
 		};
 		"878A52FC5FF6A57D50B7B870" = {
@@ -471,10 +471,100 @@
 			"productReference" = "A172CEDCAE47474B615C54D5";
 			"productType" = "com.apple.product-type.application";
 		};
+		"4D93F2C536F57F66430B3403" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "UITests/MusicInteractionTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"EB0EC0FBD7937F7FEF6B6491" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "4D93F2C536F57F66430B3403";
+		};
+		"25C5FE2CF314E600678AE193" = {
+			"isa" = "PBXGroup";
+			"children" = ("4D93F2C536F57F66430B3403");
+			"name" = "UITests";
+			"sourceTree" = "<group>";
+		};
+		"2F7092C16EBE1A501385D76D" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.cfbundle";
+			"path" = "SonoraUITests.xctest";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"6E8AAED53F382E3111DD25BB" = {
+			"isa" = "XCBuildConfiguration";
+			"name" = "Debug";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "SonoraUITests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "org.sonorahq.iphone.uitests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphonesimulator";
+				"CODE_SIGNING_ALLOWED" = "NO";
+				"TEST_TARGET_NAME" = "Sonora";
+				"SWIFT_VERSION" = "5.0";
+			};
+		};
+		"C5BA8062E7BF8044DE5398BC" = {
+			"isa" = "XCBuildConfiguration";
+			"name" = "Release";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "SonoraUITests";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "org.sonorahq.iphone.uitests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphonesimulator";
+				"CODE_SIGNING_ALLOWED" = "NO";
+				"TEST_TARGET_NAME" = "Sonora";
+				"SWIFT_VERSION" = "5.0";
+			};
+		};
+		"4E470EDE2C65CE5C1AFF64AE" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("6E8AAED53F382E3111DD25BB", "C5BA8062E7BF8044DE5398BC");
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Debug";
+		};
+		"861F2607278331903B0F5305" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ("EB0EC0FBD7937F7FEF6B6491");
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"DA969938EF751F143C7426B9" = {
+			"isa" = "PBXContainerItemProxy";
+			"containerPortal" = "244210E48437B6556980A702";
+			"proxyType" = "1";
+			"remoteGlobalIDString" = "34A04005BCAF206EEC990BD9";
+			"remoteInfo" = "Sonora";
+		};
+		"F0A0FA4FAFA3DD05C8912326" = {
+			"isa" = "PBXTargetDependency";
+			"target" = "34A04005BCAF206EEC990BD9";
+			"targetProxy" = "DA969938EF751F143C7426B9";
+		};
+		"FCB9FFCF92721B6137FB62E5" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "4E470EDE2C65CE5C1AFF64AE";
+			"buildPhases" = ("861F2607278331903B0F5305");
+			"buildRules" = ();
+			"dependencies" = ("F0A0FA4FAFA3DD05C8912326");
+			"name" = "SonoraUITests";
+			"productName" = "SonoraUITests";
+			"productReference" = "2F7092C16EBE1A501385D76D";
+			"productType" = "com.apple.product-type.bundle.ui-testing";
+		};
 		"244210E48437B6556980A702" = {
 			"isa" = "PBXProject";
 			"attributes" = {
 				"LastUpgradeCheck" = "2600";
+				"TargetAttributes" = {
+					"FCB9FFCF92721B6137FB62E5" = {
+						"TestTargetID" = "34A04005BCAF206EEC990BD9";
+					};
+				};
 			};
 			"buildConfigurationList" = "F0D0CC3CD0AE36F97BD8FD2B";
 			"compatibilityVersion" = "Xcode 14.0";
@@ -485,7 +575,7 @@
 			"productRefGroup" = "0A3E27B8CA818264D75C8D81";
 			"projectDirPath" = "";
 			"projectRoot" = "";
-			"targets" = ("34A04005BCAF206EEC990BD9");
+			"targets" = ("34A04005BCAF206EEC990BD9", "FCB9FFCF92721B6137FB62E5");
 		};
 	};
 	"rootObject" = "244210E48437B6556980A702";

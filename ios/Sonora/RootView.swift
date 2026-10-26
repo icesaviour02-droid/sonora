@@ -621,14 +621,27 @@ struct LibraryView: View {
                     }
                     if !library.tracks.isEmpty {
                         Section("ios-recently-added") {
-                            ForEach(library.tracks) { track in
-                                TrackRow(track: track) { playback.play(track, in: library.tracks) }
-                                    .swipeActions {
-                                        Button("ios-delete", role: .destructive) {
-                                            Task { await library.remove(track) }
-                                        }
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardArtwork), spacing: Layout.spacing)],
+                                      alignment: .leading, spacing: Layout.spacing) {
+                                ForEach(LocalAlbum.collect(library.tracks).sorted {
+                                    ($0.tracks.map(\.addedAt).max() ?? .distantPast) > ($1.tracks.map(\.addedAt).max() ?? .distantPast)
+                                }.prefix(8)) { album in
+                                    NavigationLink { LocalAlbumView(albumID: album.id) } label: {
+                                        SquareCard(title: album.title, subtitle: album.artist,
+                                            artworkURL: album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL)
+                                    }.buttonStyle(.plain)
+                                }
+                                ForEach(library.tracks.filter { ($0.albumTitle ?? "").isEmpty }.prefix(8)) { track in
+                                    Button { playback.play(track, in: library.tracks) } label: {
+                                        SquareCard(title: track.title, subtitle: track.artist, artworkURL: track.displayArtworkURL)
+                                    }.buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button("ios-delete", role: .destructive) { Task { await library.remove(track) } }
                                     }
+                                }
                             }
+                            .padding(.vertical, Layout.compact)
+                            .listRowSeparator(.hidden)
                         }
                     } else if !catalog.likedSongs.isEmpty {
                         Section("ios-liked-songs") {
@@ -1047,44 +1060,10 @@ struct AlbumDetailView: View {
     var body: some View {
         List {
             Section {
-                VStack(spacing: Layout.spacing) {
-                    AsyncImage(url: ArtworkRendition.url(detail?.artwork_url ?? fallbackArtwork, side: Layout.detailArtwork)) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Image(systemName: "square.stack")
-                            .appFont(.largeTitle)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(.quaternary)
-                    }
-                    .frame(width: Layout.detailArtwork, height: Layout.detailArtwork)
-                    .clipShape(RoundedRectangle(cornerRadius: Layout.cardRadius))
-                    .shadow(color: .black.opacity(0.22), radius: 14, y: 8)
-
-                    VStack(spacing: 4) {
-                        Text(detail?.title ?? fallbackTitle)
-                            .appFont(.title2, weight: .bold)
-                            .multilineTextAlignment(.center)
-                        Text(detail?.artist ?? fallbackArtist)
-                            .appFont(.headline)
-                            .foregroundStyle(.secondary)
-                        if let year = detail?.year {
-                            Text(String(year))
-                                .appFont(.caption, weight: .semibold)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    CollectionPlayShuffleHeader(
-                        playAction: {
-                            if let first = tracks.first { playback.play(first, in: tracks) }
-                        },
-                        shuffleAction: { playback.playShuffled(tracks) }
-                    )
-                    .disabled(tracks.isEmpty)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, Layout.compact)
+                MusicCollectionHeader(title: detail?.title ?? fallbackTitle,
+                    subtitle: detail?.artist ?? fallbackArtist,
+                    artworkURL: detail?.artwork_url ?? fallbackArtwork, tracks: tracks,
+                    description: detail?.year.map { String($0) }, symbol: "square.stack")
             }
 
             if isLoading {
@@ -1919,6 +1898,7 @@ struct SettingsView: View {
 
 /// Full-width Apple Music track row with clean trailing ellipsis menu and context menu.
 struct TrackRow: View {
+    @Environment(LibraryStore.self) private var library
     @Environment(PlaybackController.self) private var playback
     @Environment(DownloadsStore.self) private var downloads
     @Environment(SettingsStore.self) private var settings
@@ -1928,6 +1908,7 @@ struct TrackRow: View {
     let action: () -> Void
     private var selectionMode = false
     @State private var chooseLocalPlaylist = false
+    @State private var confirmLocalDelete = false
 
     init(track: MusicTrack, action: @escaping () -> Void) { self.track = track; self.action = action }
 
@@ -1941,6 +1922,10 @@ struct TrackRow: View {
         }
         .sheet(isPresented: $chooseLocalPlaylist) {
             NavigationStack { AddToLocalPlaylistView(trackIDs: [track.id]) }
+        }
+        .confirmationDialog("ios-delete-from-iphone", isPresented: $confirmLocalDelete, titleVisibility: .visible) {
+            Button("ios-delete", role: .destructive) { Task { await library.remove(track) } }
+            Button("ios-cancel", role: .cancel) {}
         }
     }
 
@@ -2016,6 +2001,7 @@ HStack(spacing: Layout.spacing) {
         }
         if track.youtubeID == nil {
             LocalTrackActions(track: track) { chooseLocalPlaylist = true }
+            Button("ios-delete-from-iphone", systemImage: "trash", role: .destructive) { confirmLocalDelete = true }
         }
         if track.youtubeID != nil {
             Button("ios-start-radio", systemImage: "dot.radiowaves.left.and.right") {

@@ -120,6 +120,8 @@ struct LocalPlaylistView: View {
     @State private var confirmDelete = false
     @State private var name = ""
     private var playlist: LocalPlaylist? { local.playlist(playlistID) }
+    @State private var showNavigationTitle = false
+    @State private var editMode = EditMode.inactive
     private var tracks: [MusicTrack] { playlist?.tracks(in: library.tracks) ?? [] }
     private var indexed: [String: MusicTrack] { Dictionary(library.tracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) }
 
@@ -149,19 +151,28 @@ struct LocalPlaylistView: View {
                     if let error = local.error { Text(error).foregroundStyle(.secondary) }
                 }
                 .listStyle(.plain)
+                .environment(\.editMode, $editMode)
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    geometry.contentOffset.y > Layout.collectionArtwork
+                } action: { _, collapsed in showNavigationTitle = collapsed }
             } else { ContentUnavailableView("ios-playlists", systemImage: "music.note.list", description: Text("ios-local-playlist-missing")) }
         }
-        .navigationTitle(playlist?.title ?? "")
+        .navigationTitle(showNavigationTitle ? (playlist?.title ?? "") : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { EditButton().disabled(local.isBusy || (playlist?.track_ids.isEmpty ?? true)) }
+            if editMode.isEditing {
+                ToolbarItem(placement: .confirmationAction) { Button("ios-done") { editMode = .inactive } }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button("ios-edit-playlist", systemImage: "pencil") { editMode = .active }
+                        .disabled(playlist?.track_ids.isEmpty ?? true)
                     Button("ios-add-songs", systemImage: "plus") { picking = true }
                     Button("ios-rename-playlist", systemImage: "pencil") { name = playlist?.title ?? ""; renaming = true }
+                        .accessibilityIdentifier("playlist-rename")
                     Button("ios-delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
                 } label: { Image(systemName: "ellipsis") }
-                .disabled(local.isBusy || playlist == nil)
+                .disabled(local.isBusy || playlist == nil).accessibilityIdentifier("playlist-more")
             }
         }
         .sheet(isPresented: $picking) {
@@ -169,7 +180,7 @@ struct LocalPlaylistView: View {
         }
         .alert("ios-rename-playlist", isPresented: $renaming) {
             TextField("ios-playlist-title", text: $name)
-            Button("ios-save") { local.rename(playlistID, name: name) }
+            Button("ios-save") { local.rename(playlistID, name: name) }.accessibilityIdentifier("playlist-save-name")
             Button("ios-cancel", role: .cancel) {}
         }
         .confirmationDialog("ios-delete-playlist", isPresented: $confirmDelete, titleVisibility: .visible) {

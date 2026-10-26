@@ -249,6 +249,8 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         }
         var checks: [String: Bool] = [:]
         do {
+            if entry(for: "youtube:reviewSaved") != nil { remove("youtube:reviewSaved") }
+            playlists.removeAll { $0.id == "review-playlist" }
             let filename = UUID().uuidString + ".m4a"
             try FileManager.default.copyItem(at: file, to: Self.root.appendingPathComponent(filename))
             var saved = track
