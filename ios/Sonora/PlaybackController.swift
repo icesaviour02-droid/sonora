@@ -288,7 +288,7 @@ final class PlaybackController {
     func reorderUpcoming(_ order: [UUID]) {
         let entries = upcomingItems
         guard order.count == entries.count, Set(order).count == order.count,
-              Set(order) == Set(entries.map(\.id)) else { return }
+              Set(order) == Set(entries.map(\.id)), order != entries.map(\.id) else { return }
         let indexed = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
         let start = currentQueueIndex.map { $0 + 1 } ?? 0
         queueItems = Array(queueItems.prefix(start)) + order.compactMap { indexed[$0] }
