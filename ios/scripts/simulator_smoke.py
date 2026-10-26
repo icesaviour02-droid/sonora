@@ -278,12 +278,17 @@ if __name__ == "__main__":
     udid = sim("create", "Sonora iPhone 13 Review", device_type, runtime["identifier"])
     try:
         sim("boot", udid)
+        developer = Path(subprocess.check_output(["xcode-select", "-p"], text=True).strip())
+        # Activate the simulator's display services for real UI tests; no images are captured.
+        subprocess.run(["open", "-a", str(developer / "Applications/Simulator.app"),
+                        "--args", "-CurrentDeviceUDID", udid], check=True, timeout=30)
         sim("bootstatus", udid, "-b")
         sim("install", udid, str(IOS / "build/simulator/Build/Products/Debug-iphonesimulator/Sonora.app"))
         try:
             launch = sim("launch", udid, BUNDLE)
-        except subprocess.TimeoutExpired:
-            state = {"step": "initial_launch", "timeout_seconds": 240}
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as failure:
+            state = {"step": "initial_launch", "timeout_seconds": 240,
+                     "failure_type": type(failure).__name__}
             try:
                 processes = subprocess.run(["xcrun", "simctl", "spawn", udid, "launchctl", "list"],
                     capture_output=True, text=True, timeout=15)
@@ -291,6 +296,17 @@ if __name__ == "__main__":
                 state["app_process_present"] = BUNDLE in processes.stdout
             except subprocess.SubprocessError:
                 state["simulator_responding"] = False
+            reports = Path.home() / "Library/Logs/DiagnosticReports"
+            for diagnostic in sorted(reports.glob("Sonora*.ips"), key=lambda path: path.stat().st_mtime, reverse=True)[:2]:
+                try:
+                    body = diagnostic.read_text()
+                    lines = body.splitlines()
+                    detail = json.loads("\n".join(lines[1:]))
+                    state["termination"] = detail.get("termination")
+                    state["exception"] = detail.get("exception")
+                    break
+                except (OSError, ValueError):
+                    pass
             (OUTPUT / "simulator-launch-failure.json").write_text(json.dumps(state, indent=2))
             raise
         time.sleep(3)

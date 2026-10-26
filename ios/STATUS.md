@@ -533,7 +533,7 @@ reopening. No appearance screenshots are requested or analyzed. Exact animation 
 be certified from static screenshots, and unsupported AutoMix/crossfade buttons are not faked.
 
 Run 40374499230 at 3921f918 compiled both targets and ran on iPhone 13/iOS 27.0. All ten native
-state/playback groups passed (88 boolean checks): cancellation, sound observation/profiles,
+state/playback groups passed (92 boolean checks): cancellation, sound observation/profiles,
 lyrics storage, scrobbling fixtures, AAC/local playback, download storage, local playlists,
 relaunch and queue occurrence/order checks. Downloads navigation, playlist rename and the new
 player modes/menu/dismiss/reopen touch flow passed. Native drag and swipe removal passed, but
@@ -550,3 +550,14 @@ The runner also reused a pre-XCTest data-container path for later Home/Search/Gu
 It now re-fetches the AUT container after XCTest installation and again for final diagnostics.
 Those earlier missing files/null Guest result do not establish a provider pass or a Google
 verification response. Live network results must be collected again from the active container.
+
+
+Run 40379514699 at c6463d44 compiled both targets and verified the development IPA, but the
+simulator returned NSPOSIXErrorDomain 3 (no process handle) before initial app launch. This
+provides no new runtime acceptance. The simulator-only signature now explicitly emits DER
+entitlements, as required by current Apple signing formats, and uses a complete test-only team/
+application identity. The device IPA remains unsigned and does not contain these test identities.
+The selected Simulator application's display services are activated by CLI for UI tests, with
+no screenshots. Initial-launch failures now retain only termination/exception metadata from a
+Sonora crash report for diagnosis. Apple reference: 
+https://developer.apple.com/documentation/xcode/using-the-latest-code-signature-format .

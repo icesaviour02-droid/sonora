@@ -122,7 +122,7 @@ jobs:
           xcodebuild -project ios/Sonora.xcodeproj -scheme Sonora \
             -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ios/build/simulator ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build-for-testing
-          codesign --force --sign - --entitlements ios/Sonora/Simulator.entitlements \
+          codesign --force --sign - --generate-entitlement-der --entitlements ios/Sonora/Simulator.entitlements \
             ios/build/simulator/Build/Products/Debug-iphonesimulator/Sonora.app
           codesign --verify --strict ios/build/simulator/Build/Products/Debug-iphonesimulator/Sonora.app
       - name: Run explicitly selected iPhone 13 iOS 27 checks
