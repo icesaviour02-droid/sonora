@@ -135,3 +135,9 @@ response, preset headroom, APO parsing, stale-request rejection and +6 dB normal
 Linux DSP results. iPhone device/simulator compilation and actual AVFoundation tap processing
 remain pending; the local playback check now requires a positive native processed-frame count.
 Full parametric editing, named profiles/device rules and APO import/export UI are still missing.
+
+Apple native-core run 40259560019 passed, including the six reused filter tests, generated-PCM
+C-boundary checks on the Mac host, and both iPhone/simulator static-library builds. iPhone run
+40259560062 has compiled the device app and is checking simulator/runtime behavior for snapshot
+0c4607bd. Re-poll that same run rather than restarting it. Its positive tap-frame assertion is the
+required evidence for actual AVFoundation integration; compilation and core tests alone are insufficient.

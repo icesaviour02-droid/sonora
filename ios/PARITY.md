@@ -25,13 +25,13 @@ whose behavior can be used as a separate reference.
 | YouTube AAC streaming | Implemented; latest simulator resolution blocked by Google's bot-verification response | Audible playback, advancing clock, pause/resume, long tracks, network/error recovery |
 | Offline downloads | Implemented; latest simulator cannot resolve Guest audio | Exact byte count, playable file, progress, cancel/retry/remove, queued concurrency, interrupted recovery |
 | Offline relaunch | Implemented file selection; unverified | Cold launch in airplane mode, play/seek/queue downloaded tracks without provider requests |
-| Local audio import/search/delete | Implemented; unverified | Supported formats, corrupt files, large/multiple imports, durable metadata, deletion during playback |
+| Local audio import/search/delete | Generated WAV import, duration, advancing playback, pause, seek/resume and deletion verified in iOS 26.5 simulator | Other supported formats, corrupt files, large/multiple imports, durable metadata and local search |
 | Queue, next/previous, shuffle, repeat, seek | Implemented subset; unverified | Order changes, boundaries, repeated tracks, unavailable tracks, restore without autoplay |
-| Queue editing, play-next/append, radio/autoplay | Native reorder/removal and per-occurrence UUIDs implemented; runtime checks in Apple run 40256955207 | Reorder/remove/append, radio continuation and queue persistence |
+| Queue editing, play-next/append, radio/autoplay | Eight repeated-entry/order/restore checks verified in iOS simulator; native queue UI rendered and inspected | Touch-driven reorder/removal, radio continuation and queue persistence across actual relaunch |
 | Background audio, lock-screen commands, AirPlay | Implemented; unverified on hardware | Screen lock, long background session, headphones/Bluetooth, calls/interruption, route loss |
 | Gapless playback | Missing | Consecutive tracks with measured gap behavior |
 | Audio normalization, quality selection | Implemented; runtime unverified | Provider loudness handling, level consistency, supported quality fallback |
-| Equalizer/output options | Presets exist, but current implementation changes overall gain instead of frequency bands | Real iOS audio-engine equalization and persistent sound settings |
+| Equalizer/output options | Exact desktop DSP reused; six filter tests and generated-PCM C boundary pass on Linux and Apple host; iPhone app compiles, native tap playback pending | Native tap processing, presets/tone/manual and auto headroom, full parametric UI, profiles, APO files and device rules |
 | Sleep timer | Implemented; runtime unverified | Timed stop and end-of-track behavior across backgrounding |
 | YouTube account sign-in/session/sign-out | Cookie sessions, renewal/page selection/proof-of-origin implemented but unaccepted; system Safari/OAuth missing | Real account login, Keychain storage, expiration/restore, sign-out cache isolation |
 | Home feed, recommendations, genres | Populated Home verified on iOS 26.5 simulator; account personalization and genre navigation unverified | Loaded/empty/error/continuation and navigation behavior |
