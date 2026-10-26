@@ -164,8 +164,8 @@ struct NowPlayingView: View {
         ZStack {
             Color(red: 0.09, green: 0.09, blue: 0.12)
                 .ignoresSafeArea()
-            if !reduceTransparency, let url = playback.current?.artworkURL {
-                AsyncImage(url: url) { image in
+            if !reduceTransparency, let url = playback.current?.displayArtworkURL {
+                ArtworkImage(url: url) { image in
                     image
                         .resizable()
                         .scaledToFill()
@@ -700,7 +700,7 @@ struct NowPlayingView: View {
 
     private func loadLyricsIfNeeded() {
         guard let current = playback.current else { lyrics.clear(); return }
-        guard mode == .lyrics else { return }
+        guard mode == .lyrics else { lyrics.cancel(); return }
         guard current.youtubeID != nil || settings.localFileLyrics else { lyrics.clear(); return }
         lyrics.load(current.youtubeID, title: current.title, artist: current.artist,
             album: current.albumTitle, duration: current.durationSeconds,

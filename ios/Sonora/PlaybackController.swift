@@ -602,10 +602,10 @@ final class PlaybackController {
             nowPlayingArtwork = nil
             artworkTrackID = track.id
         }
-        guard let url = track.artworkURL else { return }
+        guard let url = track.displayArtworkURL else { return }
         let trackID = track.id
         artworkTask = Task { [weak self] in
-            guard let (data, _) = try? await URLSession.shared.data(from: url),
+            guard let data = try? await ArtworkFiles.shared.data(url),
                   !Task.isCancelled,
                   let image = UIImage(data: data) else { return }
             let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }

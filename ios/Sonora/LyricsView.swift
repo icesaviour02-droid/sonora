@@ -86,9 +86,10 @@ struct LyricsContentView: View {
                     .disabled(store.sheet?.hasContent != true)
                 Button("ios-refresh-lyrics", systemImage: "arrow.clockwise", action: retry)
             } label: {
-                Image(systemName: "ellipsis").frame(minWidth: Layout.control, minHeight: Layout.control)
+                Image(systemName: "ellipsis").appFont(.body, weight: .semibold)
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
+            .frame(minWidth: Layout.control, minHeight: Layout.control)
             .accessibilityLabel(Text("ios-lyrics-options"))
         }
     }

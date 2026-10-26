@@ -146,6 +146,18 @@ final class LyricsStore {
         #endif
     }
 
+    /// Embedded lyrics become a sandbox sidecar, using the same parser and storage as file imports.
+    static func saveEmbedded(_ text: String, trackID: String) async throws {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= 1_024 * 1_024 else { return }
+        guard await LyricsFiles.shared.sidecar(trackID) == nil else { return }
+        let parsed = try await NativeProvider.parseLyrics(text)
+        guard parsed.hasContent else { return }
+        let format = text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") ? "ttml" : "lrc"
+        try await LyricsFiles.shared.saveSidecar(.init(text: text, format: format), id: trackID)
+    }
+
+    static func removeImported(trackID: String) async { await LyricsFiles.shared.removeSidecar(trackID) }
+
     static func clearCachedSheets() async { await LyricsFiles.shared.clearCachedSheets() }
 
     #if DEBUG
@@ -234,6 +246,8 @@ private actor LyricsFiles {
         guard let data = try? Data(contentsOf: path(id, prefix: "sidecar")) else { return nil }
         return try? JSONDecoder().decode(Sidecar.self, from: data)
     }
+
+    func removeSidecar(_ id: String) { try? FileManager.default.removeItem(at: path(id, prefix: "sidecar")) }
 
     func saveSidecar(_ value: Sidecar, id: String) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

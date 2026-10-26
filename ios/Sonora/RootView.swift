@@ -448,7 +448,7 @@ private struct SquareCard: View {
 
     var body: some View {
         VStack(alignment: circular ? .center : .leading, spacing: 6) {
-            AsyncImage(url: ArtworkRendition.url(artworkURL, side: Layout.cardArtwork)) { image in
+            ArtworkImage(url: ArtworkRendition.url(artworkURL, side: Layout.cardArtwork)) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Image(systemName: circular ? "music.mic" : "music.note")
@@ -814,12 +814,14 @@ struct ArtistsCollectionView: View {
 
 /// Library > Albums sub-screen.
 struct AlbumsCollectionView: View {
+    @Environment(LibraryStore.self) private var library
+    private var localAlbums: [LocalAlbum] { LocalAlbum.collect(library.tracks) }
     @Environment(CatalogStore.self) private var catalog
     @Environment(AccountStore.self) private var account
 
     var body: some View {
         Group {
-            if catalog.savedAlbums.isEmpty {
+            if catalog.savedAlbums.isEmpty && localAlbums.isEmpty {
                 ContentUnavailableView(
                     "ios-albums",
                     systemImage: "square.stack",
@@ -832,6 +834,13 @@ struct AlbumsCollectionView: View {
                         columns: [GridItem(.flexible(), spacing: Layout.spacing), GridItem(.flexible(), spacing: Layout.spacing)],
                         spacing: Layout.spacing
                     ) {
+                        ForEach(localAlbums) { album in
+                            NavigationLink { LocalAlbumView(albumID: album.id) } label: {
+                                SquareCard(title: album.title, subtitle: album.artist,
+                                    artworkURL: album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL)
+                            }
+                            .buttonStyle(.plain)
+                        }
                         ForEach(catalog.savedAlbums) { album in
                             NavigationLink {
                                 AlbumDetailView(
@@ -2136,10 +2145,10 @@ struct ArtworkView: View {
     let side: CGFloat
     var cornerRadius: CGFloat = Layout.compact
 
-    private var artworkURL: URL? { ArtworkRendition.url(track?.artworkURL, side: side) }
+    private var artworkURL: URL? { ArtworkRendition.url(track?.displayArtworkURL, side: side) }
 
     var body: some View {
-        AsyncImage(url: artworkURL) { image in
+        ArtworkImage(url: artworkURL) { image in
             image.resizable().scaledToFill()
         } placeholder: {
             Image(systemName: "music.note")

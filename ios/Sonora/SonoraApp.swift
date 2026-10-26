@@ -40,11 +40,11 @@ struct SonoraApp: App {
                 .font(InterfaceTypography.font(.body, typeface: settings.typefaceID))
                 .tint(appearance.color(for: settings.accent))
                 .onChange(of: settings.soundProfiles.revision) { _, _ in playback.applyAudioGain() }
-                .onChange(of: playback.current?.artworkURL, initial: true) { _, url in
+                .onChange(of: playback.current?.displayArtworkURL, initial: true) { _, url in
                     appearance.updateArtwork(settings.accent == .artwork ? url : nil)
                 }
                 .onChange(of: settings.accent) { _, accent in
-                    appearance.updateArtwork(accent == .artwork ? playback.current?.artworkURL : nil)
+                    appearance.updateArtwork(accent == .artwork ? playback.current?.displayArtworkURL : nil)
                 }
                 .task {
                     poTokenMinter.start()

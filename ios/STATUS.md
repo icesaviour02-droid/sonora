@@ -198,3 +198,25 @@ backoff, isolates changed accounts by credential digest, and retries on foregrou
 Credentials remain in Keychain; queue files contain no tokens. The settings screen shows pending
 listens and offers retry. These changes and sixteen native acceptance checks are pending Apple
 compilation/runtime evidence. Last.fm/Libre.fm linking and real-account acceptance remain missing.
+
+## Local covers, embedded lyrics and albums (26 October 2026)
+
+Local import now reads embedded covers, album artist, disc/track numbers and lyric tags.
+Covers are stored with relative filenames, orientation corrected and bounded to 1600 pixels;
+the shared artwork component supports local files in rows, player, background, lock-screen and
+artwork accent calculation. Removing an import removes its cover and imported lyric sidecar.
+Embedded lyrics use the existing parser and remain readable without a network request.
+
+Library Albums now includes imported records. Album-artist grouping keeps compilations together,
+and disc/track tags order local album playback. Existing native song rows, artwork cards and play/
+shuffle controls are reused. A generated AAC fixture with actual AVFoundation tags, synthetic cover
+and self-authored timed lyrics extends local acceptance with metadata, cover/sidecar restoration,
+album grouping/order and cleanup checks. Swift syntax passes; Apple runtime results are pending.
+
+Apple run 40267418409 at c058f44a compiled both targets and passed all eight initial native lyrics
+store checks. The actual remote sheet had 38 lines, 203 timed words and three source choices.
+The lyrics screen was inspected; the source-options button is being tightened to a native circle,
+and inactive/active line typography now has a stable size. Actual generated-WAV playback including
+the native DSP still passed all seven checks. Shared core run 40267418289 passed Apple host tests,
+boundary checks and both release libraries. Guest resolution alone still failed with verification
+required. This is not final IPA acceptance.

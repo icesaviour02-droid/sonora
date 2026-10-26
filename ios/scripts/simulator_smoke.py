@@ -10,6 +10,7 @@ import struct
 import time
 import urllib.parse
 import wave
+import zlib
 
 IOS = Path(__file__).resolve().parents[1]
 OUTPUT = IOS / "build/review"
@@ -165,6 +166,12 @@ if __name__ == "__main__":
         with wave.open(str(tone), "wb") as output:
             output.setparams((1, 2, rate, 0, "NONE", "not compressed"))
             output.writeframes(b"".join(struct.pack("<h", int(2_000 * math.sin(2 * math.pi * 220 * i / rate))) for i in range(rate * 16)))
+        # A self-generated gradient cover exercises actual artwork metadata, never third-party media.
+        def png_chunk(kind, data):
+            return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+        rows = b"".join(b"\x00" + bytes(channel for x in range(64) for channel in (x * 4, y * 4, 128)) for y in range(64))
+        cover = b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)) + png_chunk(b"IDAT", zlib.compress(rows)) + png_chunk(b"IEND", b"")
+        (tone.parent / "sonora-review-cover.png").write_bytes(cover)
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://localreview")
         local_review = evidence(container, "local-playback-review.json", timeout=60)
         if not local_review or not local_review.get("passed"):

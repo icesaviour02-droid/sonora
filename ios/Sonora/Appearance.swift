@@ -45,12 +45,11 @@ final class AppearanceStore {
         task?.cancel()
         artworkAccent = .pink
         guard let url = ArtworkRendition.url(original, side: Layout.rowArtwork),
-              url.scheme == "https" else { return }
+              url.scheme == "https" || url.isFileURL else { return }
         task = Task { [weak self] in
             do {
-                let (data, response) = try await URLSession.shared.data(from: url)
+                let data = try await ArtworkFiles.shared.data(url)
                 guard !Task.isCancelled, let self, self.currentURL == original,
-                      let response = response as? HTTPURLResponse, response.statusCode == 200,
                       data.count <= 4 * 1_024 * 1_024,
                       let image = CIImage(data: data) else { return }
                 let average = CIFilter.areaAverage()

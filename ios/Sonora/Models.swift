@@ -18,6 +18,18 @@ struct MusicTrack: Codable, Identifiable, Hashable {
     var available: Bool? = nil
     var liked: Bool? = nil
     var setVideoID: String? = nil
+    var artworkFilename: String? = nil
+    var albumArtist: String? = nil
+    var trackNumber: Int? = nil
+    var discNumber: Int? = nil
+
+    /// A relative cover filename survives the container path changing during app upgrades.
+    var displayArtworkURL: URL? {
+        if let filename = artworkFilename, URL(fileURLWithPath: filename).lastPathComponent == filename {
+            return ArtworkFiles.root.appendingPathComponent(filename)
+        }
+        return artworkURL
+    }
 }
 
 /// Each occurrence has its own identity, so the same song can appear several times in a queue.
