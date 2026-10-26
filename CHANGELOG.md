@@ -38,6 +38,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Fresh iPhone YouTube sign-ins no longer load an older account's cached cookies. Renewed sessions are saved to Keychain, and outstanding requests cannot update a later account's session.
+
 - iPhone playback keeps precise provider duration for streaming and downloads and bounds native playback to the song end instead of displaying container padding. The collapsed player keeps only Play/Pause, and the queue uses inline history, swipe removal and native reorder handles.
 
 - Local playlist edits preserve existing songs when a save fails. Imported music loads before remote account restoration so local controls can remain available offline.

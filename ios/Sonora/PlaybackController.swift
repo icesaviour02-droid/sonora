@@ -54,6 +54,9 @@ final class PlaybackController {
     @ObservationIgnored private var interruptedWhilePlaying = false
     @ObservationIgnored private var didRestore = false
     @ObservationIgnored private var wantsToPlay = false
+    #if DEBUG
+    @ObservationIgnored private var liveReviewTask: Task<Void, Never>?
+    #endif
     private let snapshotKey = "sonora.ios.queue.v1"
 
     init(downloads: DownloadsStore, settings: SettingsStore) {
@@ -152,6 +155,54 @@ final class PlaybackController {
     }
 
     #if DEBUG
+    /// Runs against a real stream or completed download, including decoding, seek and native EOF.
+    func reviewLiveControls() {
+        guard ProcessInfo.processInfo.arguments.contains("--sonora-review-url") else { return }
+        liveReviewTask?.cancel()
+        liveReviewTask = Task { [weak self] in
+            guard let self else { return }
+            var checks: [String: Bool] = [:]
+            let autoplay = settings.autoplayRadio
+            settings.autoplayRadio = false
+            repeatMode = .off
+            defer { settings.autoplayRadio = autoplay }
+            for _ in 0..<1_100 {
+                if Task.isCancelled || error != nil || (isPlaying && elapsed > 1) { break }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            let end = duration
+            checks["audio_decoded"] = isPlaying && audioEffects.processedFrames > 0 && end > 3
+            if checks["audio_decoded"] == true {
+                pause()
+                try? await Task.sleep(for: .milliseconds(400))
+                checks["pause"] = !isPlaying && !wantsToPlay
+                let target = min(15, end / 3)
+                seek(to: target)
+                resume()
+                for _ in 0..<150 {
+                    if error != nil || (isPlaying && elapsed > target + 0.5) { break }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                checks["seek_and_resume"] = isPlaying && elapsed > target + 0.5 && elapsed < target + 10
+                checks["precise_end_installed"] = player.currentItem?.forwardPlaybackEndTime.seconds == end
+                seek(to: max(0, end - 2))
+                resume()
+                for _ in 0..<200 {
+                    if error != nil || (!isPlaying && elapsed >= end - 0.3) { break }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                checks["stops_at_song_end"] = !isPlaying && elapsed >= end - 0.3 && elapsed <= end + 0.3
+            }
+            pause()
+            let report: [String: Any] = ["passed": checks.count == 5 && checks.values.allSatisfy { $0 }, "checks": checks,
+                "duration": end, "processed_frames": audioEffects.processedFrames,
+                "downloaded": current.map { downloads.fileURL(for: $0.id) != nil } ?? false]
+            if let data = try? JSONSerialization.data(withJSONObject: report) {
+                try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("live-controls-review.json"), options: .atomic)
+            }
+        }
+    }
+
     /// Lets the CLI review real track metadata without depending on successful audio authorization.
     func prepareReview(_ track: MusicTrack) {
         didRestore = true
@@ -774,9 +825,12 @@ final class PlaybackController {
             let isDownloaded: Bool
             let hasError: Bool
             let error: String?
+            let duration: Double
+            let processedAudioFrames: UInt64
         }
         let state = Review(trackID: current.id, elapsed: elapsed, isPlaying: isPlaying,
-                           isDownloaded: downloads.fileURL(for: current.id) != nil, hasError: error != nil, error: error)
+                           isDownloaded: downloads.fileURL(for: current.id) != nil, hasError: error != nil, error: error,
+                           duration: duration, processedAudioFrames: audioEffects.processedFrames)
         let url = URL.applicationSupportDirectory.appendingPathComponent("playback-review.json")
         if let data = try? JSONEncoder().encode(state) { try? data.write(to: url, options: .atomic) }
     }

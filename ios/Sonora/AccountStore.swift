@@ -65,6 +65,8 @@ final class AccountStore {
     var error: String?
     @ObservationIgnored private var pendingCookies: String?
     @ObservationIgnored private var operation: Task<Void, Never>?
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var sessionGeneration = 0
 
     func restore() async {
         guard isRestoring else { return }
@@ -85,12 +87,22 @@ final class AccountStore {
             let account = try await NativeProvider.authenticate(
                 session.cookies,
                 authuser: session.authuser,
-                pageID: session.pageID
+                pageID: session.pageID,
+                restoring: true
             )
+            do {
+                try AccountKeychain.save(SavedSession(cookies: account.cookies ?? session.cookies,
+                    authuser: account.authuser ?? session.authuser, pageID: account.page_id ?? session.pageID))
+            } catch {
+                try? await NativeProvider.signOut()
+                throw error
+            }
+            sessionGeneration += 1
             name = account.name
             handle = account.handle
             avatarURL = account.avatar_url.flatMap(URL.init(string:))
             error = nil
+            startCookieRefresh(immediately: false)
         } catch {
             // Retain the Keychain item on a transient network failure so a retry can recover it.
             self.error = String(localized: "ios-account-restore-error")
@@ -108,7 +120,31 @@ final class AccountStore {
 
     func rotateCookiesIfSignedIn() {
         guard name != nil, !isBusy, !isRestoring else { return }
-        Task { await NativeProvider.rotateCookies() }
+        startCookieRefresh(immediately: true)
+    }
+
+    /// Rotation and Keychain persistence share one cancelable task and cannot cross sign-out.
+    private func startCookieRefresh(immediately: Bool) {
+        refreshTask?.cancel()
+        let generation = sessionGeneration
+        refreshTask = Task { [weak self] in
+            var shouldWait = !immediately
+            while !Task.isCancelled {
+                if shouldWait {
+                    do { try await Task.sleep(for: .seconds(600)) }
+                    catch { return }
+                }
+                shouldWait = true
+                guard let self, self.sessionGeneration == generation, self.name != nil else { return }
+                let cookies = await NativeProvider.rotateCookies()
+                guard !Task.isCancelled, self.sessionGeneration == generation, self.name != nil else { return }
+                guard let cookies else { continue }
+                do {
+                    guard let saved = try AccountKeychain.read() else { return }
+                    try AccountKeychain.save(SavedSession(cookies: cookies, authuser: saved.authuser, pageID: saved.pageID))
+                } catch { self.error = String(localized: "ios-account-save-error") }
+            }
+        }
     }
 
     func signIn(_ cookies: String, authuser: UInt8 = 0, pageID: String? = nil, discoverChannels: Bool = true) {
@@ -158,7 +194,7 @@ final class AccountStore {
         let account = try await NativeProvider.authenticate(cookies, authuser: authuser, pageID: pageID)
         do {
             try AccountKeychain.save(SavedSession(
-                cookies: cookies,
+                cookies: account.cookies ?? cookies,
                 authuser: account.authuser ?? authuser,
                 pageID: account.page_id ?? pageID
             ))
@@ -168,17 +204,22 @@ final class AccountStore {
             return
         }
         self.name = account.name
+        self.sessionGeneration += 1
         self.handle = account.handle
         self.avatarURL = account.avatar_url.flatMap(URL.init(string:))
         self.availableAccounts = []
         self.pendingCookies = nil
         self.revision += 1
+        startCookieRefresh(immediately: false)
     }
 
     func signOut() {
         guard !isBusy, !isRestoring else { return }
         isBusy = true
         error = nil
+        sessionGeneration += 1
+        refreshTask?.cancel()
+        refreshTask = nil
         operation = Task { [weak self] in
             guard let self else { return }
             defer { self.isBusy = false }
@@ -194,6 +235,33 @@ final class AccountStore {
             } catch { self.error = String(localized: "ios-account-sign-out-error") }
         }
     }
+
+    #if DEBUG
+    /// Exercises the actual simulator Keychain without a Google account or credential exports.
+    func reviewSessionStorage() {
+        guard ProcessInfo.processInfo.arguments.contains("--sonora-review-url") else { return }
+        var checks: [String: Bool] = [:]
+        do {
+            let previous = try AccountKeychain.read()
+            defer {
+                if let previous { try? AccountKeychain.save(previous) }
+                else { try? AccountKeychain.remove() }
+            }
+            try AccountKeychain.save(SavedSession(cookies: "SAPISID=sonora-original", authuser: 2, pageID: "sonora-review-page"))
+            checks["session_round_trip"] = try AccountKeychain.read()?.cookies == "SAPISID=sonora-original"
+            try AccountKeychain.save(SavedSession(cookies: "SAPISID=sonora-rotated", authuser: 2, pageID: "sonora-review-page"))
+            let updated = try AccountKeychain.read()
+            checks["rotated_credentials_replace_original"] = updated?.cookies == "SAPISID=sonora-rotated"
+            checks["account_selection_preserved"] = updated?.authuser == 2 && updated?.pageID == "sonora-review-page"
+            try AccountKeychain.remove()
+            checks["signed_out_credentials_removed"] = try AccountKeychain.read() == nil
+        } catch { checks["keychain_operation"] = false }
+        let report: [String: Any] = ["passed": checks.count == 4 && checks.values.allSatisfy { $0 }, "checks": checks]
+        if let data = try? JSONSerialization.data(withJSONObject: report) {
+            try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("account-storage-review.json"), options: .atomic)
+        }
+    }
+    #endif
 }
 
 /// Keeps Google's sign-in page isolated from other apps. It uses the normal WebKit identity;

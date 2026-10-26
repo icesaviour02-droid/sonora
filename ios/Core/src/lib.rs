@@ -13,6 +13,7 @@ pub use local_ids::*;
 #[path = "../../../crates/music/src/models.rs"]
 pub mod models;
 mod request_lifetime;
+mod session_cookies;
 pub use models::*;
 #[path = "../../../crates/music/src/lyrics/mod.rs"]
 pub mod lyrics;
@@ -36,8 +37,8 @@ pub mod netease;
 use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
-use std::time::{Duration, Instant, SystemTime};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
 use async_trait::async_trait;
@@ -49,8 +50,6 @@ use ytmusic::{Client, Minter, YtMusic, nav::Nav as _, parse::find_renderers};
 const DEADLINE: Duration = Duration::from_secs(30);
 const MAX_QUERY: usize = 512;
 const ACCOUNT_LIMIT: usize = 8;
-const ROTATION: Duration = Duration::from_secs(10 * 60);
-const ROTATION_CHECK: Duration = Duration::from_secs(60);
 const POTOKEN_KEEP: Duration = Duration::from_secs(6 * 60 * 60);
 const POTOKEN_SOONEST: Duration = Duration::from_secs(5);
 const POTOKEN_SLOWEST: Duration = Duration::from_secs(5 * 60);
@@ -71,6 +70,7 @@ static POTOKENS: OnceLock<Mutex<PoTokenStore>> = OnceLock::new();
 /// The generation prevents an old sign-in from replacing a later sign-out or account choice.
 struct Session {
     api: Arc<YtMusic>,
+    cookies: Option<Arc<session_cookies::SessionCookies>>,
     generation: u64,
     cache_dir: Option<PathBuf>,
 }
@@ -166,16 +166,17 @@ fn build_authenticated(
     authuser: usize,
     page_id: Option<&str>,
     cache_dir: Option<&PathBuf>,
+    credentials: &session_cookies::SessionCookies,
 ) -> Arc<YtMusic> {
     let mut api = YtMusic::with_cookies(cookies).as_user(authuser);
     if let Some(page) = page_id.filter(|page| !page.is_empty()) {
         api = api.as_page(page);
     }
+    api = api
+        .persist_cookies(credentials.path())
+        .cache_resolutions(credentials.resolutions());
     if let Some(dir) = cache_dir {
-        api = api
-            .persist_cookies(dir.join("cookies.json"))
-            .cache_resolutions(dir.join("resolved.json"))
-            .cache_player(dir.join("player.json"));
+        api = api.cache_player(dir.join("player.json"));
     }
     Arc::new(api.mint_po_tokens(Arc::new(MobileMinter)))
 }
@@ -184,6 +185,7 @@ fn session() -> &'static RwLock<Session> {
     SESSION.get_or_init(|| {
         RwLock::new(Session {
             api: build_anonymous(None),
+            cookies: None,
             generation: 0,
             cache_dir: None,
         })
@@ -236,6 +238,8 @@ enum Request {
         cookies: String,
         authuser: Option<usize>,
         page_id: Option<String>,
+        #[serde(default)]
+        restoring: bool,
     },
     RotateCookies {},
     SignOut {},
@@ -491,8 +495,15 @@ async fn execute(request: Request) -> Result<Value> {
             cookies,
             authuser,
             page_id,
+            restoring,
         } => {
-            return authenticate(&cookies, authuser.unwrap_or(0), page_id.as_deref()).await;
+            return authenticate(
+                &cookies,
+                authuser.unwrap_or(0),
+                page_id.as_deref(),
+                restoring,
+            )
+            .await;
         }
         Request::SignOut {} => {
             if let Ok(mut store) = potokens().lock() {
@@ -507,16 +518,19 @@ async fn execute(request: Request) -> Result<Value> {
                 let _ = std::fs::remove_file(dir.join("resolved.json"));
             }
             state.api = build_anonymous(state.cache_dir.as_ref());
+            state.cookies = None;
             return Ok(json!({ "signed_out": true }));
         }
         _ => {}
     }
 
-    let api = session()
-        .read()
-        .map_err(|_| anyhow::anyhow!("session lock poisoned"))?
-        .api
-        .clone();
+    // A replaced account's in-flight requests retain only their own temporary cookie jar.
+    let (api, credentials) = {
+        let state = session()
+            .read()
+            .map_err(|_| anyhow::anyhow!("session lock poisoned"))?;
+        (state.api.clone(), state.cookies.clone())
+    };
 
     match request {
         Request::EqualizerConfigure {
@@ -550,10 +564,9 @@ async fn execute(request: Request) -> Result<Value> {
             preamp_db,
         } => audio_effects::describe(&preset, profile.as_deref(), filters, auto_preamp, preamp_db),
         Request::RotateCookies {} => {
-            if api.is_cookie_auth() {
-                let _ = api.rotate_cookies().await;
-            }
-            Ok(json!({ "rotated": api.is_cookie_auth() }))
+            let rotated = api.is_cookie_auth() && api.rotate_cookies().await.is_ok();
+            let cookies = credentials.as_ref().map(|jar| jar.header()).transpose()?;
+            Ok(json!({ "rotated": rotated, "cookies": cookies }))
         }
         Request::Search { query } => {
             let query = validate_query(&query)?;
@@ -830,9 +843,17 @@ async fn list_accounts(cookies: &str) -> Result<Value> {
 }
 
 /// Validates the desktop cookie-header format and checks the account before publishing a session.
-/// Credentials are supplied from the host Keychain and are never saved or logged by the core.
-async fn authenticate(cookies: &str, authuser: usize, page_id: Option<&str>) -> Result<Value> {
+/// The current header returns privately to the host Keychain; caches never override a fresh login.
+async fn authenticate(
+    cookies: &str,
+    authuser: usize,
+    page_id: Option<&str>,
+    restoring: bool,
+) -> Result<Value> {
     let normalized = normalize_cookies(cookies)?;
+    if let Ok(mut store) = potokens().lock() {
+        store.clear();
+    }
     let (generation, cache_dir) = {
         let mut state = session()
             .write()
@@ -840,15 +861,17 @@ async fn authenticate(cookies: &str, authuser: usize, page_id: Option<&str>) -> 
         state.generation += 1;
         (state.generation, state.cache_dir.clone())
     };
-    let api = build_authenticated(&normalized, authuser, page_id, cache_dir.as_ref());
-    let fresh = cache_dir
-        .as_ref()
-        .and_then(|dir| std::fs::metadata(dir.join("cookies.json")).ok())
-        .and_then(|meta| meta.modified().ok())
-        .is_some_and(|at| at.elapsed().is_ok_and(|elapsed| elapsed < ROTATION));
-    if !fresh {
-        let _ = api.rotate_cookies().await;
-    }
+    let root = cache_dir
+        .clone()
+        .unwrap_or_else(|| std::env::temp_dir().join("sonora-mobile-core"));
+    let credentials = Arc::new(session_cookies::SessionCookies::create(
+        &root,
+        &normalized,
+        restoring,
+    )?);
+    let header = credentials.header()?;
+    let api = build_authenticated(&header, authuser, page_id, cache_dir.as_ref(), &credentials);
+    let _ = api.rotate_cookies().await;
     let profile = api
         .profile()
         .await
@@ -860,32 +883,21 @@ async fn authenticate(cookies: &str, authuser: usize, page_id: Option<&str>) -> 
     if state.generation != generation {
         bail!("superseded account request");
     }
-    keep_fresh(Arc::downgrade(&api), SystemTime::now());
+    let cookies = credentials.header()?;
     state.api = api;
+    state.cookies = Some(credentials);
+    if let Some(dir) = cache_dir {
+        let _ = std::fs::remove_file(dir.join("cookies.json"));
+        let _ = std::fs::remove_file(dir.join("resolved.json"));
+    }
     Ok(json!({
         "name": profile.name,
         "email": profile.email,
         "avatar_url": avatar,
         "authuser": authuser,
         "page_id": page_id,
+        "cookies": cookies,
     }))
-}
-
-fn keep_fresh(api: Weak<YtMusic>, since: SystemTime) {
-    tokio::spawn(async move {
-        let mut rotated = since;
-        loop {
-            tokio::time::sleep(ROTATION_CHECK).await;
-            let Some(api) = api.upgrade() else {
-                return;
-            };
-            if rotated.elapsed().is_ok_and(|elapsed| elapsed < ROTATION) {
-                continue;
-            }
-            let _ = api.rotate_cookies().await;
-            rotated = SystemTime::now();
-        }
-    });
 }
 
 fn validate_video_id(id: &str) -> Result<()> {

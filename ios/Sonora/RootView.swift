@@ -132,6 +132,10 @@ struct RootView: View {
         guard url.scheme == "sonora",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
         #if DEBUG
+        if url.host == "sessionreview" {
+            account.reviewSessionStorage()
+            return
+        }
         if url.host == "downloadsreview" {
             selectedTab = .downloads
             library.reviewDownloads(downloads)
@@ -232,6 +236,9 @@ struct RootView: View {
             if url.host == "play" {
                 playerMode = "artwork"
                 playback.play(track, in: [track])
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--sonora-review-live-controls") { playback.reviewLiveControls() }
+                #endif
                 showPlayer = true
             } else if url.host == "download" {
                 downloads.enqueue(track)

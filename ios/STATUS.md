@@ -478,3 +478,34 @@ their assertions successfully. Complete Add Songs/Clear touch acceptance remains
 last code change explicitly targets visible picker rows and awaits asynchronous count updates.
 A build-only pass must not be called full feature acceptance. Account/Guest and desktop-parity
 limitations in PARITY.md remain. The user's real-phone review is the next UI validation step.
+
+## Build 13 functional verification (26 October 2026)
+
+The user authorized live functionality verification and a replacement IPA if a defect is fixed;
+visual screenshot review and iOS 26 testing remain excluded. A `functional` manual workflow
+runs real iOS 27 state/Keychain/playback and touch checks, then attempts live Guest streaming,
+full native download, seek/end controls and downloaded cold-launch playback with stream
+resolution explicitly blocked. It emits count-only JSON, with no appearance screenshots.
+An aggregate pass covers the named checks only, never complete desktop parity or physical-phone
+acceptance. Private account credentials are not uploaded to GitHub.
+
+Live Linux checks through the actual mobile FFI passed Home, four catalog result types (20 each),
+Guest AAC resolution, all 6,992,801 expected bytes and full audio decoding. Provider duration was
+431.933 seconds, ffprobe duration 431.933061 seconds, and no trailing silence was detected.
+Lyrics lookup returned successfully. The available local desktop account could not be verified;
+this is not an authenticated playback pass. These are Linux results, not an iPhone audio pass.
+
+Source inspection confirmed that ytmusic.persist_cookies loads an existing jar over supplied
+cookies. The iPhone bridge used a single global jar for all fresh sign-ins. Each attempt now gets
+a private, unique jar and resolution cache. Only restoring an existing Keychain session may
+migrate a legacy jar after checking its stable identity cookie. In-flight requests retain their
+own jar and remove it after the last request completes. Account verification and rotation return
+current cookies privately to Swift; Swift persists them in Keychain, rotates with one retained
+cancelable task, and rejects refresh results across sign-out. Proof tokens are cleared on new
+account verification. Three offline cookie regressions pass, bringing the shared suite to 56.
+Actual iOS Keychain storage and native live playback checks are pending the new Apple run.
+
+A quick backup-provider assessment found that the desktop Apple Music path uses Widevine and
+has no equivalent wired into this native bridge. Subsonic requires a server/account, and Spotify,
+Deezer and Tidal also need distinct account/playback integrations. No cosmetic provider entry or
+unusable fallback has been added. Local imported audio and completed downloads remain available.

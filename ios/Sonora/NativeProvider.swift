@@ -313,12 +313,15 @@ enum NativeProvider {
         let avatar_url: String?
         let authuser: UInt8?
         let page_id: String?
+        /// Returned only by account verification; persisted privately by AccountStore.
+        let cookies: String?
 
         var id: String { "\(authuser ?? 0):\(page_id ?? ""):\(name)" }
     }
 
     private struct Status: Decodable {}
     private struct SignedOut: Decodable { let signed_out: Bool }
+    private struct SessionRefresh: Decodable { let cookies: String? }
     private struct PoTokenWanted: Decodable { let binding: String? }
     private struct CreatedPlaylist: Decodable { let playlist_id: String }
 
@@ -343,14 +346,15 @@ enum NativeProvider {
         try await request(["operation": "list_accounts", "cookies": cookies])
     }
 
-    static func authenticate(_ cookies: String, authuser: UInt8 = 0, pageID: String? = nil) async throws -> Account {
-        var payload: [String: Any] = ["operation": "authenticate", "cookies": cookies, "authuser": Int(authuser)]
+    static func authenticate(_ cookies: String, authuser: UInt8 = 0, pageID: String? = nil, restoring: Bool = false) async throws -> Account {
+        var payload: [String: Any] = ["operation": "authenticate", "cookies": cookies, "authuser": Int(authuser), "restoring": restoring]
         if let pageID, !pageID.isEmpty { payload["page_id"] = pageID }
         return try await request(payload)
     }
 
-    static func rotateCookies() async {
-        let _: Status? = try? await request(["operation": "rotate_cookies"])
+    static func rotateCookies() async -> String? {
+        let result: SessionRefresh? = try? await request(["operation": "rotate_cookies"])
+        return result?.cookies
     }
 
     static func signOut() async throws {
@@ -372,7 +376,10 @@ enum NativeProvider {
     }
 
     static func resolve(_ id: String, quality: AudioQuality = .high) async throws -> Stream {
-        try await request(["operation": "resolve", "video_id": id, "quality": quality.rawValue])
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--sonora-review-block-resolution") { throw ProviderError.unavailable }
+        #endif
+        return try await request(["operation": "resolve", "video_id": id, "quality": quality.rawValue])
     }
 
     static func lyrics(_ id: String?, title: String? = nil, artist: String? = nil,
@@ -770,9 +777,9 @@ final class GuestAcceptanceProbe {
                 for track in tracks.filter({ $0.available != false }).prefix(4) {
                     guard !Task.isCancelled, let id = track.youtubeID else { return }
                     do {
-                        _ = try await NativeProvider.resolve(id)
+                        let stream = try await NativeProvider.resolve(id)
                         results.append(["id": id, "result": "resolved"])
-                        writeReviewEvidence("guest-probe.json", ["status": "selected", "selected_id": id, "candidates": results])
+                        writeReviewEvidence("guest-probe.json", ["status": "selected", "selected_id": id, "source_duration": stream.duration_seconds ?? 0, "candidates": results])
                         playback.play(track, in: [track])
                         selected()
                         return

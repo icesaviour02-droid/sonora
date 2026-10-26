@@ -79,7 +79,7 @@ def generate_review_media(container):
     (tone.parent / "sonora-review-cover.png").write_bytes(cover)
 
 
-def run_interactions(udid):
+def run_interactions(udid, export_images=True):
     """Run real touch tests on the same populated simulator; failure preserves the result bundle."""
     test_run = next((IOS / "build/simulator/Build/Products").glob("*.xctestrun"))
     bundle = OUTPUT / "MusicInteractions.xcresult"
@@ -100,7 +100,7 @@ def run_interactions(udid):
                 (OUTPUT / "touch-review-summary.json").write_text(json.dumps(value, indent=2))
             help_text = subprocess.run(["xcrun", "xcresulttool", "export", "attachments", "--help"],
                 capture_output=True, text=True, timeout=15)
-            if "--only-failures" in help_text.stdout + help_text.stderr:
+            if export_images and "--only-failures" in help_text.stdout + help_text.stderr:
                 destination = OUTPUT / "TouchAttachments"
                 exported = subprocess.run(["xcrun", "xcresulttool", "export", "attachments", "--path", str(bundle),
                     "--output-path", str(destination), "--only-failures"], capture_output=True, text=True, timeout=30)
@@ -152,6 +152,115 @@ def review_changed_screens(udid, container):
     }, indent=2))
 
 
+def review_functionality(udid, container):
+    """Exercise real state/playback and touch behavior without generating appearance screenshots."""
+    generate_review_media(container)
+    checks = {}
+    report = {"scope": "functional", "device": "iPhone 13 / iOS 27 simulator", "checks": checks,
+              "full_feature_parity": False, "private_account_and_physical_phone": "not available on this host"}
+
+    def record(name, passed):
+        checks[name] = bool(passed)
+        report["passed"] = all(checks.values())
+        (OUTPUT / "functional-results.json").write_text(json.dumps(report, indent=2))
+
+    fixture = json.loads((IOS / "scripts/review-track.json").read_text())
+    metadata = {"id": fixture["id"], "title": fixture["title"], "artist": fixture["artist"], "artwork": fixture["artwork_url"]}
+    routes = [
+        ("sessionreview", "account-storage-review.json"),
+        ("requestreview", "native-requests-review.json"),
+        ("soundobservationreview", "sound-observation-review.json"),
+        ("soundprofilesreview", "sound-profiles-review.json"),
+        ("lyricsstorereview", "lyrics-store-review.json"),
+        ("scrobblereview", "scrobble-review.json"),
+        ("localreview", "local-playback-review.json"),
+        ("downloadsreview", "downloads-layout-review.json"),
+        ("localplaylistreview", "local-library-review.json"),
+        ("localplaylistrestore", "local-library-relaunch-review.json"),
+        ("queuereview?" + urllib.parse.urlencode(metadata), "queue-review.json"),
+    ]
+    for route, filename in routes:
+        (container / "Library/Application Support" / filename).unlink(missing_ok=True)
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://" + route)
+        result = evidence(container, filename, timeout=90)
+        record(filename, result and result.get("passed"))
+    try:
+        run_interactions(udid, export_images=False)
+        record("touch_interactions", True)
+    except (subprocess.SubprocessError, RuntimeError):
+        record("touch_interactions", False)
+
+    for route, filename, count in [("home", "home-review.json", "items"),
+                                   ("search?q=Beethoven", "search-review.json", "songs")]:
+        (container / "Library/Application Support" / filename).unlink(missing_ok=True)
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://" + route)
+        result = evidence(container, filename, timeout=90)
+        record(filename, result and result.get(count, 0) > 0)
+
+    probe_file = container / "Library/Application Support/guest-probe.json"
+    probe_file.unlink(missing_ok=True)
+    sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://guestprobe")
+    deadline = time.monotonic() + 390
+    probe = None
+    while time.monotonic() < deadline:
+        if probe_file.exists():
+            probe = json.loads(probe_file.read_text())
+            if probe.get("status") in ("selected", "failed"):
+                break
+        time.sleep(1)
+    (OUTPUT / "guest-probe.json").write_text(json.dumps(probe, indent=2))
+    resolved = probe and probe.get("status") == "selected"
+    record("guest_audio_resolution", resolved)
+    if resolved:
+        video_id = probe["selected_id"]
+        streamed = verify_playback(container, video_id, downloaded=False)
+        record("native_stream_decoding", streamed)
+        if streamed:
+            state = json.loads((OUTPUT / "stream-playback.json").read_text())
+            record("provider_duration_preserved", probe.get("source_duration", 0) > 0 and state.get("duration", 0) > 0
+                   and abs(state.get("duration", 0) - probe["source_duration"]) < 1)
+            record("stream_pcm_processed", state.get("processedAudioFrames", 0) > 0)
+        route = "sonora://play?" + urllib.parse.urlencode({"id": video_id, "title": video_id})
+        controls_file = container / "Library/Application Support/live-controls-review.json"
+        controls_file.unlink(missing_ok=True)
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-live-controls", "--sonora-review-url", route)
+        controls = evidence(container, "live-controls-review.json", timeout=160)
+        record("stream_pause_seek_and_end", controls and controls.get("passed"))
+        if controls: (OUTPUT / "stream-controls-review.json").write_text(json.dumps(controls, indent=2))
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url",
+            "sonora://download?" + urllib.parse.urlencode({"id": video_id, "title": video_id}))
+        index = container / "Library/Application Support/Downloads/downloads.json"
+        deadline = time.monotonic() + 180
+        complete = None
+        while time.monotonic() < deadline:
+            if index.exists():
+                entry = next((e for e in json.loads(index.read_text()) if e["track"].get("youtubeID") == video_id), None)
+                if entry and entry["state"] == "downloaded":
+                    complete = entry
+                    break
+                if entry and entry["state"] == "failed":
+                    report["download_failure_code"] = entry.get("failureCode")
+                    break
+            time.sleep(2)
+        record("complete_native_download", complete is not None)
+        if complete:
+            path = index.parent / complete["filename"]
+            record("download_byte_count", path.exists() and path.stat().st_size == complete.get("expectedBytes", -1))
+            record("download_source_duration", probe.get("source_duration", 0) > 0 and complete.get("sourceDuration", 0) > 0
+                   and abs(complete["sourceDuration"] - probe["source_duration"]) < 1)
+            controls_file.unlink(missing_ok=True)
+            sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-live-controls",
+                "--sonora-review-block-resolution", "--sonora-review-url", route)
+            downloaded = evidence(container, "live-controls-review.json", timeout=160)
+            record("download_relaunch_without_resolution", downloaded and downloaded.get("passed") and downloaded.get("downloaded"))
+            if downloaded: (OUTPUT / "downloaded-controls-review.json").write_text(json.dumps(downloaded, indent=2))
+    else:
+        report["live_stream_and_download"] = "not accepted: provider did not resolve a real Guest stream"
+        record("guest_audio_resolution", False)
+    if not all(checks.values()):
+        raise RuntimeError("Functional verification has unresolved failures; inspect functional-results.json")
+
+
 if __name__ == "__main__":
     OUTPUT.mkdir(parents=True, exist_ok=True)
     runtimes = json.loads(sim("list", "runtimes", "--json"))["runtimes"]
@@ -187,6 +296,9 @@ if __name__ == "__main__":
         if BUNDLE not in processes:
             raise RuntimeError("Sonora did not remain running after launch")
         container = Path(sim("get_app_container", udid, BUNDLE, "data"))
+        if os.environ.get("SONORA_REVIEW_SCOPE") == "functional":
+            review_functionality(udid, container)
+            raise SystemExit(0)
         if os.environ.get("SONORA_REVIEW_SCOPE") == "changed_ui":
             review_changed_screens(udid, container)
             raise SystemExit(0)
