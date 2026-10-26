@@ -143,11 +143,14 @@ if __name__ == "__main__":
     OUTPUT.mkdir(parents=True, exist_ok=True)
     runtimes = json.loads(sim("list", "runtimes", "--json"))["runtimes"]
     available = [r for r in runtimes if r.get("isAvailable") and r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS-") and int(r["version"].split(".")[0]) >= 26]
+    device_type = "com.apple.CoreSimulator.SimDeviceType.iPhone-13"
+    available = [r for r in available if not r.get("supportedDeviceTypes") or any(
+        device.get("identifier") == device_type for device in r["supportedDeviceTypes"])]
     if not available:
         raise RuntimeError("No available iOS 26+ simulator runtime on this runner")
     runtime = sorted(available, key=lambda r: tuple(map(int, r["version"].split("."))))[-1]
     (OUTPUT / "selected-runtime.json").write_text(json.dumps(runtime, indent=2))
-    udid = sim("create", "Sonora iPhone 13 Review", "com.apple.CoreSimulator.SimDeviceType.iPhone-13", runtime["identifier"])
+    udid = sim("create", "Sonora iPhone 13 Review", device_type, runtime["identifier"])
     try:
         sim("boot", udid)
         sim("bootstatus", udid, "-b")

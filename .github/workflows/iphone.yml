@@ -12,6 +12,11 @@ on:
         type: choice
         options: [full, changed_ui]
         default: full
+      runner:
+        description: 'Standard free public-repository Apple runner'
+        type: choice
+        options: [macos-26, xcode-27]
+        default: macos-26
   push:
     paths:
       - 'ios/Sonora/**'
@@ -71,7 +76,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runner || 'macos-26' }}
     timeout-minutes: 30
     env:
       RUSTUP_TOOLCHAIN: stable

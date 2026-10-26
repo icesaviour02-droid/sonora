@@ -383,3 +383,24 @@ app-only occurrence payload, drop-enter reordering through PlaybackController, a
 Up/Down actions. Swipe removal remains in ordinary list mode. The rename test reached its real
 alert but failed because the accessibility tree exposed two Save button wrappers; the test now
 selects the first matching button. No claim of passing these two touch flows is made yet.
+
+Run 40326174606 at 04e5f7cb built the production device app with the separate private-UTI drag
+grip. Simulator test compilation failed only in the XCTest gesture call: XCUIElement.press expects
+an element destination, while the intended target was an XCUICoordinate. The source grip is now
+converted to a coordinate before the coordinate-to-coordinate press/drag call. App playback code
+was not changed by that repair. Run 40327404338 at 836e89bc is queued for the corrected focused
+review. No build 12 has been delivered to LATEST-VERSION yet. Builds 10 and 11 remain unchanged.
+
+Review artifacts are now split: Sonora-iPhone-simulator-review contains top-level count JSON and
+screenshots; Sonora-iPhone-touch-review contains the detailed xcresult bundle. The runner also
+exports touch-review-summary.json using xcresulttool when available, including on test failure.
+The former combined artifact could reach 75 MB and delayed simple screenshot retrieval.
+
+The standard macos-26 run remained queued without an assigned runner. GitHub's official hosted
+runner table lists xcode-27 as a standard free public-repository arm64 image, and the official
+runner image manifest lists Xcode 27.1 plus iOS 27 runtimes. The fork is confirmed PUBLIC. A
+separate codex/iphone-ios27-review branch adds an explicit runner choice so an iOS 27 review can
+run without canceling the waiting main-branch job. Simulator selection now requires support for
+iPhone 13 instead of blindly choosing the numerically newest runtime. No paid runner is selected.
+Sources: https://docs.github.com/en/actions/reference/runners/github-hosted-runners and
+https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md .
