@@ -260,3 +260,18 @@ checks, including actual tagged AAC export/import, cover/metadata restoration, e
 compilation grouping/order, native processed frames, real clock/pause/seek and media/cover removal.
 The fixture is self-generated audio, cover and lyric text. Local album touch navigation and physical
 phone behavior are still outstanding.
+
+## Simulator fixture isolation repair (26 October 2026)
+
+Run 40284403208 passed Apple host cancellation stress, all shared tests and both production iOS
+libraries. Run 40284403215 compiled both app targets, but its Swift cancellation probe failed at
+normal/in-flight calls while early cancellation passed. Direct artifact inspection confirms this
+pattern. The simulator links an optimized Rust archive, where debug assertions had removed the
+new delayed QA operation. This is a test-build mismatch, not evidence of passing wrapper behavior.
+
+An explicit review-fixtures feature now enables that deterministic operation only for the simulator
+archive staged by build_native.py. The iPhoneOS IPA archive keeps the feature off. Host CI also tests
+that an optimized production archive rejects the fixture and that optimized QA cancellation passes.
+Swift wrapper and sound-observation acceptance must still be rerun. The prior response graph was
+visually inspected; its deep notch drew below the plot into the caption. Plot clipping is included
+in 422e1bdf and awaits the new screenshot capture.

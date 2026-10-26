@@ -187,7 +187,7 @@ fn session() -> &'static RwLock<Session> {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 enum Request {
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "review-fixtures"))]
     ReviewWait {
         milliseconds: u64,
     },
@@ -421,7 +421,7 @@ pub unsafe extern "C" fn sonora_mobile_string_free(json: *mut c_char) {
 
 async fn execute(request: Request) -> Result<Value> {
     match request {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "review-fixtures"))]
         Request::ReviewWait { milliseconds } => {
             tokio::time::sleep(Duration::from_millis(milliseconds.min(5_000))).await;
             return Ok(json!({ "completed": true }));
@@ -696,7 +696,7 @@ async fn execute(request: Request) -> Result<Value> {
                 .await?;
             Ok(json!({ "removed": true }))
         }
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "review-fixtures"))]
         Request::ReviewWait { .. } => unreachable!("handled before session read"),
         Request::Configure { .. }
         | Request::PoTokenWanted {}

@@ -18,7 +18,12 @@ def build():
     for target, sdk in [("aarch64-apple-ios", "iphoneos"), ("aarch64-apple-ios-sim", "iphonesimulator")]:
         selected = environment.copy()
         selected["SDKROOT"] = subprocess.check_output(["xcrun", "--sdk", sdk, "--show-sdk-path"], text=True).strip()
-        subprocess.run(["cargo", "build", "--manifest-path", str(IOS / "Core/Cargo.toml"), "--locked", "--release", "--target", target], env=selected, check=True)
+        command = ["cargo", "build", "--manifest-path", str(IOS / "Core/Cargo.toml"), "--locked", "--release", "--target", target]
+        # Swift simulator Debug uses an optimized Rust archive. Enable its deterministic QA fixture
+        # explicitly; the iPhoneOS archive packaged in the IPA never enables this feature.
+        if sdk == "iphonesimulator":
+            command.extend(["--features", "review-fixtures"])
+        subprocess.run(command, env=selected, check=True)
         source = IOS / "Core/target" / target / "release/libsonora_mobile_core.a"
         destination = IOS / "build/native" / sdk / source.name
         destination.parent.mkdir(parents=True, exist_ok=True)

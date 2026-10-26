@@ -76,6 +76,12 @@ jobs:
           python3 ios/scripts/audio_effects_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
           python3 ios/scripts/lyrics_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
           python3 ios/scripts/cancellation_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
+      - name: Verify optimized fixture isolation and cancellation
+        run: |
+          cargo build --manifest-path ios/Core/Cargo.toml --locked --release
+          python3 ios/scripts/cancellation_check.py ios/Core/target/release/libsonora_mobile_core.dylib --expect-no-fixture
+          cargo build --manifest-path ios/Core/Cargo.toml --locked --release --features review-fixtures
+          python3 ios/scripts/cancellation_check.py ios/Core/target/release/libsonora_mobile_core.dylib
       - name: Build native iPhone and simulator libraries
         run: |
           export LIBCLANG_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"

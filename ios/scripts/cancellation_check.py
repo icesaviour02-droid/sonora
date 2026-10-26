@@ -70,5 +70,24 @@ def check(path):
     print(json.dumps(result))
 
 
+def check_no_fixture(path):
+    native = NativeDSP(path)
+    replies = []
+
+    @native.callback_type
+    def callback(context, pointer):
+        replies.append(True)
+        native.lib.sonora_mobile_string_free(pointer)
+
+    payload = json.dumps(dict(operation="review_wait", milliseconds=1, request_id="release-fixture-check")).encode()
+    assert native.lib.sonora_mobile_request(payload, None, callback) == 1, "test fixture present in production archive"
+    time.sleep(0.05)
+    assert not replies
+    print(json.dumps(dict(passed=True, production_fixture_absent=True)))
+
+
 if __name__ == "__main__":
-    check(Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT)
+    args = [arg for arg in sys.argv[1:] if arg != "--expect-no-fixture"]
+    path = Path(args[0]) if args else DEFAULT
+    if "--expect-no-fixture" in sys.argv: check_no_fixture(path)
+    else: check(path)
