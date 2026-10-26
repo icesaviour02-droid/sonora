@@ -231,6 +231,12 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
     func clearRemoteDownloads() {
         let ids = entries.filter { $0.track.youtubeID != nil }.map(\.id)
         ids.forEach { remove($0) }
+        playlists = []
+        do {
+            if FileManager.default.fileExists(atPath: playlistsURL.path) {
+                try FileManager.default.removeItem(at: playlistsURL)
+            }
+        } catch { self.error = String(localized: "ios-download-save-error") }
     }
 
     private func pump() {

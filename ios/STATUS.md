@@ -404,3 +404,14 @@ run without canceling the waiting main-branch job. Simulator selection now requi
 iPhone 13 instead of blindly choosing the numerically newest runtime. No paid runner is selected.
 Sources: https://docs.github.com/en/actions/reference/runners/github-hosted-runners and
 https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md .
+
+Run 40329068868 at 39c766f1 compiled with Xcode 27 and selected an actual iPhone 13/iOS 27.0
+simulator (24A434). Native playback/end, download storage and local/relaunch checks passed.
+Two of three real touch tests passed: Downloads navigation and local playlist rename. Dragging
+still failed its order assertion. The next diagnostic run advertises the custom non-secret queue
+occurrence representation to the system drag service, records bounded simulator-only drag events
+and exports failure screenshots when xcresulttool supports that filter. No stream URL or account
+token is in the drag payload. This distinguishes a rejected drag representation from a model or
+accessibility-order problem. The revised collection cover was visually confirmed sharp and loaded.
+Download playlist manifests are also removed when the user clears account downloads, so old
+playlist names do not reappear if the same song is downloaded under another account.

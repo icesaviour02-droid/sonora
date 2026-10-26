@@ -542,9 +542,12 @@ struct NowPlayingView: View {
                     .contentShape(Rectangle())
                     .onDrag {
                         draggedQueueID = queueID
+                        #if DEBUG
+                        QueueDragDiagnostics.record("begin:" + queueID.uuidString)
+                        #endif
                         let provider = NSItemProvider()
                         provider.registerDataRepresentation(forTypeIdentifier: UTType.sonoraQueueEntry.identifier,
-                            visibility: .ownProcess) { completion in
+                            visibility: .all) { completion in
                             completion(Data(queueID.uuidString.utf8), nil)
                             return nil
                         }
@@ -585,6 +588,9 @@ struct NowPlayingView: View {
         let entries = playback.upcomingItems
         guard let from = entries.firstIndex(where: { $0.id == source }),
               let to = entries.firstIndex(where: { $0.id == target }), from != to else { return }
+        #if DEBUG
+        QueueDragDiagnostics.record("move:\(from)>\(to)")
+        #endif
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
             playback.moveUpcoming(fromOffsets: IndexSet(integer: from), toOffset: from < to ? to + 1 : to)
         }

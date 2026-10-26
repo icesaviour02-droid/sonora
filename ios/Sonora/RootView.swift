@@ -217,6 +217,7 @@ struct RootView: View {
             )
             #if DEBUG
             if url.host == "queuereview" {
+                QueueDragDiagnostics.reset()
                 playback.reviewQueue(track)
                 playerMode = "queue"
                 showPlayer = true

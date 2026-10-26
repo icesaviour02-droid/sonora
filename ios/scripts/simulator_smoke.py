@@ -88,12 +88,25 @@ def run_interactions(udid):
             "-destination", "id=" + udid, "-parallel-testing-enabled", "NO",
             "-resultBundlePath", str(bundle)], check=True, timeout=360)
     finally:
+        current = Path(sim("get_app_container", udid, BUNDLE, "data"))
+        drag = current / "Library/Application Support/queue-drag-review.json"
+        if drag.exists():
+            (OUTPUT / drag.name).write_bytes(drag.read_bytes())
         try:
             summary = subprocess.run(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)],
                 capture_output=True, text=True, timeout=30)
             if summary.returncode == 0:
                 value = json.loads(summary.stdout)
                 (OUTPUT / "touch-review-summary.json").write_text(json.dumps(value, indent=2))
+            help_text = subprocess.run(["xcrun", "xcresulttool", "export", "attachments", "--help"],
+                capture_output=True, text=True, timeout=15)
+            if "--only-failures" in help_text.stdout + help_text.stderr:
+                destination = OUTPUT / "TouchAttachments"
+                exported = subprocess.run(["xcrun", "xcresulttool", "export", "attachments", "--path", str(bundle),
+                    "--output-path", str(destination), "--only-failures"], capture_output=True, text=True, timeout=30)
+                if exported.returncode == 0:
+                    for index, screenshot in enumerate(sorted(destination.rglob("*.png"))[:6]):
+                        (OUTPUT / f"touch-failure-{index}.png").write_bytes(screenshot.read_bytes())
         except (subprocess.SubprocessError, ValueError):
             print("Detailed touch-test result remains in the xcresult bundle", flush=True)
 
