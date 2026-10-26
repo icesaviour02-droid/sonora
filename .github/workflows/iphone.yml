@@ -62,6 +62,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ios/Core -> target
+          cache-on-failure: true
       - name: Build shared YouTube provider libraries
         run: python3 ios/scripts/build_native.py
       - name: Prepare native project

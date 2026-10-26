@@ -59,6 +59,10 @@ jobs:
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim
           components: clippy,rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ios/Core -> target
+          cache-on-failure: true
       - name: Check Rust style and contracts
         run: |
           cargo fmt --manifest-path ios/Core/Cargo.toml -- --check
