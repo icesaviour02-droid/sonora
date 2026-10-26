@@ -82,9 +82,20 @@ def generate_review_media(container):
 def run_interactions(udid):
     """Run real touch tests on the same populated simulator; failure preserves the result bundle."""
     test_run = next((IOS / "build/simulator/Build/Products").glob("*.xctestrun"))
-    subprocess.run(["xcodebuild", "test-without-building", "-xctestrun", str(test_run),
-        "-destination", "id=" + udid, "-parallel-testing-enabled", "NO",
-        "-resultBundlePath", str(OUTPUT / "MusicInteractions.xcresult")], check=True, timeout=360)
+    bundle = OUTPUT / "MusicInteractions.xcresult"
+    try:
+        subprocess.run(["xcodebuild", "test-without-building", "-xctestrun", str(test_run),
+            "-destination", "id=" + udid, "-parallel-testing-enabled", "NO",
+            "-resultBundlePath", str(bundle)], check=True, timeout=360)
+    finally:
+        try:
+            summary = subprocess.run(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)],
+                capture_output=True, text=True, timeout=30)
+            if summary.returncode == 0:
+                value = json.loads(summary.stdout)
+                (OUTPUT / "touch-review-summary.json").write_text(json.dumps(value, indent=2))
+        except (subprocess.SubprocessError, ValueError):
+            print("Detailed touch-test result remains in the xcresult bundle", flush=True)
 
 
 def review_changed_screens(udid, container):
