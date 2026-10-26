@@ -415,3 +415,20 @@ token is in the drag payload. This distinguishes a rejected drag representation 
 accessibility-order problem. The revised collection cover was visually confirmed sharp and loaded.
 Download playlist manifests are also removed when the user clears account downloads, so old
 playlist names do not reappear if the same song is downloaded under another account.
+
+Run 40332339702 at faaa7ce0 passed the same two UI tests but still failed queue order. Its bounded
+drag evidence contains only provider-start callbacks for both visible rows, with no validate,
+enter or drop callbacks. The accessibility snapshot confirms that both occurrences remained in
+their old positions. Changing provider visibility did not fix the SwiftUI List drop path.
+
+The queue's scrollable content now uses UICollectionView's native list layout, always-visible
+UICellAccessory.reorder and diffable-data-source reordering handlers, in normal mode with native
+trailing swipe actions. SwiftUI still renders the shared artwork/font labels and existing player
+header/transport. PlaybackController commits complete upcoming UUID order only when it matches
+the current set, so past/current entries and stale drag snapshots are protected. History and
+Add Songs remain non-reorderable rows; proposed destinations are constrained to upcoming songs.
+Initial queue scroll positioning waits for a real viewport. The discarded custom drag/drop type
+and provider have been removed. Two model checks cover accepted and rejected native reorders.
+Primary SDK references: https://developer.apple.com/documentation/uikit/uicellaccessory-swift.struct/reorder(displayed:options:)
+and https://developer.apple.com/documentation/uikit/uicollectionviewdiffabledatasource-9tqpa/reorderinghandlers-swift.property .
+Native touch acceptance for this replacement is still pending.

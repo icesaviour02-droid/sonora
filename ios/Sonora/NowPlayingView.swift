@@ -1,7 +1,6 @@
 import AVKit
 import MediaPlayer
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// The system tab accessory automatically moves with the Liquid Glass tab bar and pops up into Now Playing on tap or upward swipe.
 struct MiniPlayer: View {
@@ -99,7 +98,6 @@ struct NowPlayingView: View {
     @State private var lyrics = LyricsStore()
     @State private var chooseLocalPlaylist = false
     @State private var addQueueSongs = false
-    @State private var draggedQueueID: UUID?
 
     init(initialMode: String = "artwork") {
         _mode = State(initialValue: initialMode == "lyrics" ? .lyrics : (initialMode == "queue" ? .queue : .artwork))
@@ -139,7 +137,7 @@ struct NowPlayingView: View {
         .onChange(of: settings.localFileLyrics) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: settings.lyricsSources) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: mode) { _, _ in loadLyricsIfNeeded() }
-        .onDisappear { lyrics.cancel(); draggedQueueID = nil }
+        .onDisappear { lyrics.cancel() }
         .sheet(isPresented: $addQueueSongs) {
             NavigationStack { QueueSongsPicker() }
         }
@@ -451,155 +449,10 @@ struct NowPlayingView: View {
                 queueModePill(symbol: "infinity", label: "ios-autoplay-radio", isActive: settings.autoplayRadio,
                     action: { settings.autoplayRadio.toggle() })
             }
-            ScrollViewReader { proxy in
-                List {
-                    if !settings.history.isEmpty {
-                        Section {
-                            ForEach(settings.history.reversed()) { track in
-                                queueRow(track) { playback.play(track, in: settings.history) }
-                                    .swipeActions {
-                                        Button("ios-delete", role: .destructive) { settings.removeFromHistory(track) }
-                                    }
-                            }
-                        } header: {
-                            HStack {
-                                Text("ios-history")
-                                Spacer()
-                                Button("ios-clear") { settings.clearHistory() }
-                            }.textCase(nil)
-                        }
-                    }
-                    Section {
-                        ForEach(playback.upcomingItems) { item in
-                            queueRow(item.track, queueID: item.id) { playback.selectQueueItem(item.id) }
-                                .onDrop(of: [.sonoraQueueEntry], delegate: QueueEntryDrop(
-                                    target: item.id, dragged: $draggedQueueID, move: moveQueueEntry))
-                                .swipeActions {
-                                    Button("ios-remove-from-queue", role: .destructive) { playback.removeQueueItem(item.id) }
-                                        .accessibilityIdentifier("queue-remove-" + item.id.uuidString)
-                                }
-                        }
-                        Button { addQueueSongs = true } label: {
-                            HStack(spacing: Layout.compact) {
-                                Image(systemName: "plus")
-                                    .appFont(.title2)
-                                    .frame(width: Layout.rowArtwork, height: Layout.rowArtwork)
-                                    .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: Layout.compact))
-                                Text("ios-add-songs-to-queue").appFont(.body)
-                            }.foregroundStyle(.white)
-                        }.buttonStyle(.plain).accessibilityIdentifier("queue-add-songs")
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: Layout.compact / 2, leading: 0, bottom: Layout.compact / 2, trailing: 0))
-                    } header: {
-                        HStack {
-                            Text("ios-queue").appFont(.headline)
-                            Spacer()
-                            Button("ios-clear") { playback.clearUpcomingQueue() }
-                                .accessibilityIdentifier("queue-clear")
-                                .disabled(playback.upcomingItems.isEmpty)
-                        }
-                        .foregroundStyle(.white).textCase(nil)
-                        .padding(.vertical, Layout.compact)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                        .id("queue-start")
-                    }
-                    if settings.autoplayRadio {
-                        Section {
-                            VStack(alignment: .leading, spacing: Layout.compact / 2) {
-                                Label("ios-autoplay-radio", systemImage: "infinity").appFont(.headline)
-                                Text("ios-autoplay-description").appFont(.subheadline).foregroundStyle(.white.opacity(0.65))
-                            }
-                            .foregroundStyle(.white)
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: Layout.spacing, leading: 0, bottom: Layout.compact, trailing: 0))
-                        }
-                    }
-                }
-                .listStyle(.plain)
-                .listRowSpacing(Layout.compact / 2)
-                .scrollContentBackground(.hidden)
-                .listSectionSeparator(.hidden)
-                .task {
-                    await Task.yield()
-                    proxy.scrollTo("queue-start", anchor: .top)
-                }
-            }
+            NativeQueueList(upcoming: playback.upcomingItems, history: settings.history,
+                autoplay: settings.autoplayRadio, playback: playback, settings: settings,
+                addSongs: { addQueueSongs = true })
         }
-    }
-
-    /// Shares queue/history metadata while each caller selects the correct queue occurrence.
-    private func queueRow(_ track: MusicTrack, queueID: UUID? = nil, action: @escaping () -> Void) -> some View {
-        HStack(spacing: Layout.compact) {
-            Button(action: action) { queueTrackContent(track) }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier(queueID.map { "queue-row-" + $0.uuidString } ?? "queue-history-" + track.id)
-            if let queueID {
-                Image(systemName: "line.3.horizontal")
-                    .foregroundStyle(.white.opacity(0.4))
-                    .frame(width: Layout.control, height: Layout.control)
-                    .contentShape(Rectangle())
-                    .onDrag {
-                        draggedQueueID = queueID
-                        #if DEBUG
-                        QueueDragDiagnostics.record("begin:" + queueID.uuidString)
-                        #endif
-                        let provider = NSItemProvider()
-                        provider.registerDataRepresentation(forTypeIdentifier: UTType.sonoraQueueEntry.identifier,
-                            visibility: .all) { completion in
-                            completion(Data(queueID.uuidString.utf8), nil)
-                            return nil
-                        }
-                        return provider
-                    } preview: {
-                        queueTrackContent(track)
-                            .padding(Layout.compact)
-                            .frame(width: Layout.queuePreviewWidth)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Layout.cardRadius))
-                    }
-                    .accessibilityElement()
-                    .accessibilityLabel(Text("ios-reorder-song"))
-                    .accessibilityIdentifier("queue-grip-" + queueID.uuidString)
-                    .accessibilityAction(named: Text("ios-move-up")) { nudgeQueueEntry(queueID, by: -1) }
-                    .accessibilityAction(named: Text("ios-move-down")) { nudgeQueueEntry(queueID, by: 1) }
-            }
-        }
-        .listRowInsets(EdgeInsets(top: Layout.compact / 2, leading: 0, bottom: Layout.compact / 2, trailing: 0))
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
-    }
-
-    private func queueTrackContent(_ track: MusicTrack) -> some View {
-        HStack(spacing: Layout.compact) {
-            ArtworkView(track: track, side: Layout.rowArtwork, cornerRadius: Layout.compact).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: Layout.compact / 2) {
-                Text(track.title).appFont(.subheadline, weight: .medium).foregroundStyle(.white).lineLimit(1)
-                Text(track.artist).appFont(.caption).foregroundStyle(.white.opacity(0.68)).lineLimit(1)
-            }
-            Spacer(minLength: Layout.compact)
-        }
-        .frame(maxWidth: .infinity, minHeight: Layout.control, alignment: .leading)
-        .contentShape(Rectangle())
-    }
-
-    /// Resolve current occurrence positions at every drop entry, so repeated songs stay distinct.
-    private func moveQueueEntry(_ source: UUID, _ target: UUID) {
-        let entries = playback.upcomingItems
-        guard let from = entries.firstIndex(where: { $0.id == source }),
-              let to = entries.firstIndex(where: { $0.id == target }), from != to else { return }
-        #if DEBUG
-        QueueDragDiagnostics.record("move:\(from)>\(to)")
-        #endif
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
-            playback.moveUpcoming(fromOffsets: IndexSet(integer: from), toOffset: from < to ? to + 1 : to)
-        }
-    }
-
-    private func nudgeQueueEntry(_ id: UUID, by distance: Int) {
-        let entries = playback.upcomingItems
-        guard let source = entries.firstIndex(where: { $0.id == id }), entries.indices.contains(source + distance) else { return }
-        moveQueueEntry(id, entries[source + distance].id)
     }
 
     private func queueModePill(symbol: String, label: LocalizedStringKey, isActive: Bool, action: @escaping () -> Void) -> some View {

@@ -173,6 +173,10 @@ final class PlaybackController {
         let before = upcomingItems.map(\.id)
         moveUpcoming(fromOffsets: IndexSet(integer: 0), toOffset: 2)
         checks["move_preserves_current"] = currentQueueID == active && upcomingItems.map(\.id) == Array(before.reversed())
+        reorderUpcoming(before)
+        checks["native_reorder_commit"] = upcomingItems.map(\.id) == before && currentQueueID == active
+        reorderUpcoming([before[0], before[0]])
+        checks["native_reorder_rejects_stale"] = upcomingItems.map(\.id) == before
         if let removed = upcomingItems.first { removeQueueItem(removed.id) }
         checks["remove_one_occurrence"] = queueItems.count == 2 && currentQueueID == active
         let later = queueItems.last?.id
@@ -278,6 +282,19 @@ final class PlaybackController {
     func moveUpcoming(fromOffsets source: IndexSet, toOffset destination: Int) {
         let start = (currentQueueIndex.map { $0 + 1 }) ?? 0
         moveQueue(fromOffsets: IndexSet(source.map { $0 + start }), toOffset: destination + start)
+    }
+
+    /// Commit a native reorder only if it still contains exactly the current upcoming occurrences.
+    func reorderUpcoming(_ order: [UUID]) {
+        let entries = upcomingItems
+        guard order.count == entries.count, Set(order).count == order.count,
+              Set(order) == Set(entries.map(\.id)) else { return }
+        let indexed = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        let start = currentQueueIndex.map { $0 + 1 } ?? 0
+        queueItems = Array(queueItems.prefix(start)) + order.compactMap { indexed[$0] }
+        originalQueue = queueItems
+        isShuffled = false
+        saveQueue()
     }
 
     func clearUpcomingQueue() {
