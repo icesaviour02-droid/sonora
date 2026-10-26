@@ -83,6 +83,7 @@ struct NowPlayingView: View {
     @Environment(PlaybackController.self) private var playback
     @Environment(DownloadsStore.self) private var downloads
     @Environment(SettingsStore.self) private var settings
+    @Environment(LocalLibraryStore.self) private var localLibrary
     @Environment(CatalogStore.self) private var catalog
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var textSize
@@ -94,6 +95,7 @@ struct NowPlayingView: View {
     @State private var seekValue: Double = 0
     @State private var isSeeking = false
     @State private var lyrics = LyricsStore()
+    @State private var chooseLocalPlaylist = false
 
     init(initialMode: String = "artwork") {
         _mode = State(initialValue: initialMode == "lyrics" ? .lyrics : (initialMode == "queue" ? .queue : .artwork))
@@ -134,6 +136,9 @@ struct NowPlayingView: View {
         .onChange(of: settings.lyricsSources) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: mode) { _, _ in loadLyricsIfNeeded() }
         .onDisappear { lyrics.cancel() }
+        .sheet(isPresented: $chooseLocalPlaylist) {
+            NavigationStack { AddToLocalPlaylistView(trackIDs: playback.current.map { [$0.id] } ?? []) }
+        }
     }
 
     /// Keeps the artwork and every control within the sheet, even with accessibility text sizes.
@@ -282,17 +287,22 @@ struct NowPlayingView: View {
 
     @ViewBuilder
     private var favoriteControl: some View {
-        if let current = playback.current, current.youtubeID != nil {
-            Button { catalog.toggleLike(current) } label: {
-                Image(systemName: catalog.isLiked(current) ? "star.fill" : "star")
+        if let current = playback.current {
+            let favorite = current.youtubeID != nil ? catalog.isLiked(current) : localLibrary.favoriteTracks.contains(current.id)
+            Button {
+                if current.youtubeID != nil { catalog.toggleLike(current) }
+                else { localLibrary.toggleFavorite(current.id, category: .tracks) }
+            } label: {
+                Image(systemName: favorite ? "star.fill" : "star")
                     .appFont(.body, weight: .semibold)
-                    .foregroundStyle(catalog.isLiked(current) ? .yellow : .white.opacity(0.88))
+                    .foregroundStyle(favorite ? .yellow : .white.opacity(0.88))
                     .frame(width: Layout.control, height: Layout.control)
                     .background(.white.opacity(0.14), in: Circle())
             }
             .buttonStyle(.plain)
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            .accessibilityLabel(Text("ios-favorite"))
+            .disabled(current.youtubeID == nil && (localLibrary.isBusy || !localLibrary.isLoaded))
+            .accessibilityLabel(Text(favorite ? "ios-remove-favorite" : "ios-favorite"))
         }
     }
 
@@ -331,6 +341,9 @@ struct NowPlayingView: View {
                 }
                 Button("ios-add-to-queue", systemImage: "text.badge.plus") {
                     playback.addToQueue(track)
+                }
+                if track.youtubeID == nil {
+                    LocalTrackActions(track: track) { chooseLocalPlaylist = true }
                 }
                 if track.youtubeID != nil {
                     Button("ios-start-radio", systemImage: "dot.radiowaves.left.and.right") {

@@ -16,6 +16,7 @@ pub mod link;
 #[cfg(test)]
 mod live_tests;
 pub mod local;
+mod local_ids;
 pub mod lrclib;
 pub mod lyrics;
 mod models;
@@ -50,6 +51,9 @@ use time::{Month, OffsetDateTime};
 
 pub use audio::Meter;
 pub use equalizer::Equalizer;
+pub use local_ids::{
+    LOCAL_ALBUM_PREFIX, LOCAL_ARTIST_PREFIX, LOCAL_PLAYLIST_PREFIX, LOCAL_TRACK_PREFIX, is_local_id,
+};
 pub use lyrics::provider::LyricsProvider;
 pub use models::{
     Album, AlbumCatalogue, AlbumDetail, Artist, ArtistCatalogue, ArtistProfile, ArtistRef,
@@ -61,21 +65,9 @@ pub use models::{
 pub use output::{Server as SoundServer, missing_bridge};
 pub use spectrum::{Analyzer, Level, Spectrum, Watch};
 
-pub const LOCAL_TRACK_PREFIX: &str = "local:";
-pub const LOCAL_ALBUM_PREFIX: &str = "local-album:";
-pub const LOCAL_ARTIST_PREFIX: &str = "local-artist:";
-pub const LOCAL_PLAYLIST_PREFIX: &str = "local-playlist:";
-
 /// The most recommendations a provider hands one list of an album or artist page, so a
 /// rail never asks for or draws more than this many releases or artists.
 pub const SUGGESTIONS: usize = 10;
-
-pub fn is_local_id(id: &str) -> bool {
-    id.starts_with(LOCAL_TRACK_PREFIX)
-        || id.starts_with(LOCAL_ALBUM_PREFIX)
-        || id.starts_with(LOCAL_ARTIST_PREFIX)
-        || id.starts_with(LOCAL_PLAYLIST_PREFIX)
-}
 
 pub fn distinct_covers(tracks: &[Track], wanted: usize) -> Vec<String> {
     let mut covers: Vec<String> = Vec::with_capacity(wanted);

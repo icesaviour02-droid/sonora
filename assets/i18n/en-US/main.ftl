@@ -1631,3 +1631,16 @@ ios-sound-response = Frequency Response
 ios-sound-response-description = Calculated at 48 kHz with the profile’s preamp. Your changes apply after saving.
 ios-sound-response-error = The response cannot be shown until the filter values are valid.
 ios-response-db = Output Level (dB)
+
+ios-local-library-error = Your local library could not be updated. Existing playlists and favorites have been kept.
+ios-on-my-iphone = On My iPhone
+ios-local-playlists = Local Playlists
+ios-local-playlists-description = These playlists stay on your iPhone and work with imported music without an account.
+ios-local-favorites = Local Favorites
+ios-add-songs = Add Songs
+ios-local-empty-playlist = Add songs from your imported music to start this playlist.
+ios-local-playlist-missing = This local playlist is no longer available.
+
+ios-add = Add
+
+ios-track-unavailable = This song is no longer in your imported library.

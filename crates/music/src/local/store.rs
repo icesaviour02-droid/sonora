@@ -144,13 +144,28 @@ impl Store {
     }
 
     pub fn create(&self, name: &str) -> Result<String> {
+        self.create_with_tracks(name, &[])
+    }
+
+    /// Creates the playlist and its initial selection together, leaving no partial playlist on error.
+    pub fn create_with_tracks(&self, name: &str, tracks: &[String]) -> Result<String> {
         let id = format!("{LOCAL_PLAYLIST_PREFIX}{}-{}", stamp(), minted());
-        self.open()?
+        let mut connection = self.open()?;
+        let transaction = connection
+            .transaction()
+            .context("cannot begin local playlist creation")?;
+        transaction
             .execute(
                 "INSERT INTO playlists (id, name, modified_at) VALUES (?, ?, ?)",
                 params![id, name, stamp()],
             )
             .context("cannot create a local playlist")?;
+        for (position, track) in tracks.iter().enumerate() {
+            transaction.execute("INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)", params![id, track, position as i64])?;
+        }
+        transaction
+            .commit()
+            .context("cannot commit local playlist creation")?;
         Ok(id)
     }
 
@@ -165,47 +180,129 @@ impl Store {
     }
 
     pub fn delete(&self, id: &str) -> Result<()> {
-        let connection = self.open()?;
-        connection
+        let mut connection = self.open()?;
+        let transaction = connection
+            .transaction()
+            .context("cannot begin local playlist deletion")?;
+        transaction
             .execute(
                 "DELETE FROM playlist_tracks WHERE playlist_id = ?",
                 params![id],
             )
             .context("cannot empty a local playlist")?;
-        connection
+        transaction
             .execute("DELETE FROM playlists WHERE id = ?", params![id])
             .context("cannot delete a local playlist")?;
-        Ok(())
+        transaction
+            .commit()
+            .context("cannot commit local playlist deletion")
     }
 
     pub fn add(&self, id: &str, track_id: &str) -> Result<()> {
-        let connection = self.open()?;
-        let position: i64 = connection
-            .query_row(
-                "SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_tracks WHERE playlist_id = ?",
-                params![id],
-                |row| row.get(0),
-            )
-            .context("cannot place a track in a local playlist")?;
-        connection
-            .execute(
-                "INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position)
-                 VALUES (?, ?, ?)",
-                params![id, track_id, position],
-            )
-            .context("cannot add a track to a local playlist")?;
-        touch(&connection, id)
+        self.add_many(id, &[track_id.to_owned()])
+    }
+
+    /// Adds a selection in one transaction, preserving order and ignoring songs already present.
+    pub fn add_many(&self, id: &str, tracks: &[String]) -> Result<()> {
+        let mut connection = self.open()?;
+        let transaction = connection
+            .transaction()
+            .context("cannot begin local playlist addition")?;
+        let mut position: i64 = transaction.query_row(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_tracks WHERE playlist_id = ?",
+            params![id],
+            |row| row.get(0),
+        )?;
+        for track in tracks {
+            let inserted = transaction.execute("INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)", params![id, track, position])?;
+            position += inserted as i64;
+        }
+        touch(&transaction, id)?;
+        transaction
+            .commit()
+            .context("cannot commit local playlist addition")
     }
 
     pub fn remove(&self, id: &str, track_id: &str) -> Result<()> {
-        let connection = self.open()?;
-        connection
-            .execute(
+        self.remove_many(id, &[track_id.to_owned()])
+    }
+
+    /// Removes a selection together so a failed save leaves the original playlist intact.
+    pub fn remove_many(&self, id: &str, tracks: &[String]) -> Result<()> {
+        let mut connection = self.open()?;
+        let transaction = connection
+            .transaction()
+            .context("cannot begin local playlist removal")?;
+        for track in tracks {
+            transaction.execute(
                 "DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?",
-                params![id, track_id],
-            )
-            .context("cannot remove a track from a local playlist")?;
-        touch(&connection, id)
+                params![id, track],
+            )?;
+        }
+        touch(&transaction, id)?;
+        transaction
+            .commit()
+            .context("cannot commit local playlist removal")
+    }
+
+    /// Removes deleted imports from their playlists and track favorites without touching other media.
+    pub fn forget_tracks(&self, tracks: &[String]) -> Result<()> {
+        let mut connection = self.open()?;
+        let transaction = connection
+            .transaction()
+            .context("cannot begin local track cleanup")?;
+        for track in tracks {
+            transaction.execute("UPDATE playlists SET modified_at = ? WHERE id IN (SELECT playlist_id FROM playlist_tracks WHERE track_id = ?)", params![stamp(), track])?;
+            transaction.execute(
+                "DELETE FROM playlist_tracks WHERE track_id = ?",
+                params![track],
+            )?;
+            transaction.execute("DELETE FROM favorites WHERE track_id = ?", params![track])?;
+        }
+        transaction
+            .commit()
+            .context("cannot commit local track cleanup")
+    }
+
+    /// Reorders the existing set atomically. A stale or duplicated list cannot discard songs.
+    pub fn reorder(&self, id: &str, tracks: &[String]) -> Result<()> {
+        let mut connection = self.open()?;
+        let transaction = connection
+            .transaction()
+            .context("cannot begin local playlist reorder")?;
+        let exists: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM playlists WHERE id = ?)",
+            params![id],
+            |row| row.get(0),
+        )?;
+        if !exists {
+            anyhow::bail!("cannot find local playlist");
+        }
+        let current: std::collections::HashSet<String> = {
+            let mut query = transaction
+                .prepare("SELECT track_id FROM playlist_tracks WHERE playlist_id = ?")?;
+            query
+                .query_map(params![id], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<_>>()?
+        };
+        let wanted: std::collections::HashSet<String> = tracks.iter().cloned().collect();
+        if wanted.len() != tracks.len() || current != wanted {
+            anyhow::bail!("local playlist order is stale or duplicated");
+        }
+        transaction.execute(
+            "DELETE FROM playlist_tracks WHERE playlist_id = ?",
+            params![id],
+        )?;
+        for (position, track) in tracks.iter().enumerate() {
+            transaction.execute(
+                "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
+                params![id, track, position as i64],
+            )?;
+        }
+        touch(&transaction, id)?;
+        transaction
+            .commit()
+            .context("cannot commit local playlist reorder")
     }
 
     pub fn tracks(&self, id: &str) -> Result<Vec<String>> {

@@ -6,6 +6,10 @@ on:
     paths:
       - 'ios/Core/**'
       - 'crates/music/src/equalizer/**'
+      - 'crates/music/src/local/store.rs'
+      - 'crates/music/src/local_ids.rs'
+      - 'crates/storage/**'
+      - 'Cargo.toml'
       - 'crates/music/src/lyrics/**'
       - 'crates/music/src/models.rs'
       - 'crates/music/src/youtube/lyrics.rs'
@@ -19,11 +23,16 @@ on:
       - 'ios/scripts/audio_effects_check.py'
       - 'ios/scripts/lyrics_check.py'
       - 'ios/scripts/cancellation_check.py'
+      - 'ios/scripts/local_library_check.py'
       - '.github/workflows/mobile-core.yml'
   pull_request:
     paths:
       - 'ios/Core/**'
       - 'crates/music/src/equalizer/**'
+      - 'crates/music/src/local/store.rs'
+      - 'crates/music/src/local_ids.rs'
+      - 'crates/storage/**'
+      - 'Cargo.toml'
       - 'crates/music/src/lyrics/**'
       - 'crates/music/src/models.rs'
       - 'crates/music/src/youtube/lyrics.rs'
@@ -37,6 +46,7 @@ on:
       - 'ios/scripts/audio_effects_check.py'
       - 'ios/scripts/lyrics_check.py'
       - 'ios/scripts/cancellation_check.py'
+      - 'ios/scripts/local_library_check.py'
       - '.github/workflows/mobile-core.yml'
 
 permissions:
@@ -76,6 +86,7 @@ jobs:
           python3 ios/scripts/audio_effects_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
           python3 ios/scripts/lyrics_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
           python3 ios/scripts/cancellation_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
+          python3 ios/scripts/local_library_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
       - name: Verify optimized fixture isolation and cancellation
         run: |
           cargo build --manifest-path ios/Core/Cargo.toml --locked --release

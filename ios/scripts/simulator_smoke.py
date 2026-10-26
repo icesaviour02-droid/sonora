@@ -184,6 +184,18 @@ if __name__ == "__main__":
         local_review = evidence(container, "local-playback-review.json", timeout=60)
         if not local_review or not local_review.get("passed"):
             raise RuntimeError("Local import, playback, pause, seek or removal checks failed")
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://localplaylistreview")
+        local_library = evidence(container, "local-library-review.json", timeout=90)
+        if not local_library or not local_library.get("passed"):
+            raise RuntimeError("Native local playlist/favorite queue, ordering or restoration failed")
+        time.sleep(2)
+        sim("io", udid, "screenshot", str(OUTPUT / "iphone13-local-playlist.png"))
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://localplaylistrestore")
+        local_relaunch = evidence(container, "local-library-relaunch-review.json")
+        if not local_relaunch or not local_relaunch.get("passed"):
+            raise RuntimeError("Local playlist/media/favorites did not survive actual app relaunch")
+        time.sleep(2)
+        sim("io", udid, "screenshot", str(OUTPUT / "iphone13-local-playlist-restored.png"))
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://locallyrics?" + urllib.parse.urlencode({"title": fixture["title"], "artist": fixture["artist"]}))
         local_lyrics = evidence(container, "local-lyrics-review.json")
         if not local_lyrics or local_lyrics.get("has_video_id") or local_lyrics.get("line_count", 0) == 0:

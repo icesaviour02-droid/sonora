@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct RootView: View {
     @Environment(AccountStore.self) private var account
     @Environment(LibraryStore.self) private var library
+    @Environment(LocalLibraryStore.self) private var localLibrary
     @Environment(PlaybackController.self) private var playback
     @Environment(YouTubeSearch.self) private var youtube
     @Environment(DownloadsStore.self) private var downloads
@@ -23,6 +24,8 @@ struct RootView: View {
     #if DEBUG
     @State private var guestProbe = GuestAcceptanceProbe()
     @State private var localLyricsProbe = LyricsStore()
+    @State private var localLibraryProbe = LocalLibraryReview()
+    @State private var localPlaylistPresentation: LocalPlaylistReviewPresentation?
     #endif
 
     var body: some View {
@@ -65,6 +68,7 @@ struct RootView: View {
             }
         }
         .sheet(isPresented: $showPlayer) { NowPlayingView(initialMode: playerMode) }
+        .modifier(LocalLibraryReviewSheet(presentation: localReviewBinding))
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             switch result {
             case .success(let urls): Task { await library.importFiles(urls) }
@@ -80,8 +84,12 @@ struct RootView: View {
         .onChange(of: library.isLoaded) { _, loaded in
             if loaded { playback.synchronizeLibrary(with: library.tracks) }
         }
-        .onChange(of: library.tracks) { _, tracks in
-            if library.isLoaded { playback.synchronizeLibrary(with: tracks) }
+        .onChange(of: library.tracks) { previous, tracks in
+            if library.isLoaded {
+                playback.synchronizeLibrary(with: tracks)
+                let removed = Set(previous.map(\.id)).subtracting(tracks.map(\.id))
+                localLibrary.forget(Array(removed))
+            }
         }
         .onChange(of: account.revision) { _, _ in
             youtube.clear()
@@ -91,12 +99,12 @@ struct RootView: View {
             catalog.loadHome(force: true)
             catalog.loadLibrary(isSignedIn: account.name != nil)
         }
-        .disabled(account.isRestoring)
         .onOpenURL(perform: open)
         .task {
-            await account.restore()
             await library.load()
-            catalog.loadHome()
+            await localLibrary.load()
+            await account.restore()
+            catalog.loadHome(force: true)
             catalog.loadLibrary(isSignedIn: account.name != nil)
             guard !didHandleLaunchURL else { return }
             didHandleLaunchURL = true
@@ -109,6 +117,14 @@ struct RootView: View {
             }
             #endif
         }
+    }
+
+    private var localReviewBinding: Binding<LocalPlaylistReviewPresentation?> {
+        #if DEBUG
+        $localPlaylistPresentation
+        #else
+        .constant(nil)
+        #endif
     }
 
     /// Shares URL validation between system deep links and the debug simulator runner.
@@ -134,6 +150,14 @@ struct RootView: View {
         }
         if url.host == "lyricsstorereview" {
             localLyricsProbe.review(settings: settings)
+            return
+        }
+        if url.host == "localplaylistrestore" {
+            localLibraryProbe.restore(library: library) { localPlaylistPresentation = $0 }
+            return
+        }
+        if url.host == "localplaylistreview" {
+            localLibraryProbe.start(library: library) { localPlaylistPresentation = $0 }
             return
         }
         if url.host == "localreview" {
@@ -587,6 +611,9 @@ struct LibraryView: View {
                         }
                     }
 
+                    Section {
+                        NavigationLink { LocalFavoritesView() } label: { Label("ios-local-favorites", systemImage: "star.fill") }
+                    }
                     if !library.tracks.isEmpty {
                         Section("ios-recently-added") {
                             ForEach(library.tracks) { track in
@@ -658,99 +685,55 @@ struct LibraryView: View {
 struct PlaylistsCollectionView: View {
     @Environment(CatalogStore.self) private var catalog
     @Environment(AccountStore.self) private var account
-    @State private var showCreate = false
-    @State private var title = ""
-    @State private var description = ""
-    @State private var privacy = "PRIVATE"
+    @Environment(LocalLibraryStore.self) private var local
+    @Environment(LibraryStore.self) private var library
+    @State private var createLocal = false
+    @State private var createYouTube = false
+    @State private var createdID: String?
 
     var body: some View {
-        Group {
-            if catalog.isLoadingLibrary && catalog.savedPlaylists.isEmpty {
-                ProgressView("ios-loading-library")
-            } else if catalog.savedPlaylists.isEmpty {
-                ContentUnavailableView {
-                    Label("ios-playlists", systemImage: "music.note.list")
-                } description: {
-                    Text(account.name == nil ? LocalizedStringKey("ios-sign-in-library-description") : LocalizedStringKey("ios-playlists-empty-description"))
-                } actions: {
-                    if account.name != nil {
-                        Button("ios-create-playlist", systemImage: "plus") { showCreate = true }
-                            .buttonStyle(.glassProminent)
+        List {
+            Section {
+                Button("ios-create-playlist", systemImage: "plus") { createLocal = true }
+                    .disabled(local.isBusy || !local.isLoaded)
+                ForEach(local.playlists) { playlist in
+                    NavigationLink { LocalPlaylistView(playlistID: playlist.id) } label: {
+                        LocalPlaylistLabel(playlist: playlist, tracks: playlist.tracks(in: library.tracks))
                     }
                 }
-                .modifier(ScrollableEmptyState())
-            } else {
-                List(catalog.savedPlaylists) { playlist in
-                    NavigationLink {
-                        PlaylistDetailView(
-                            playlistID: playlist.id,
-                            fallbackTitle: playlist.title,
-                            fallbackAuthor: playlist.author,
-                            fallbackArtwork: playlist.artworkURL
-                        )
-                    } label: {
-                        HStack(spacing: Layout.spacing) {
-                            AsyncImage(url: playlist.artworkURL) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Image(systemName: "music.note.list")
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.quaternary)
-                            }
-                            .frame(width: 52, height: 52)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(playlist.title).appFont(.body, weight: .medium).lineLimit(1)
-                                Text(playlist.author).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                        }
-                    }
-                }
-                .listStyle(.plain)
-            }
-        }
-        .navigationTitle("ios-playlists")
-        .toolbar {
+            } header: { Text("ios-on-my-iphone") } footer: { Text("ios-local-playlists-description") }
             if account.name != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("ios-create-playlist", systemImage: "plus") { showCreate = true }
-                }
-            }
-        }
-        .sheet(isPresented: $showCreate) {
-            NavigationStack {
-                Form {
-                    TextField("ios-playlist-title", text: $title)
-                    Text("ios-private-playlist-description").foregroundStyle(.secondary)
-                }
-                .navigationTitle("ios-create-playlist")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("ios-done") { showCreate = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("ios-create") {
-                            let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                            showCreate = false
-                            title = ""
-                            description = ""
-                            Task {
-                                do {
-                                    _ = try await NativeProvider.createPlaylist(title: name)
-                                    catalog.loadLibrary(isSignedIn: account.name != nil)
-                                } catch {
-                                    catalog.libraryError = String(localized: "ios-provider-error")
+                Section("ios-youtube-music") {
+                    Button("ios-create-playlist", systemImage: "plus") { createYouTube = true }
+                    if catalog.isLoadingLibrary { ProgressView("ios-loading-library") }
+                    ForEach(catalog.savedPlaylists) { playlist in
+                        NavigationLink {
+                            PlaylistDetailView(playlistID: playlist.id, fallbackTitle: playlist.title,
+                                fallbackAuthor: playlist.author, fallbackArtwork: playlist.artworkURL)
+                        } label: {
+                            HStack(spacing: Layout.spacing) {
+                                ArtworkView(url: playlist.artworkURL, side: Layout.rowArtwork)
+                                VStack(alignment: .leading, spacing: Layout.compact / 2) {
+                                    Text(playlist.title).appFont(.body, weight: .medium).lineLimit(2)
+                                    Text(playlist.author).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                                 }
                             }
                         }
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
             }
+            if let error = local.error {
+                Section { Text(error).foregroundStyle(.secondary); Button("ios-retry") { local.refresh() } }
+            }
+            if let error = catalog.libraryError { Text(error).foregroundStyle(.secondary) }
         }
+        .listStyle(.plain)
+        .navigationTitle("ios-playlists")
+        .navigationDestination(item: $createdID) { LocalPlaylistView(playlistID: $0) }
+        .sheet(isPresented: $createLocal) {
+            NavigationStack { CreateLocalPlaylistView(trackIDs: []) { createdID = $0 } }
+        }
+        .sheet(isPresented: $createYouTube) { NavigationStack { YouTubePlaylistCreationView() } }
     }
 }
 
@@ -758,10 +741,11 @@ struct PlaylistsCollectionView: View {
 struct ArtistsCollectionView: View {
     @Environment(CatalogStore.self) private var catalog
     @Environment(LibraryStore.self) private var library
+    @Environment(LocalLibraryStore.self) private var local
     @Environment(PlaybackController.self) private var playback
 
     private var localArtists: [String] {
-        Array(Set(library.tracks.map(\.artist))).sorted()
+        Array(Dictionary(library.tracks.map { ($0.artist.lowercased(), $0.artist) }, uniquingKeysWith: { first, _ in first }).values).sorted()
     }
 
     var body: some View {
@@ -801,13 +785,12 @@ struct ArtistsCollectionView: View {
                     if !localArtists.isEmpty {
                         Section("ios-library") {
                             ForEach(localArtists, id: \.self) { name in
-                                let tracks = library.tracks.filter { $0.artist == name }
-                                NavigationLink(name) {
-                                    List(tracks) { track in
-                                        TrackRow(track: track) { playback.play(track, in: tracks) }
-                                    }
-                                    .listStyle(.plain)
-                                    .navigationTitle(name)
+                                NavigationLink(name) { LocalArtistView(name: name) }
+                                .contextMenu {
+                                    Button(local.isFavorite(name.lowercased(), category: .artists) ? "ios-remove-favorite" : "ios-favorite",
+                                           systemImage: local.isFavorite(name.lowercased(), category: .artists) ? "star.slash" : "star") {
+                                        local.toggleFavorite(name.lowercased(), category: .artists)
+                                    }.disabled(local.isBusy || !local.isLoaded)
                                 }
                             }
                         }
@@ -2043,13 +2026,49 @@ struct TrackRow: View {
     @Environment(DownloadsStore.self) private var downloads
     @Environment(SettingsStore.self) private var settings
     @Environment(CatalogStore.self) private var catalog
+    @Environment(LocalLibraryStore.self) private var localLibrary
     let track: MusicTrack
     let action: () -> Void
+    private var selectionMode = false
+    @State private var chooseLocalPlaylist = false
+
+    init(track: MusicTrack, action: @escaping () -> Void) { self.track = track; self.action = action }
+
+    /// Makes the existing row a passive label for native multi-selection controls.
+    func selecting() -> Self { var row = self; row.selectionMode = true; return row }
 
     var body: some View {
-        HStack(spacing: Layout.compact) {
-            Button(action: action) {
-                HStack(spacing: Layout.spacing) {
+        Group {
+            if selectionMode { trackContent }
+            else { playbackRow }
+        }
+        .sheet(isPresented: $chooseLocalPlaylist) {
+            NavigationStack { AddToLocalPlaylistView(trackIDs: [track.id]) }
+        }
+    }
+
+    private var playbackRow: some View {
+HStack(spacing: Layout.compact) {
+            Button(action: action) { trackContent }
+            .buttonStyle(.plain)
+
+            Menu {
+                trackMenuItems
+            } label: {
+                Image(systemName: "ellipsis")
+                    .appFont(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: Layout.control, minHeight: Layout.control)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("ios-track-actions"))
+        }
+        .contextMenu { trackMenuItems }
+    }
+
+    private var trackContent: some View {
+HStack(spacing: Layout.spacing) {
                     ArtworkView(track: track, side: Layout.rowArtwork, cornerRadius: 8)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
@@ -2070,6 +2089,10 @@ struct TrackRow: View {
                             .lineLimit(1)
                     }
                     Spacer(minLength: Layout.compact)
+                    if track.youtubeID == nil && localLibrary.favoriteTracks.contains(track.id) {
+                        Image(systemName: "star.fill").appFont(.caption).foregroundStyle(.tint)
+                            .accessibilityLabel(Text("ios-favorite"))
+                    }
                     if downloads.entry(for: track.id)?.state == .downloaded {
                         Image(systemName: "arrow.down.circle.fill")
                             .appFont(.caption)
@@ -2083,23 +2106,8 @@ struct TrackRow: View {
                 }
                 .frame(minHeight: Layout.control)
                 .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Menu {
-                trackMenuItems
-            } label: {
-                Image(systemName: "ellipsis")
-                    .appFont(.body)
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: Layout.control, minHeight: Layout.control)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("ios-track-actions"))
-        }
-        .contextMenu { trackMenuItems }
     }
+
 
     @ViewBuilder
     private var trackMenuItems: some View {
@@ -2108,6 +2116,9 @@ struct TrackRow: View {
         }
         Button("ios-add-to-queue", systemImage: "text.badge.plus") {
             playback.addToQueue(track)
+        }
+        if track.youtubeID == nil {
+            LocalTrackActions(track: track) { chooseLocalPlaylist = true }
         }
         if track.youtubeID != nil {
             Button("ios-start-radio", systemImage: "dot.radiowaves.left.and.right") {
@@ -2151,14 +2162,26 @@ struct ArtworkView: View {
     let track: MusicTrack?
     let side: CGFloat
     var cornerRadius: CGFloat = Layout.compact
+    private let suppliedURL: URL?
+    private var symbol = "music.note"
 
-    private var artworkURL: URL? { ArtworkRendition.url(track?.displayArtworkURL, side: side) }
+    init(track: MusicTrack?, side: CGFloat, cornerRadius: CGFloat = Layout.compact) {
+        self.track = track; self.side = side; self.cornerRadius = cornerRadius; suppliedURL = nil
+    }
+
+    init(url: URL?, side: CGFloat, cornerRadius: CGFloat = Layout.compact) {
+        track = nil; self.side = side; self.cornerRadius = cornerRadius; suppliedURL = url
+    }
+
+    func placeholderSymbol(_ name: String) -> Self { var view = self; view.symbol = name; return view }
+
+    private var artworkURL: URL? { ArtworkRendition.url(suppliedURL ?? track?.displayArtworkURL, side: side) }
 
     var body: some View {
         ArtworkImage(url: artworkURL) { image in
             image.resizable().scaledToFill()
         } placeholder: {
-            Image(systemName: "music.note")
+            Image(systemName: symbol)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.quaternary)

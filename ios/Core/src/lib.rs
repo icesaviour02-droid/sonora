@@ -3,7 +3,13 @@
 
 // Reuse the desktop's allocation-free DSP and preset curves, without its rodio output plumbing.
 mod audio_effects;
+#[path = "../../../crates/music/src/local/store.rs"]
+pub mod desktop_local_store;
+#[path = "../../../crates/music/src/local_ids.rs"]
+mod local_ids;
+mod local_library;
 mod lyric_bridge;
+pub use local_ids::*;
 #[path = "../../../crates/music/src/models.rs"]
 pub mod models;
 mod request_lifetime;
@@ -187,6 +193,10 @@ fn session() -> &'static RwLock<Session> {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 enum Request {
+    LocalLibrary {
+        database_path: String,
+        action: local_library::Action,
+    },
     #[cfg(any(debug_assertions, feature = "review-fixtures"))]
     ReviewWait {
         milliseconds: u64,
@@ -421,6 +431,10 @@ pub unsafe extern "C" fn sonora_mobile_string_free(json: *mut c_char) {
 
 async fn execute(request: Request) -> Result<Value> {
     match request {
+        Request::LocalLibrary {
+            database_path,
+            action,
+        } => return local_library::execute(database_path, action).await,
         #[cfg(any(debug_assertions, feature = "review-fixtures"))]
         Request::ReviewWait { milliseconds } => {
             tokio::time::sleep(Duration::from_millis(milliseconds.min(5_000))).await;
@@ -698,6 +712,7 @@ async fn execute(request: Request) -> Result<Value> {
         }
         #[cfg(any(debug_assertions, feature = "review-fixtures"))]
         Request::ReviewWait { .. } => unreachable!("handled before session read"),
+        Request::LocalLibrary { .. } => unreachable!("handled before session read"),
         Request::Configure { .. }
         | Request::PoTokenWanted {}
         | Request::PoTokenGive { .. }

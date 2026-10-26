@@ -7,6 +7,7 @@ struct SonoraApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var account = AccountStore()
     @State private var library = LibraryStore()
+    @State private var localLibrary = LocalLibraryStore()
     @State private var settings: SettingsStore
     @State private var downloads: DownloadsStore
     @State private var playback: PlaybackController
@@ -29,6 +30,7 @@ struct SonoraApp: App {
             RootView()
                 .environment(account)
                 .environment(library)
+                .environment(localLibrary)
                 .environment(settings)
                 .environment(playback)
                 .environment(youtube)

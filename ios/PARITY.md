@@ -1,8 +1,8 @@
 # Desktop parity and release gates
 
 This is the acceptance checklist for the requested iPhone port. A successful IPA build is not
-feature acceptance. Test IPAs remain internal until these gates pass; previous beta links are
-not a release recommendation. The target phone is iPhone 13, reported iOS 27.
+feature acceptance. Final releases remain gated; a user-requested development snapshot can be
+provided with explicit limitations and source/build metadata. The target phone is iPhone 13, reported iOS 27.
 
 Sources: README.md Features, crates/music/src/lib.rs MusicApi/Capabilities,
 crates/router/src/lib.rs Destination/SettingsPage, and crates/state/src/.
@@ -45,7 +45,7 @@ whose behavior can be used as a separate reference.
 | Synced/karaoke lyrics, background vocals, romanization | 53 shared tests pass on Linux/Apple; simulator decodes 38 lines, 203 timed words and three source choices; nine native import/cache/source checks pass; actual timed playback interaction pending | Playback timing/seek synchronization, alternate sources/languages and fallback |
 | LastFM/ListenBrainz/LibreFM/Maloja scrobbling | ListenBrainz/Maloja payloads, now-playing, earned thresholds and durable account-isolated retries pass sixteen Apple checks with an injected transport; real service delivery and LastFM/LibreFM linking missing | Auth, now-playing, completed listens, offline retry and duplicate prevention |
 | Apple Music/Spotify/Deezer/Tidal/Subsonic/Navidrome | Missing | Each provider's supported sign-in, catalog, playback, library and download capabilities |
-| Local albums/artists/playlists, folders/tag editing | Local artist lists and tagged album grouping exist; fifteen Apple generated-AAC checks pass for cover/metadata/embedded lyrics, grouping/order and cleanup; local playlists/folders/tag editing missing | Files security scope, metadata editing, indexes and rescan behavior |
+| Local albums/artists/playlists, folders/tag editing | Tagged albums/artists exist; native local playlists/favorites now reuse desktop SQLite, with sixteen Linux boundary checks passing; Swift CRUD/reorder/relaunch checks pending; folders/tag editing missing | Files security scope, metadata editing, indexes and rescan behavior |
 | Appearance/fonts/icons/themes/layout customization | Native SF Pro Rounded/Inter selection, registration and relaunch verified in simulator; custom imports and artwork accents implemented; fuller customization missing | Import/remove/preview and persistence, Dynamic Type across screens, theme contrast, motion and desktop option inventory |
 | Storage/cache management | Partial download removal only | Usage counts, clearing, low storage, damaged indexes and interrupted writes |
 | Localization/accessibility | English native strings; initial visual review verified | VoiceOver, large text across populated screens, contrast, reduced motion/transparency |

@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iPhone users can create and edit local playlists without a streaming account, reorder their songs, and keep track, album and artist favorites on the device.
+
 - iPhone sound-profile editors show the frequency response calculated by the audio filters before a profile is saved.
 
 - Imported iPhone music can show embedded cover art and lyrics, and local albums appear in Library with album-artist grouping and disc/track ordering.
@@ -33,6 +35,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Account playback compatibility is still under verification.
 
 ### Fixed
+
+- Local playlist edits preserve existing songs when a save fails. Imported music loads before remote account restoration so local controls can remain available offline.
 
 - Canceled iPhone catalog and lyrics loads stop their background work. Equalizer changes from the player menu apply immediately, like changes in Sound settings.
 

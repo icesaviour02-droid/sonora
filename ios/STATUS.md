@@ -284,3 +284,39 @@ arm64 iPhone build and package integrity checks, while simulator acceptance stil
 push builds and the final unsigned artifact retain the existing full acceptance gate. Development
 snapshots do not establish feature completeness. Package metadata now records source commit,
 workflow run, build kind/time, build number and SHA-256. This snapshot increments the build to 10.
+
+## Verified build 10 device archive and local library work (26 October 2026)
+
+The user's requested development IPA is saved, unchanged, in build/LATEST-VERSION as
+Sonora-0.3.0-build10-aad9b1de.ipa (6,927,846 bytes; SHA-256
+82b2f2e2f85cf332ab92124591df692b300c8bb7b6e383c7ce891967b9bc4208).
+Source aad9b1de; manual run 40287973238. Local validation checked archive CRC, source/hash, version,
+and the actual arm64 Mach-O iPhoneOS platform (2), excluding Simulator platform (7).
+Direct a6a322db artifacts confirm all three Swift cancellation and all three live sound-observation
+checks passed. The clipped response graph was visually inspected; its notch no longer crosses
+the caption. Guest verification remains failed and the full goal is active. This development
+snapshot was explicitly requested; it is not a feature-complete release.
+
+Build 11 work adds native local playlists, track/album/artist favorites and local artist pages.
+The backend compiles the exact desktop local Store and storage crate, including SQLite schema,
+with shared local ID namespaces. Bulk create/add/remove/delete/reorder operations are transactional;
+stale/duplicate reorders are rejected. Deleted imports are cleaned out of playlists/favorites.
+Sixteen native-boundary checks pass on Linux, including SQLite trigger-induced failure rollback,
+NUL/Unicode IDs, duplicate prevention and damaged-file preservation. All 53 existing shared tests
+and Clippy pass. Native state owns serialized writes; native drag ordering updates immediately and
+rolls back/refetches on save failure. Canonically equivalent favorite names use a normalized ID.
+
+Library Playlists combines account-independent local playlists and the existing YouTube collection.
+Creation, selection/search, editing, add/remove/reorder, favorites, album/artist navigation and
+player actions reuse shared song/artwork components. Local bootstrap now runs before remote account
+restoration and the root no longer disables all local controls while sign-in is pending. Home is
+refreshed after account restoration. Physical airplane-mode startup remains unverified.
+Thirteen Swift state checks and four actual app-relaunch checks, using real imported generated AAC
+files and a review-only database, are added; Apple compilation/runtime evidence is pending.
+Build 10 remains frozen for the user; these new changes belong to the next build.
+
+Known next authentication issue: pinned ytmusic-rs persist_cookies explicitly replaces freshly
+supplied headers when its cookie file exists. The current authenticate builder always enables that
+file, so an old saved store can shadow a new login. Account restore/renewal also needs reliable
+Keychain persistence of rotated cookies. This has been confirmed by source inspection, not fixed
+or accepted with a real account. System Safari Google OAuth remains unimplemented.

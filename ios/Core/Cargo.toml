@@ -21,6 +21,8 @@ flate2 = "1"
 percent-encoding = "2"
 dirs = "6"
 serde_norway = "0.9"
+rusqlite = { version = "0.32", features = ["bundled"] }
+storage = { path = "../../crates/storage", features = ["bundled-sqlite"] }
 
 [package]
 name = "sonora-mobile-core"
@@ -52,6 +54,8 @@ flate2.workspace = true
 percent-encoding.workspace = true
 dirs.workspace = true
 serde_norway.workspace = true
+rusqlite.workspace = true
+storage.workspace = true
 
 # Upstream ships desktop bindings but no pre-generated iOS bindings. Generate those against
 # the selected Apple SDK instead of copying macOS ABI declarations into the iPhone build.

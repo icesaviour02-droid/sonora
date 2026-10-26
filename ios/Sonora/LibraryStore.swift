@@ -52,6 +52,17 @@ final class LibraryStore {
     }
 
     #if DEBUG
+    /// Imports a tagged, self-generated recording for native playlist presentation checks.
+    func importReviewRecording() async -> MusicTrack? {
+        let before = Set(tracks.map(\.id))
+        do {
+            let file = try await files.taggedReviewFile(URL.cachesDirectory.appendingPathComponent("sonora-review-tone.wav"))
+            defer { try? FileManager.default.removeItem(at: file) }
+            await importFiles([file])
+            return tracks.first { !before.contains($0.id) }
+        } catch { return nil }
+    }
+
     /// Imports the runner's generated WAV, checks the real player clock and removes that import.
     func reviewLocalPlayback(_ playback: PlaybackController) {
         reviewTask?.cancel()

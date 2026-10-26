@@ -59,6 +59,10 @@ private func receiveNativeReply(_ context: UnsafeMutableRawPointer?, _ json: Uns
 
 /// Thin asynchronous adapter. All provider sockets and stream resolution run in the Rust core.
 enum NativeProvider {
+    static func localLibrary(at database: URL, action: [String: Any]) async throws -> LocalLibrarySnapshot {
+        try await request(["operation": "local_library", "database_path": database.path, "action": action])
+    }
+
     struct EqualizerDescription: Decodable {
         let filters: [SoundFilter]
         let auto_preamp: Bool
@@ -632,6 +636,8 @@ final class CatalogStore {
     var libraryError: String?
     @ObservationIgnored private var homeTask: Task<Void, Never>?
     @ObservationIgnored private var libraryTask: Task<Void, Never>?
+    @ObservationIgnored private var playlistTask: Task<Void, Never>?
+    private(set) var isCreatingPlaylist = false
 
     func loadHome(force: Bool = false) {
         if !force && (!homeSections.isEmpty || isLoadingHome) { return }
@@ -684,7 +690,30 @@ final class CatalogStore {
         }
     }
 
+    func createPlaylist(title: String, completed: @escaping () -> Void) {
+        guard !isCreatingPlaylist else { return }
+        isCreatingPlaylist = true
+        libraryError = nil
+        playlistTask = Task { [weak self] in
+            do {
+                _ = try await NativeProvider.createPlaylist(title: title)
+                try Task.checkCancellation()
+                guard let self else { return }
+                self.isCreatingPlaylist = false
+                self.loadLibrary(isSignedIn: true)
+                completed()
+            } catch is CancellationError {
+            } catch {
+                self?.isCreatingPlaylist = false
+                self?.libraryError = String(localized: "ios-provider-error")
+            }
+        }
+    }
+
     func clearLibrary() {
+        playlistTask?.cancel()
+        playlistTask = nil
+        isCreatingPlaylist = false
         libraryTask?.cancel()
         likedSongs = []
         savedAlbums = []

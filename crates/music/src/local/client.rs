@@ -318,6 +318,10 @@ impl MusicApi for LocalClient {
         self.store.add(playlist_id, track_id)
     }
 
+    async fn add_tracks_to_playlist(&self, playlist_id: &str, track_ids: &[String]) -> Result<()> {
+        self.store.add_many(playlist_id, track_ids)
+    }
+
     async fn remove_track_from_playlist(&self, playlist_id: &str, track_id: &str) -> Result<()> {
         self.store.remove(playlist_id, track_id)
     }
