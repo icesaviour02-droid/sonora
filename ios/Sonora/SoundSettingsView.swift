@@ -267,17 +267,8 @@ private struct SoundFilterEditor: View {
                     .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
             }
             if filter.kind.hasGain { DecibelControl(title: "ios-filter-gain", value: $filter.gain, range: -24...24) }
-            if !filter.kind.isShelf {
-                Picker("ios-filter-width-unit", selection: $filter.widthUnit) {
-                    ForEach(SoundWidthUnit.allCases) { unit in Text(unit.label).tag(unit) }
-                }
-                .onChange(of: filter.widthUnit) { _, unit in
-                    filter.width = min(max(filter.width, unit == .q ? 0.05 : 0.01), unit == .q ? 50 : 6)
-                }
-            }
-            Stepper(value: $filter.width, in: filter.widthUnit == .q ? 0.05...50 : 0.01...6, step: 0.01) {
-                LabeledContent(filter.widthUnit.label) { Text(filter.width, format: .number.precision(.fractionLength(0...3))) }
-            }
+            if !filter.kind.isShelf { widthPicker }
+            widthControl
         }
         .navigationTitle("ios-sound-filter")
         .toolbar {
@@ -285,6 +276,27 @@ private struct SoundFilterEditor: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("ios-done") { saved(filter); dismiss() }
                     .disabled(!filter.frequency.isFinite || !(10...24_000).contains(filter.frequency))
+            }
+        }
+    }
+
+    private var widthRange: ClosedRange<Double> {
+        filter.widthUnit == .q ? 0.05...50.0 : 0.01...6.0
+    }
+
+    private var widthPicker: some View {
+        Picker("ios-filter-width-unit", selection: $filter.widthUnit) {
+            ForEach(SoundWidthUnit.allCases) { unit in Text(unit.label).tag(unit) }
+        }
+        .onChange(of: filter.widthUnit) { _, _ in
+            filter.width = min(max(filter.width, widthRange.lowerBound), widthRange.upperBound)
+        }
+    }
+
+    private var widthControl: some View {
+        Stepper(value: $filter.width, in: widthRange, step: 0.01) {
+            LabeledContent(filter.widthUnit.label) {
+                Text(filter.width, format: .number.precision(.fractionLength(0...3)))
             }
         }
     }
