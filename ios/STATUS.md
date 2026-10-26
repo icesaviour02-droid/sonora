@@ -559,5 +559,12 @@ entitlements, as required by current Apple signing formats, and uses a complete 
 application identity. The device IPA remains unsigned and does not contain these test identities.
 The selected Simulator application's display services are activated by CLI for UI tests, with
 no screenshots. Initial-launch failures now retain only termination/exception metadata from a
-Sonora crash report for diagnosis. Apple reference: 
+Sonora crash report for diagnosis. Apple reference:
 https://developer.apple.com/documentation/xcode/using-the-latest-code-signature-format .
+
+Run 40381404738 at 12e6111b compiled device/simulator and generated the verified device IPA,
+but this runner image has command-line simulator services without the Simulator.app GUI bundle.
+The added GUI activation failed before installation or launch. That optional activation is
+removed entirely; headless simctl remains the path used by earlier successful native checks.
+This was a runner setup error, not an app feature result. DER signature and launch diagnostics
+remain. No GUI or screenshot work is requested.

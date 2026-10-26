@@ -278,10 +278,6 @@ if __name__ == "__main__":
     udid = sim("create", "Sonora iPhone 13 Review", device_type, runtime["identifier"])
     try:
         sim("boot", udid)
-        developer = Path(subprocess.check_output(["xcode-select", "-p"], text=True).strip())
-        # Activate the simulator's display services for real UI tests; no images are captured.
-        subprocess.run(["open", "-a", str(developer / "Applications/Simulator.app"),
-                        "--args", "-CurrentDeviceUDID", udid], check=True, timeout=30)
         sim("bootstatus", udid, "-b")
         sim("install", udid, str(IOS / "build/simulator/Build/Products/Debug-iphonesimulator/Sonora.app"))
         try:
