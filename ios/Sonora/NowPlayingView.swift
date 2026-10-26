@@ -390,7 +390,6 @@ struct NowPlayingView: View {
                     Button {
                         settings.equalizerEnabled = true
                         settings.equalizerPreset = preset
-                        playback.applyAudioGain()
                     } label: {
                         HStack {
                             Text(preset.labelKey)

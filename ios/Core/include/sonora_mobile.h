@@ -10,9 +10,13 @@
 typedef void (*SonoraMobileCallback)(void *context, char *json);
 
 // Copies request_json before returning. Context must remain valid until the callback runs.
-// Returns 0 when accepted, 1 for invalid input, or 2 if the runtime could not start.
+// Returns 0 when accepted, 1 for invalid input/duplicate ID/full capacity, or 2 if the runtime could not start.
 int32_t sonora_mobile_request(const char *request_json, void *context, SonoraMobileCallback callback);
 void sonora_mobile_string_free(char *json);
+// Optional request_id in the JSON must be unique until its callback arrives.
+// Cancellation stops the work and still delivers exactly one owned callback response.
+bool sonora_mobile_cancel(const char *request_id);
+uint32_t sonora_mobile_pending_requests(void);
 
 // Prepare/destroy off the render thread. Process/reset exclusively on its owning render thread.
 void *sonora_audio_stage_create(void);

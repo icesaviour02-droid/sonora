@@ -16,7 +16,33 @@ enum ProviderError: LocalizedError {
     }
 }
 
-/// Native response ownership lasts through cancellation until the bounded Rust callback arrives.
+/// Keeps start/cancel ordered so cancellation cannot race ahead of native request registration.
+private final class NativeCancellation: @unchecked Sendable {
+    let id = UUID().uuidString
+    private let lock = NSLock()
+    private var started = false
+    private var cancelled = false
+
+    func start(_ submit: () -> Void) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !cancelled else { return false }
+        started = true
+        submit()
+        return true
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let needsCancel = started
+        lock.unlock()
+        if needsCancel { id.withCString { _ = sonora_mobile_cancel($0) } }
+    }
+}
+
+/// Ownership lasts until one callback; cancellation stops work without abandoning the continuation.
+
 private final class NativeReply {
     let continuation: CheckedContinuation<Data, Error>
     init(_ continuation: CheckedContinuation<Data, Error>) { self.continuation = continuation }
@@ -440,17 +466,54 @@ enum NativeProvider {
         ])
     }
 
-    private static func request<Value: Decodable>(_ request: [String: Any]) async throws -> Value {
-        let encoded = try JSONSerialization.data(withJSONObject: request)
-        guard let input = String(data: encoded, encoding: .utf8) else { throw ProviderError.unavailable }
-        let data: Data = try await withCheckedThrowingContinuation { continuation in
-            let reply = Unmanaged.passRetained(NativeReply(continuation))
-            let result = input.withCString { sonora_mobile_request($0, reply.toOpaque(), receiveNativeReply) }
-            if result != 0 {
-                reply.release()
-                continuation.resume(throwing: ProviderError.unavailable)
-            }
+    #if DEBUG
+    /// Exercises the Swift continuation/cancellation handshake against delayed native work.
+    static func reviewCancellation() async -> [String: Bool] {
+        var checks: [String: Bool] = [:]
+        let inFlight = Task { () throws -> [String: Bool] in
+            try await request(["operation": "review_wait", "milliseconds": 5_000])
         }
+        try? await Task.sleep(for: .milliseconds(50))
+        let start = Date()
+        inFlight.cancel()
+        do { _ = try await inFlight.value; checks["swift_inflight_cancel"] = false }
+        catch is CancellationError { checks["swift_inflight_cancel"] = Date().timeIntervalSince(start) < 1 }
+        catch { checks["swift_inflight_cancel"] = false }
+        let early = Task { () throws -> [String: Bool] in
+            try await request(["operation": "review_wait", "milliseconds": 5_000])
+        }
+        early.cancel()
+        do { _ = try await early.value; checks["swift_early_cancel"] = false }
+        catch is CancellationError { checks["swift_early_cancel"] = true }
+        catch { checks["swift_early_cancel"] = false }
+        do {
+            let answer: [String: Bool] = try await request(["operation": "review_wait", "milliseconds": 1])
+            checks["swift_normal_completion"] = answer["completed"] == true
+        } catch { checks["swift_normal_completion"] = false }
+        return checks
+    }
+    #endif
+
+    private static func request<Value: Decodable>(_ request: [String: Any]) async throws -> Value {
+        try Task.checkCancellation()
+        let cancellation = NativeCancellation()
+        var payload = request
+        payload["request_id"] = cancellation.id
+        let encoded = try JSONSerialization.data(withJSONObject: payload)
+        guard let input = String(data: encoded, encoding: .utf8) else { throw ProviderError.unavailable }
+        let data: Data = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let started = cancellation.start {
+                    let reply = Unmanaged.passRetained(NativeReply(continuation))
+                    let result = input.withCString { sonora_mobile_request($0, reply.toOpaque(), receiveNativeReply) }
+                    if result != 0 {
+                        reply.release()
+                        continuation.resume(throwing: ProviderError.unavailable)
+                    }
+                }
+                if !started { continuation.resume(throwing: CancellationError()) }
+            }
+        } onCancel: { cancellation.cancel() }
         try Task.checkCancellation()
         let envelope = try JSONDecoder().decode(Envelope<Value>.self, from: data)
         guard envelope.ok, let value = envelope.data else {
@@ -460,6 +523,7 @@ enum NativeProvider {
             }
             #endif
             switch envelope.error {
+            case "cancelled": throw CancellationError()
             case "timeout": throw ProviderError.timeout
             case "sign_in_required": throw ProviderError.signInRequired
             case "verification_required": throw ProviderError.verificationRequired

@@ -18,6 +18,7 @@ on:
       - 'crates/music/src/escape.rs'
       - 'ios/scripts/audio_effects_check.py'
       - 'ios/scripts/lyrics_check.py'
+      - 'ios/scripts/cancellation_check.py'
       - '.github/workflows/mobile-core.yml'
   pull_request:
     paths:
@@ -35,6 +36,7 @@ on:
       - 'crates/music/src/escape.rs'
       - 'ios/scripts/audio_effects_check.py'
       - 'ios/scripts/lyrics_check.py'
+      - 'ios/scripts/cancellation_check.py'
       - '.github/workflows/mobile-core.yml'
 
 permissions:
@@ -73,6 +75,7 @@ jobs:
           cargo build --manifest-path ios/Core/Cargo.toml --locked
           python3 ios/scripts/audio_effects_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
           python3 ios/scripts/lyrics_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
+          python3 ios/scripts/cancellation_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
       - name: Build native iPhone and simulator libraries
         run: |
           export LIBCLANG_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"

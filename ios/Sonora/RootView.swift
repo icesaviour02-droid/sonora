@@ -120,6 +120,14 @@ struct RootView: View {
             guestProbe.start(playback: playback) { playerMode = "artwork"; showPlayer = true }
             return
         }
+        if url.host == "soundobservationreview" {
+            settings.reviewAudioObservation(playback: playback)
+            return
+        }
+        if url.host == "requestreview" {
+            settings.reviewNativeRequests()
+            return
+        }
         if url.host == "scrobblereview" {
             settings.reviewScrobbling()
             return
@@ -1931,7 +1939,6 @@ struct SettingsView: View {
                         }
                     }
                     Toggle("ios-normalize-loudness", isOn: $settings.normalizeVolume)
-                        .onChange(of: settings.normalizeVolume) { _, _ in playback.applyAudioGain() }
                     Toggle("ios-autoplay-radio", isOn: $settings.autoplayRadio)
                     Picker("ios-sleep-timer", selection: Binding(
                         get: { settings.sleepTimer },

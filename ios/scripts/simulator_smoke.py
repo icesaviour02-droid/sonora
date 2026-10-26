@@ -125,6 +125,14 @@ if __name__ == "__main__":
         scrobbling = evidence(container, "scrobble-review.json", timeout=90)
         if not scrobbling or not scrobbling.get("passed"):
             raise RuntimeError("Listening thresholds, durable scrobble retry or account isolation failed")
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://requestreview")
+        requests = evidence(container, "native-requests-review.json")
+        if not requests or not requests.get("passed"):
+            raise RuntimeError("Swift/native cancellation or callback completion failed")
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://soundobservationreview")
+        sound_observation = evidence(container, "sound-observation-review.json")
+        if not sound_observation or not sound_observation.get("passed"):
+            raise RuntimeError("Live sound settings/menu observation or latest-configuration handling failed")
         fixture = json.loads((IOS / "scripts/review-track.json").read_text())
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://soundprofilesreview")
         sound_profiles = evidence(container, "sound-profiles-review.json", timeout=90)

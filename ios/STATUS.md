@@ -239,3 +239,24 @@ from the exact desktop Curve response, including filter centre frequencies. A Li
 compares the graph at the test filter's centre to actual rendered PCM within 0.02 dB; it passes,
 along with Clippy and Swift syntax. Previewing still leaves playing audio unchanged. Apple graph
 compilation, rendering and accessibility review remain pending.
+
+## Request cancellation and sound observation (26 October 2026)
+
+Native requests now have bounded IDs and explicit cancellation. Canceling a Swift task signals the
+Tokio work, drops the request future and still returns exactly one owned callback. Start/cancel are
+ordered by a small lock outside the audio thread; duplicate IDs and more than 256 simultaneous
+registered requests are rejected. Cancellation does not abandon checked continuations. A host C
+stress check passed 256 pending cancellations, 100 completion races, normal completion, duplicate
+rejection and zero registrations remaining. All 53 shared tests, existing boundary checks, Clippy
+and Swift syntax still pass. Swift early/in-flight/normal cancellation acceptance is pending Apple.
+
+The player-menu EQ toggle previously lacked a direct apply handler. Sound configuration is now
+observed once at app scope, covering preset, bypass, preamp, tone, normalization and profile edits
+regardless of which screen changed them. Duplicate per-screen apply handlers have been removed.
+Three native observation/latest-configuration checks are included; Apple results remain pending.
+
+Directly downloaded local-playback-review.json from run 40269539723 confirms fifteen passing
+checks, including actual tagged AAC export/import, cover/metadata restoration, embedded lyrics,
+compilation grouping/order, native processed frames, real clock/pause/seek and media/cover removal.
+The fixture is self-generated audio, cover and lyric text. Local album touch navigation and physical
+phone behavior are still outstanding.

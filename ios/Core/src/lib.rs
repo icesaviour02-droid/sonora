@@ -6,6 +6,7 @@ mod audio_effects;
 mod lyric_bridge;
 #[path = "../../../crates/music/src/models.rs"]
 pub mod models;
+mod request_lifetime;
 pub use models::*;
 #[path = "../../../crates/music/src/lyrics/mod.rs"]
 pub mod lyrics;
@@ -186,6 +187,10 @@ fn session() -> &'static RwLock<Session> {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 enum Request {
+    #[cfg(debug_assertions)]
+    ReviewWait {
+        milliseconds: u64,
+    },
     EqualizerConfigure {
         revision: u64,
         enabled: bool,
@@ -320,12 +325,25 @@ pub unsafe extern "C" fn sonora_mobile_request(
     if request_json.is_null() {
         return 1;
     }
-    let request = match unsafe { CStr::from_ptr(request_json) }.to_str() {
-        Ok(value) => match serde_json::from_str::<Request>(value) {
-            Ok(request) => request,
-            Err(_) => return 1,
-        },
-        Err(_) => return 1,
+    let (request, request_id) = match unsafe { CStr::from_ptr(request_json) }.to_str() {
+        Ok(value) if value.len() <= 8 * 1_024 * 1_024 => {
+            let Ok(mut value) = serde_json::from_str::<Value>(value) else {
+                return 1;
+            };
+            let Some(object) = value.as_object_mut() else {
+                return 1;
+            };
+            let id = match object.remove("request_id") {
+                None => None,
+                Some(Value::String(id)) => Some(id),
+                _ => return 1,
+            };
+            let Ok(request) = serde_json::from_value::<Request>(value) else {
+                return 1;
+            };
+            (request, id)
+        }
+        _ => return 1,
     };
     let runtime = RUNTIME.get_or_init(|| {
         Builder::new_multi_thread()
@@ -335,6 +353,13 @@ pub unsafe extern "C" fn sonora_mobile_request(
             .map_err(|error| error.to_string())
     });
     let Ok(runtime) = runtime else { return 2 };
+    let cancellation = match request_id.as_deref() {
+        Some(id) => match request_lifetime::register(id) {
+            Some(receiver) => Some(receiver),
+            None => return 1,
+        },
+        None => None,
+    };
     // Rust does not dereference the host context. Only the host callback interprets it.
     let context = context as usize;
     runtime.spawn(async move {
@@ -342,31 +367,45 @@ pub unsafe extern "C" fn sonora_mobile_request(
             Request::Resolve { .. } => Duration::from_secs(90),
             _ => DEADLINE,
         };
-        let outcome = tokio::time::timeout(deadline, execute(request)).await;
-        let response = match outcome {
-            Ok(Ok(data)) => json!({ "ok": true, "data": data }),
-            Ok(Err(error)) => {
-                let message = format!("{error:#}").to_lowercase();
-                let verification = message.contains("not a bot");
-                let code = if verification { "verification_required" }
-                    else if error.downcast_ref::<audio_effects::InvalidConfiguration>().is_some() { "equalizer_invalid" }
-                    else if error.downcast_ref::<ytmusic::SignInRequired>().is_some() { "sign_in_required" }
-                    else { "provider_unavailable" };
-                json!({ "ok": false, "error": code, "diagnostics": {
-                    "network_verification": verification,
-                    "decipher_problem": message.contains("solver") || message.contains("decipher") || message.contains("quickjs"),
-                    "audio_host_refused": message.contains("is not being served") || message.contains("stream host refused"),
-                    "api_login_required": message.contains("login_required"),
-                }})
-            }
-            Err(_) => json!({ "ok": false, "error": "timeout" }),
+        let work = async { response_for(tokio::time::timeout(deadline, execute(request)).await) };
+        let response = match cancellation {
+            Some(receiver) => tokio::select! {
+                biased;
+                _ = receiver => json!({ "ok": false, "error": "cancelled" }),
+                response = work => response,
+            },
+            None => work.await,
         };
+        if let Some(id) = request_id {
+            request_lifetime::finish(&id);
+        }
         // JSON serialization escapes interior NULs, so a CString is always representable.
         if let Ok(encoded) = CString::new(response.to_string()) {
             callback(context as *mut c_void, encoded.into_raw());
         }
     });
     0
+}
+
+/// Cancels a registered request; its callback still arrives exactly once with a cancelled response.
+///
+/// # Safety
+/// `request_id` must point to a NUL-terminated UTF-8 ID for this call, or be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sonora_mobile_cancel(request_id: *const c_char) -> bool {
+    if request_id.is_null() {
+        return false;
+    }
+    unsafe { CStr::from_ptr(request_id) }
+        .to_str()
+        .ok()
+        .is_some_and(request_lifetime::cancel)
+}
+
+/// The number of registered calls still doing work; safe on a diagnostics thread, not audio render.
+#[unsafe(no_mangle)]
+pub extern "C" fn sonora_mobile_pending_requests() -> u32 {
+    request_lifetime::pending()
 }
 
 /// Releases exactly one response returned by `sonora_mobile_request`.
@@ -382,6 +421,12 @@ pub unsafe extern "C" fn sonora_mobile_string_free(json: *mut c_char) {
 
 async fn execute(request: Request) -> Result<Value> {
     match request {
+        #[cfg(debug_assertions)]
+        Request::ReviewWait { milliseconds } => {
+            tokio::time::sleep(Duration::from_millis(milliseconds.min(5_000))).await;
+            return Ok(json!({ "completed": true }));
+        }
+
         Request::Configure { cache_dir } => {
             let dir = PathBuf::from(cache_dir.trim());
             if dir.as_os_str().is_empty() {
@@ -651,6 +696,8 @@ async fn execute(request: Request) -> Result<Value> {
                 .await?;
             Ok(json!({ "removed": true }))
         }
+        #[cfg(debug_assertions)]
+        Request::ReviewWait { .. } => unreachable!("handled before session read"),
         Request::Configure { .. }
         | Request::PoTokenWanted {}
         | Request::PoTokenGive { .. }
@@ -658,6 +705,36 @@ async fn execute(request: Request) -> Result<Value> {
         | Request::ListAccounts { .. }
         | Request::Authenticate { .. }
         | Request::SignOut {} => unreachable!("handled before session read"),
+    }
+}
+
+/// Keeps stable error categories independent from request cancellation and callback ownership.
+fn response_for(outcome: Result<Result<Value>, tokio::time::error::Elapsed>) -> Value {
+    match outcome {
+        Ok(Ok(data)) => json!({ "ok": true, "data": data }),
+        Ok(Err(error)) => {
+            let message = format!("{error:#}").to_lowercase();
+            let verification = message.contains("not a bot");
+            let code = if verification {
+                "verification_required"
+            } else if error
+                .downcast_ref::<audio_effects::InvalidConfiguration>()
+                .is_some()
+            {
+                "equalizer_invalid"
+            } else if error.downcast_ref::<ytmusic::SignInRequired>().is_some() {
+                "sign_in_required"
+            } else {
+                "provider_unavailable"
+            };
+            json!({ "ok": false, "error": code, "diagnostics": {
+                "network_verification": verification,
+                "decipher_problem": message.contains("solver") || message.contains("decipher") || message.contains("quickjs"),
+                "audio_host_refused": message.contains("is not being served") || message.contains("stream host refused"),
+                "api_login_required": message.contains("login_required"),
+            }})
+        }
+        Err(_) => json!({ "ok": false, "error": "timeout" }),
     }
 }
 

@@ -90,6 +90,8 @@ final class NativeAudioEffects {
     private var attachmentError: String?
     var error: String? { configurationError ?? attachmentError }
     private(set) var preampDB: Double = 0
+    private(set) var enabled = false
+    private(set) var appliedRevision: UInt64 = 0
     private(set) var isAttached = false
     private(set) var isPreparing = false
     @ObservationIgnored private var context: AudioTapContext?
@@ -107,6 +109,7 @@ final class NativeAudioEffects {
         configurationTask?.cancel()
         revision &+= 1
         let revision = revision
+        let enabled = settings.equalizerEnabled
         let profile = settings.equalizerPreset == .custom ? settings.soundProfiles.selected : nil
         var request: [String: Any] = [
             "operation": "equalizer_configure", "revision": revision,
@@ -119,7 +122,9 @@ final class NativeAudioEffects {
         configurationTask = Task { [weak self] in
             do {
                 let result = try await NativeProvider.configureEqualizer(request)
-                guard let self, self.revision == revision else { return }
+                guard let self, self.revision == revision, result.applied else { return }
+                self.enabled = enabled
+                self.appliedRevision = revision
                 self.preampDB = result.preamp_db
                 self.configurationError = nil
             } catch is CancellationError {

@@ -69,6 +69,7 @@ struct SoundResponseView: View {
         }
         .chartXScale(domain: 20.0...20_000.0, type: .log)
         .chartYScale(domain: outputRange)
+        .chartPlotStyle { plot in plot.clipped() }
         .chartXAxis {
             AxisMarks(values: [20.0, 100.0, 1_000.0, 10_000.0, 20_000.0]) { value in
                 AxisGridLine()

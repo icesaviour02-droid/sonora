@@ -47,6 +47,23 @@ private enum ScrobbleKeychain {
 @MainActor @Observable
 final class SettingsStore {
     let soundProfiles = SoundProfileStore()
+    struct AudioConfigurationKey: Equatable {
+        let enabled: Bool
+        let preset: EqualizerPreset
+        let automatic: Bool
+        let preamp: Double
+        let bass: Double
+        let treble: Double
+        let normalization: Bool
+        let profilesRevision: Int
+    }
+    /// One observation path covers changes from the player menu, settings and imported profiles.
+    var audioConfigurationKey: AudioConfigurationKey {
+        AudioConfigurationKey(enabled: equalizerEnabled, preset: equalizerPreset, automatic: autoPreamp,
+            preamp: preampDB, bass: bassDB, treble: trebleDB, normalization: normalizeVolume,
+            profilesRevision: soundProfiles.revision)
+    }
+
     var streamingQuality: AudioQuality {
         didSet { UserDefaults.standard.set(streamingQuality.rawValue, forKey: "sonora.settings.streamingQuality") }
     }
@@ -398,6 +415,69 @@ final class SettingsStore {
     }
 
     #if DEBUG
+    /// No explicit apply call is made here: the app's observation must drive every change.
+    func reviewAudioObservation(playback: PlaybackController) {
+        scrobbleReviewTask?.cancel()
+        scrobbleReviewTask = Task { [weak self] in
+            guard let self else { return }
+            let original = self.audioConfigurationKey
+            defer {
+                self.equalizerEnabled = original.enabled
+                self.equalizerPreset = original.preset
+                self.autoPreamp = original.automatic
+                self.preampDB = original.preamp
+                self.bassDB = original.bass
+                self.trebleDB = original.treble
+                self.normalizeVolume = original.normalization
+            }
+            var checks: [String: Bool] = [:]
+            let before = playback.audioEffects.appliedRevision
+            self.equalizerPreset = .flat
+            self.autoPreamp = false
+            self.preampDB = -9
+            self.bassDB = 0
+            self.trebleDB = 0
+            self.equalizerEnabled = true
+            self.normalizeVolume = false
+            checks["settings_apply_without_view_handler"] = await self.waitForAudio(playback, after: before, enabled: true, preamp: -9)
+            let enabledRevision = playback.audioEffects.appliedRevision
+            self.equalizerEnabled = false
+            checks["player_menu_toggle_applies"] = await self.waitForAudio(playback, after: enabledRevision, enabled: false)
+            let disabledRevision = playback.audioEffects.appliedRevision
+            self.equalizerPreset = .rock
+            self.equalizerPreset = .bassBoost
+            self.preampDB = -3
+            self.equalizerEnabled = true
+            checks["latest_configuration_wins"] = await self.waitForAudio(playback, after: disabledRevision, enabled: true, preamp: -3)
+            let result: [String: Any] = ["passed": checks.count == 3 && checks.values.allSatisfy { $0 }, "checks": checks]
+            if let data = try? JSONSerialization.data(withJSONObject: result, options: .prettyPrinted) {
+                try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("sound-observation-review.json"), options: .atomic)
+            }
+        }
+    }
+
+    private func waitForAudio(_ playback: PlaybackController, after revision: UInt64, enabled: Bool, preamp: Double? = nil) async -> Bool {
+        for _ in 0..<250 {
+            let effects = playback.audioEffects
+            if effects.appliedRevision > revision && effects.enabled == enabled,
+               preamp.map({ abs(effects.preampDB - $0) < 0.01 }) ?? true { return true }
+            if Task.isCancelled { return false }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return false
+    }
+
+    func reviewNativeRequests() {
+        scrobbleReviewTask?.cancel()
+        scrobbleReviewTask = Task {
+            let checks = await NativeProvider.reviewCancellation()
+            let result: [String: Any] = ["passed": checks.count == 3 && checks.values.allSatisfy { $0 }, "checks": checks]
+            if let data = try? JSONSerialization.data(withJSONObject: result, options: .prettyPrinted) {
+                try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("native-requests-review.json"), options: .atomic)
+            }
+        }
+    }
+
     func reviewScrobbling() {
         scrobbleReviewTask?.cancel()
         scrobbleReviewTask = Task {

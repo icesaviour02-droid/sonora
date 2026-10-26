@@ -11,11 +11,9 @@ struct SoundSettingsView: View {
         List {
             Section {
                 Toggle("ios-equalizer-enable", isOn: $settings.equalizerEnabled)
-                    .onChange(of: settings.equalizerEnabled) { _, _ in playback.applyAudioGain() }
                 Picker("ios-equalizer-preset", selection: $settings.equalizerPreset) {
                     ForEach(EqualizerPreset.allCases) { preset in Text(preset.labelKey).tag(preset) }
                 }
-                .onChange(of: settings.equalizerPreset) { _, _ in playback.applyAudioGain() }
                 if settings.equalizerPreset == .custom {
                     Picker("ios-sound-profile", selection: Binding(
                         get: { settings.soundProfiles.selectedID },
@@ -37,19 +35,15 @@ struct SoundSettingsView: View {
                     Text("ios-sound-profile-preamp-description").foregroundStyle(.secondary)
                 } else {
                     Toggle("ios-equalizer-auto-preamp", isOn: $settings.autoPreamp)
-                        .onChange(of: settings.autoPreamp) { _, _ in playback.applyAudioGain() }
                     DecibelControl(title: "ios-equalizer-preamp", value: $settings.preampDB, range: -30...12)
                         .disabled(settings.autoPreamp)
-                        .onChange(of: settings.preampDB) { _, _ in playback.applyAudioGain() }
                 }
                 LabeledContent("ios-equalizer-effective-preamp", value: String(format: "%+.1f dB", playback.audioEffects.preampDB))
             }
             Section("ios-tone-controls") {
                 DecibelControl(title: "ios-equalizer-bass", value: $settings.bassDB, range: -12...12)
-                    .onChange(of: settings.bassDB) { _, _ in playback.applyAudioGain() }
                 DecibelControl(title: "ios-equalizer-treble", value: $settings.trebleDB, range: -12...12)
-                    .onChange(of: settings.trebleDB) { _, _ in playback.applyAudioGain() }
-                Button("ios-equalizer-reset") { settings.resetEqualizer(); playback.applyAudioGain() }
+                Button("ios-equalizer-reset") { settings.resetEqualizer() }
             }
             if let error = playback.audioEffects.error {
                 Section { Text(error).foregroundStyle(.secondary) }

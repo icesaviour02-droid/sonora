@@ -34,6 +34,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Canceled iPhone catalog and lyrics loads stop their background work. Equalizer changes from the player menu apply immediately, like changes in Sound settings.
+
 - iPhone listening history starts when audio actually plays. Scrobbles count listening time rather than seeks and wait in a saved retry queue when a service is offline.
 
 - iPhone equalizer presets and bass/treble now use the same frequency filters as desktop Sonora,
