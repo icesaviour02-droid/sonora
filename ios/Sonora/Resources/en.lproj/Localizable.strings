@@ -32,6 +32,7 @@
 "ios-appearance" = "Appearance";
 "ios-artists" = "Artists";
 "ios-artists-empty-description" = "Artists from your library and subscriptions appear here.";
+"ios-audio-effects-error" = "Audio processing is unavailable for this track.";
 "ios-audio-session-error" = "Audio playback could not start. Check your audio connection and try again.";
 "ios-autoplay-radio" = "Autoplay Similar Songs";
 "ios-blur-inactive-lyrics" = "Blur Inactive Lines";
@@ -78,8 +79,11 @@
 "ios-eq-treble-boost" = "Treble Boost";
 "ios-eq-vocal" = "Vocal";
 "ios-equalizer" = "Equalizer";
+"ios-equalizer-auto-preamp" = "Automatic Headroom";
 "ios-equalizer-bass" = "Bass";
+"ios-equalizer-effective-preamp" = "Applied Preamp";
 "ios-equalizer-enable" = "Enable Equalizer";
+"ios-equalizer-invalid" = "This equalizer configuration could not be applied.";
 "ios-equalizer-preamp" = "Preamp";
 "ios-equalizer-preset" = "Preset";
 "ios-equalizer-reset" = "Reset Equalizer";

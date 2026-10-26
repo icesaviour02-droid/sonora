@@ -65,6 +65,7 @@ final class LibraryStore {
                 checks["duration_imported"] = (track.durationSeconds ?? 0) > 10
                 playback.play(track, in: [track])
                 checks["clock_advanced"] = await self.waitForClock(playback, beyond: 1)
+                checks["native_audio_tap_processed"] = playback.audioEffects.processedFrames > 0
                 playback.pause()
                 try? await Task.sleep(for: .milliseconds(350))
                 let paused = playback.elapsed

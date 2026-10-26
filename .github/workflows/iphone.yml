@@ -8,6 +8,7 @@ on:
       - 'ios/Sonora.xcodeproj/**'
       - 'ios/scripts/**'
       - 'ios/Core/**'
+      - 'crates/music/src/equalizer/**'
       - 'assets/i18n/en-US/main.ftl'
       - 'assets/macos/sonora.icns'
       - '.github/workflows/iphone.yml'
@@ -17,6 +18,7 @@ on:
       - 'ios/Sonora.xcodeproj/**'
       - 'ios/scripts/**'
       - 'ios/Core/**'
+      - 'crates/music/src/equalizer/**'
       - 'assets/i18n/en-US/main.ftl'
       - '.github/workflows/iphone.yml'
 

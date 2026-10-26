@@ -1919,6 +1919,10 @@ struct SettingsView: View {
                         }
                     }
                     .onChange(of: settings.equalizerPreset) { _, _ in playback.applyAudioGain() }
+                    Toggle("ios-equalizer-auto-preamp", isOn: $settings.autoPreamp)
+                        .onChange(of: settings.autoPreamp) { _, _ in playback.applyAudioGain() }
+                    LabeledContent("ios-equalizer-effective-preamp", value: String(format: "%+.1f dB", playback.audioEffects.preampDB))
+                    if let error = playback.audioEffects.error { Text(error).foregroundStyle(.secondary) }
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
@@ -1928,7 +1932,8 @@ struct SettingsView: View {
                                 .appFont(.caption).monospacedDigit()
                                 .foregroundStyle(.secondary)
                         }
-                        Slider(value: $settings.preampDB, in: -12...12, step: 0.5)
+                        Slider(value: $settings.preampDB, in: -30...12, step: 0.5)
+                            .disabled(settings.autoPreamp)
                             .onChange(of: settings.preampDB) { _, _ in playback.applyAudioGain() }
                     }
                     VStack(alignment: .leading, spacing: 4) {

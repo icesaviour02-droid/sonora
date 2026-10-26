@@ -3,7 +3,7 @@ import Observation
 
 /// Stable errors cross the native boundary; raw provider responses and signed URLs never reach alerts.
 enum ProviderError: LocalizedError {
-    case unavailable, timeout, signInRequired, verificationRequired
+    case unavailable, timeout, signInRequired, verificationRequired, equalizerInvalid
 
     var errorDescription: String? {
         switch self {
@@ -11,6 +11,7 @@ enum ProviderError: LocalizedError {
         case .timeout: String(localized: "ios-provider-timeout")
         case .signInRequired: String(localized: "ios-provider-sign-in-required")
         case .verificationRequired: String(localized: "ios-provider-verification-required")
+        case .equalizerInvalid: String(localized: "ios-equalizer-invalid")
         }
     }
 }
@@ -32,6 +33,17 @@ private func receiveNativeReply(_ context: UnsafeMutableRawPointer?, _ json: Uns
 
 /// Thin asynchronous adapter. All provider sockets and stream resolution run in the Rust core.
 enum NativeProvider {
+    struct EqualizerState: Decodable {
+        let applied: Bool
+        let preamp_db: Double
+        let filter_count: Int
+        let skipped_lines: [Int]
+        let profile: String
+    }
+
+    static func configureEqualizer(_ payload: [String: Any]) async throws -> EqualizerState {
+        try await request(payload)
+    }
     private struct Envelope<Value: Decodable>: Decodable {
         let ok: Bool
         let data: Value?
@@ -420,6 +432,7 @@ enum NativeProvider {
             case "timeout": throw ProviderError.timeout
             case "sign_in_required": throw ProviderError.signInRequired
             case "verification_required": throw ProviderError.verificationRequired
+            case "equalizer_invalid": throw ProviderError.equalizerInvalid
             default: throw ProviderError.unavailable
             }
         }

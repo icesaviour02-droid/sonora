@@ -23,6 +23,7 @@ final class PlaybackController {
     private(set) var repeatMode: RepeatMode = .off
     private(set) var streamBadge: String?
     private(set) var currentLoudnessDB: Float?
+    let audioEffects = NativeAudioEffects()
     var error: String?
 
     @ObservationIgnored private let player = AVPlayer()
@@ -42,6 +43,7 @@ final class PlaybackController {
     @ObservationIgnored private var scrobbledTrackID: String?
     @ObservationIgnored private var interruptedWhilePlaying = false
     @ObservationIgnored private var didRestore = false
+    @ObservationIgnored private var wantsToPlay = false
     private let snapshotKey = "sonora.ios.queue.v1"
 
     init(downloads: DownloadsStore, settings: SettingsStore) {
@@ -53,6 +55,10 @@ final class PlaybackController {
             Task { @MainActor in
                 guard let self else { return }
                 self.elapsed = time.seconds.isFinite ? max(0, time.seconds) : 0
+                if self.isPlaying && self.elapsed > 1 && self.audioEffects.isAttached && self.audioEffects.processedFrames == 0 {
+                    self.audioEffects.reportUnprocessedAudio()
+                    self.applyAudioGain()
+                }
                 if let deadline = self.settings.sleepTimerDeadline, Date() >= deadline {
                     self.settings.setSleepTimer(.off)
                     self.pause()
@@ -78,7 +84,7 @@ final class PlaybackController {
                 guard let self else { return }
                 self.isPlaying = self.player.timeControlStatus == .playing
                 if self.resolutionTask == nil {
-                    self.isLoading = self.player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                    self.isLoading = self.wantsToPlay && (self.audioEffects.isPreparing || self.player.timeControlStatus == .waitingToPlayAtSpecifiedRate)
                 }
                 self.publishNowPlaying()
             }
@@ -337,6 +343,7 @@ final class PlaybackController {
         elapsed = 0
         duration = track.durationSeconds ?? 0
         itemObserver = nil
+        audioEffects.detach()
         player.replaceCurrentItem(with: nil)
         applyAudioGain()
         if let localItem { install(localItem) }
@@ -350,22 +357,25 @@ final class PlaybackController {
     }
 
     func applyAudioGain() {
-        var totalDB: Float = 0
+        var totalDB: Double = 0
         if settings.normalizeVolume, let loudness = currentLoudnessDB, loudness.isFinite {
             // YouTube loudness_db is relative to reference; negative values mean quieter than reference, positive louder.
-            totalDB -= min(max(loudness, -12), 12)
+            totalDB -= Double(min(max(loudness, -12), 12))
         }
-        if settings.equalizerEnabled {
-            totalDB += Float(settings.preampDB)
-            totalDB += Float(settings.bassDB * 0.2 + settings.trebleDB * 0.15)
-        }
-        let linear = pow(10.0, totalDB / 20.0)
-        player.volume = min(max(linear, 0.1), 1.0)
+        audioEffects.configure(settings: settings, normalizationDB: totalDB)
+        // The DSP applies normalization even with EQ bypassed. Native attenuation is a fallback
+        // only for an asset whose audio tap could not be attached.
+        player.volume = audioEffects.isAttached ? 1 : Float(min(max(pow(10.0, totalDB / 20.0), 0), 1))
     }
 
     private func install(_ item: AVPlayerItem) {
         player.replaceCurrentItem(with: item)
         applyAudioGain()
+        audioEffects.attach(to: item) { [weak self, weak item] in
+            guard let self, let item, self.player.currentItem === item else { return }
+            self.applyAudioGain()
+            if self.wantsToPlay { self.startAudio() }
+        }
         itemObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             guard item.status == .failed else { return }
             Task { @MainActor in
@@ -383,6 +393,7 @@ final class PlaybackController {
         error = nil
         if player.currentItem?.status == .failed, current.youtubeID != nil {
             itemObserver = nil
+            audioEffects.detach()
             player.replaceCurrentItem(with: nil)
         }
         settings.recordHistory(current)
@@ -400,6 +411,8 @@ final class PlaybackController {
     }
 
     private func startAudio() {
+        wantsToPlay = true
+        guard !audioEffects.isPreparing else { isLoading = true; return }
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .default, policy: .longFormAudio, options: [])
@@ -414,6 +427,7 @@ final class PlaybackController {
     }
 
     func pause() {
+        wantsToPlay = false
         radioTask?.cancel()
         radioTask = nil
         resolutionTask?.cancel()
@@ -531,6 +545,7 @@ final class PlaybackController {
         if let current, current.youtubeID == nil, !ids.contains(current.id) {
             pause()
             player.replaceCurrentItem(with: nil)
+            audioEffects.detach()
             self.current = nil
             currentQueueID = nil
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -543,6 +558,7 @@ final class PlaybackController {
         if current?.youtubeID != nil {
             pause()
             player.replaceCurrentItem(with: nil)
+            audioEffects.detach()
             current = nil
             currentQueueID = nil
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil

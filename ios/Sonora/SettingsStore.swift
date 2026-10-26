@@ -64,12 +64,10 @@ final class SettingsStore {
     var equalizerPreset: EqualizerPreset {
         didSet {
             UserDefaults.standard.set(equalizerPreset.rawValue, forKey: "sonora.settings.equalizerPreset")
-            if equalizerPreset != .custom {
-                preampDB = equalizerPreset.preampDB
-                bassDB = equalizerPreset.bassDB
-                trebleDB = equalizerPreset.trebleDB
-            }
         }
+    }
+    var autoPreamp: Bool {
+        didSet { UserDefaults.standard.set(autoPreamp, forKey: "sonora.settings.autoPreamp") }
     }
     var preampDB: Double {
         didSet { UserDefaults.standard.set(preampDB, forKey: "sonora.settings.preampDB") }
@@ -141,6 +139,7 @@ final class SettingsStore {
             "sonora.settings.autoplayRadio": true,
             "sonora.settings.equalizerEnabled": false,
             "sonora.settings.equalizerPreset": EqualizerPreset.flat.rawValue,
+            "sonora.settings.autoPreamp": true,
             "sonora.settings.preampDB": 0.0,
             "sonora.settings.bassDB": 0.0,
             "sonora.settings.trebleDB": 0.0,
@@ -159,6 +158,7 @@ final class SettingsStore {
         autoplayRadio = defaults.bool(forKey: "sonora.settings.autoplayRadio")
         equalizerEnabled = defaults.bool(forKey: "sonora.settings.equalizerEnabled")
         equalizerPreset = EqualizerPreset(rawValue: defaults.string(forKey: "sonora.settings.equalizerPreset") ?? "") ?? .flat
+        autoPreamp = defaults.bool(forKey: "sonora.settings.autoPreamp")
         preampDB = defaults.double(forKey: "sonora.settings.preampDB")
         bassDB = defaults.double(forKey: "sonora.settings.bassDB")
         trebleDB = defaults.double(forKey: "sonora.settings.trebleDB")
@@ -186,6 +186,12 @@ final class SettingsStore {
             history = decoded
         }
         measureCache()
+        // Earlier betas approximated presets by changing overall volume and tone values.
+        if defaults.integer(forKey: "sonora.settings.equalizerDSPVersion") == 0 {
+            if equalizerPreset != .custom { bassDB = 0; trebleDB = 0; preampDB = 0 }
+            autoPreamp = true
+            defaults.set(1, forKey: "sonora.settings.equalizerDSPVersion")
+        }
     }
 
     func setSleepTimer(_ option: SleepTimerOption) {
@@ -199,6 +205,7 @@ final class SettingsStore {
 
     func resetEqualizer() {
         equalizerPreset = .flat
+        autoPreamp = true
         preampDB = 0
         bassDB = 0
         trebleDB = 0

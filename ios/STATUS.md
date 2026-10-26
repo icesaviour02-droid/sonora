@@ -112,3 +112,26 @@ network-dependent Guest audio. Source syntax and Rust Clippy/build checks pass; 
 Apple run 40256955207 is the exact queue/local repair snapshot at da48eede and must be checked
 before making further acceptance claims. Inspect queue-review.json, local-playback-review.json
 and local-lyrics-review.json, plus the actual duplicate-entry queue screenshot. The goal remains active.
+
+Run 40256955207 passed all eight queue occurrence/order/restore checks. Its generated WAV test
+passed actual import, duration metadata, playback clock advancement, pause, seek/resume and deletion.
+Local metadata-only lyrics decoded 37 synced lines in the simulator. The duplicate-entry queue
+screen was visually inspected: both rows, removal controls and native reorder handles render correctly.
+The run then failed on the same Guest network-verification gate; no IPA was published.
+
+## Shared desktop equalizer integration (26 October 2026)
+
+The mobile core now compiles the existing `crates/music/src/equalizer/` source directly, without
+GPUI, rodio output or copied filter implementations. A C boundary exposes one preallocated reader
+per AVFoundation audio tap; render processing does not allocate, lock or use Tokio. Configuration
+runs on Tokio and has revision ordering so an obsolete slider request cannot replace newer settings.
+The native player installs a MediaToolbox audio tap before starting playback. Presets use the
+desktop's actual ten-band curves and tone shelves, with automatic headroom/manual preamp, smooth
+changes and normalization capable of positive gain. Unsupported processing is reported explicitly.
+
+All six existing desktop DSP tests pass in the isolated core. The generated-PCM C-boundary check
+passes exact finite-sample bypass, matching planar/interleaved stereo, frequency-selective bass
+response, preset headroom, APO parsing, stale-request rejection and +6 dB normalization. These are
+Linux DSP results. iPhone device/simulator compilation and actual AVFoundation tap processing
+remain pending; the local playback check now requires a positive native processed-frame count.
+Full parametric editing, named profiles/device rules and APO import/export UI are still missing.

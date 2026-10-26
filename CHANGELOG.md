@@ -26,6 +26,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- iPhone equalizer presets and bass/treble now use the same frequency filters as desktop Sonora,
+  replacing the earlier volume-only approximation. Automatic headroom and manual preamp are configurable.
 - The iPhone queue keeps repeated songs as separate entries, supports reordering Playing Next,
   and preserves the selected occurrence, shuffle order and repeat mode when restoring the queue.
 - Local-file lyrics can search by song and artist without a YouTube video ID. Disabling these

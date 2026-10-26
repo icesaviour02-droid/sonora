@@ -5,10 +5,14 @@ on:
   push:
     paths:
       - 'ios/Core/**'
+      - 'crates/music/src/equalizer/**'
+      - 'ios/scripts/audio_effects_check.py'
       - '.github/workflows/mobile-core.yml'
   pull_request:
     paths:
       - 'ios/Core/**'
+      - 'crates/music/src/equalizer/**'
+      - 'ios/scripts/audio_effects_check.py'
       - '.github/workflows/mobile-core.yml'
 
 permissions:
@@ -37,6 +41,11 @@ jobs:
         run: |
           cargo fmt --manifest-path ios/Core/Cargo.toml -- --check
           cargo clippy --manifest-path ios/Core/Cargo.toml --locked -- -D warnings
+      - name: Verify shared desktop filters and native audio boundary
+        run: |
+          cargo test --manifest-path ios/Core/Cargo.toml --locked --lib
+          cargo build --manifest-path ios/Core/Cargo.toml --locked
+          python3 ios/scripts/audio_effects_check.py ios/Core/target/debug/libsonora_mobile_core.dylib
       - name: Build native iPhone and simulator libraries
         run: |
           export LIBCLANG_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"

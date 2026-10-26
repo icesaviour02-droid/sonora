@@ -1,6 +1,11 @@
 //! A narrow native boundary around the same YouTube client used by desktop Sonora.
 //! Network operations stay on Tokio, with no GPUI, desktop audio output or UI dependencies.
 
+// Reuse the desktop's allocation-free DSP and preset curves, without its rodio output plumbing.
+mod audio_effects;
+#[path = "../../../crates/music/src/equalizer/mod.rs"]
+pub mod equalizer;
+
 use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::path::PathBuf;
@@ -163,6 +168,17 @@ fn session() -> &'static RwLock<Session> {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 enum Request {
+    EqualizerConfigure {
+        revision: u64,
+        enabled: bool,
+        preset: String,
+        auto_preamp: bool,
+        preamp_db: f64,
+        bass_db: f64,
+        treble_db: f64,
+        normalization_db: f64,
+        profile: Option<String>,
+    },
     Configure {
         cache_dir: String,
     },
@@ -299,6 +315,7 @@ pub unsafe extern "C" fn sonora_mobile_request(
                 let message = format!("{error:#}").to_lowercase();
                 let verification = message.contains("not a bot");
                 let code = if verification { "verification_required" }
+                    else if error.downcast_ref::<audio_effects::InvalidConfiguration>().is_some() { "equalizer_invalid" }
                     else if error.downcast_ref::<ytmusic::SignInRequired>().is_some() { "sign_in_required" }
                     else { "provider_unavailable" };
                 json!({ "ok": false, "error": code, "diagnostics": {
@@ -409,6 +426,27 @@ async fn execute(request: Request) -> Result<Value> {
         .clone();
 
     match request {
+        Request::EqualizerConfigure {
+            revision,
+            enabled,
+            preset,
+            auto_preamp,
+            preamp_db,
+            bass_db,
+            treble_db,
+            normalization_db,
+            profile,
+        } => audio_effects::configure(audio_effects::Configuration {
+            revision,
+            enabled,
+            preset,
+            auto_preamp,
+            preamp_db,
+            bass_db,
+            treble_db,
+            normalization_db,
+            profile,
+        }),
         Request::RotateCookies {} => {
             if api.is_cookie_auth() {
                 let _ = api.rotate_cookies().await;

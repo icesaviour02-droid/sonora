@@ -11,6 +11,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "time", "net", "sync"] }
 # Match the desktop lockfile. Keep provider fixes shared rather than reimplementing InnerTube.
 ytmusic = { git = "https://github.com/sonorahq/ytmusic-rs", rev = "8553a967e9ab980e4f94283821e3f6c698b7c40c" }
 rquickjs = { version = "0.12", features = ["bindgen"] }
+log = "0.4"
 
 [package]
 name = "sonora-mobile-core"
@@ -29,6 +30,7 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 ytmusic.workspace = true
+log.workspace = true
 
 # Upstream ships desktop bindings but no pre-generated iOS bindings. Generate those against
 # the selected Apple SDK instead of copying macOS ABI declarations into the iPhone build.

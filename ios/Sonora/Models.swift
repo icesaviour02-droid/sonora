@@ -138,6 +138,17 @@ enum EqualizerPreset: String, CaseIterable, Codable, Identifiable {
     case flat, bassBoost, bassReducer, trebleBoost, vocal, rock, pop, jazz, classical, electronic, acoustic, loudness, custom
     var id: String { rawValue }
 
+    /// The desktop engine's stable preset identifier; custom tone starts from its flat curve.
+    var coreID: String {
+        switch self {
+        case .bassBoost: "bass-boost"
+        case .bassReducer: "bass-reducer"
+        case .trebleBoost: "treble-boost"
+        case .custom: "flat"
+        default: rawValue
+        }
+    }
+
     var labelKey: LocalizedStringKey {
         switch self {
         case .flat: "ios-eq-flat"
@@ -156,44 +167,7 @@ enum EqualizerPreset: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    var preampDB: Double {
-        switch self {
-        case .flat, .custom: 0
-        case .bassBoost, .trebleBoost, .rock, .electronic, .loudness: -2.0
-        case .pop, .vocal, .jazz, .acoustic: -1.0
-        case .bassReducer, .classical: 0
-        }
-    }
 
-    var bassDB: Double {
-        switch self {
-        case .flat, .custom, .trebleBoost, .classical: 0
-        case .bassBoost: 5.5
-        case .bassReducer: -5.0
-        case .vocal: -1.5
-        case .rock: 4.0
-        case .pop: 2.5
-        case .jazz: 2.0
-        case .electronic: 4.5
-        case .acoustic: 2.0
-        case .loudness: 4.5
-        }
-    }
-
-    var trebleDB: Double {
-        switch self {
-        case .flat, .custom, .bassBoost, .bassReducer: 0
-        case .trebleBoost: 5.5
-        case .vocal: 2.5
-        case .rock: 3.5
-        case .pop: 2.5
-        case .jazz: 1.5
-        case .classical: 2.0
-        case .electronic: 3.5
-        case .acoustic: 2.5
-        case .loudness: 3.5
-        }
-    }
 }
 
 /// Sleep timer intervals matching Sonora's desktop sleep timer.

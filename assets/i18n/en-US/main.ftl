@@ -1553,3 +1553,7 @@ ios-accent-purple = Purple
 ios-accent-orange = Orange
 ios-accent-green = Green
 ios-queue-empty = No upcoming songs. Add music with Play Next or Add to Queue.
+ios-equalizer-auto-preamp = Automatic Headroom
+ios-equalizer-effective-preamp = Applied Preamp
+ios-equalizer-invalid = This equalizer configuration could not be applied.
+ios-audio-effects-error = Audio processing is unavailable for this track.
