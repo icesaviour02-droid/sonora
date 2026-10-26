@@ -178,6 +178,14 @@ enum Request {
         treble_db: f64,
         normalization_db: f64,
         profile: Option<String>,
+        filters: Option<Vec<audio_effects::FilterSpec>>,
+    },
+    EqualizerDescribe {
+        preset: String,
+        profile: Option<String>,
+        filters: Option<Vec<audio_effects::FilterSpec>>,
+        auto_preamp: Option<bool>,
+        preamp_db: Option<f64>,
     },
     Configure {
         cache_dir: String,
@@ -436,6 +444,7 @@ async fn execute(request: Request) -> Result<Value> {
             treble_db,
             normalization_db,
             profile,
+            filters,
         } => audio_effects::configure(audio_effects::Configuration {
             revision,
             enabled,
@@ -446,7 +455,15 @@ async fn execute(request: Request) -> Result<Value> {
             treble_db,
             normalization_db,
             profile,
+            filters,
         }),
+        Request::EqualizerDescribe {
+            preset,
+            profile,
+            filters,
+            auto_preamp,
+            preamp_db,
+        } => audio_effects::describe(&preset, profile.as_deref(), filters, auto_preamp, preamp_db),
         Request::RotateCookies {} => {
             if api.is_cookie_auth() {
                 let _ = api.rotate_cookies().await;

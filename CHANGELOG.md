@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iPhone sound profiles can be created from presets, renamed, edited, reordered and shared as
+  Equalizer APO files. Profiles support all eight desktop filter types and preserve imported-file warnings.
 - iPhone Appearance settings now offer SF Pro Rounded, bundled Inter faces and imported TTF,
   OTF or TTC fonts with Dynamic Type scaling. The selected font persists across relaunches.
 - iPhone accent colors can follow the current album artwork or a chosen system color.

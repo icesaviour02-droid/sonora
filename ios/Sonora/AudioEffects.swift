@@ -77,7 +77,7 @@ private func processAudioTap(_ tap: MTAudioProcessingTap, _ requested: CMItemCou
               let data = buffer.mData else { return }
         context.planes[index] = data.assumingMemoryBound(to: Float.self)
     }
-    if outputFlags.pointee & kMTAudioProcessingTapFlag_StartOfStream != 0 {
+    if (flags | outputFlags.pointee) & kMTAudioProcessingTapFlag_StartOfStream != 0 {
         sonora_audio_stage_reset(context.stage)
     }
     _ = sonora_audio_stage_process(context.stage, context.planes, frames.pointee, context.interleaved)
@@ -107,13 +107,15 @@ final class NativeAudioEffects {
         configurationTask?.cancel()
         revision &+= 1
         let revision = revision
-        let request: [String: Any] = [
+        let profile = settings.equalizerPreset == .custom ? settings.soundProfiles.selected : nil
+        var request: [String: Any] = [
             "operation": "equalizer_configure", "revision": revision,
             "enabled": settings.equalizerEnabled, "preset": settings.equalizerPreset.coreID,
-            "auto_preamp": settings.autoPreamp, "preamp_db": settings.preampDB,
+            "auto_preamp": profile?.autoPreamp ?? settings.autoPreamp, "preamp_db": profile?.preampDB ?? settings.preampDB,
             "bass_db": settings.bassDB, "treble_db": settings.trebleDB,
             "normalization_db": normalizationDB
         ]
+        if let profile { request["filters"] = profile.filters.map(\.payload) }
         configurationTask = Task { [weak self] in
             do {
                 let result = try await NativeProvider.configureEqualizer(request)

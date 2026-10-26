@@ -6,10 +6,12 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use anyhow::{Context as _, Result, bail};
+use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::equalizer::{
-    Curve, Edit, EqualizerWriter, FilterStage, MAX_CHANNELS, Preamp, Preset, Tone, apo,
+    Curve, Edit, EqualizerWriter, Filter, FilterStage, Kind, MAX_CHANNELS, Preamp, Preset, Tone,
+    Width, apo,
 };
 
 const MAX_FRAMES: usize = 65_536;
@@ -28,6 +30,105 @@ pub(crate) struct Configuration {
     pub treble_db: f64,
     pub normalization_db: f64,
     pub profile: Option<String>,
+    pub filters: Option<Vec<FilterSpec>>,
+}
+
+/// Plain numbers cross the boundary; the shared desktop constructor validates every filter.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FilterSpec {
+    kind: String,
+    frequency: f64,
+    gain: f64,
+    width_unit: String,
+    width: f64,
+    enabled: bool,
+}
+
+impl FilterSpec {
+    fn filter(self) -> Result<Filter> {
+        let kind = Kind::from_id(&self.kind).context("unknown filter kind")?;
+        let width = match self.width_unit.as_str() {
+            "q" => Width::Q(self.width),
+            "octaves" => Width::Octaves(self.width),
+            _ => bail!("unknown filter width"),
+        };
+        Ok(Filter::new(
+            kind,
+            self.frequency,
+            self.gain,
+            width,
+            self.enabled,
+        )?)
+    }
+}
+
+/// Describes presets, imported files or edited filters without changing the active sound.
+pub(crate) fn describe(
+    preset: &str,
+    profile: Option<&str>,
+    filters: Option<Vec<FilterSpec>>,
+    auto_preamp: Option<bool>,
+    preamp_db: Option<f64>,
+) -> Result<Value> {
+    describe_inner(preset, profile, filters, auto_preamp, preamp_db)
+        .map_err(|_| InvalidConfiguration.into())
+}
+
+fn describe_inner(
+    preset: &str,
+    profile: Option<&str>,
+    filters: Option<Vec<FilterSpec>>,
+    auto_preamp: Option<bool>,
+    preamp_db: Option<f64>,
+) -> Result<Value> {
+    let (base, skipped) = base_curve(preset, profile, filters)?;
+    let preamp = match auto_preamp {
+        Some(true) => Preamp::Auto,
+        Some(false) => Preamp::Manual(preamp_db.unwrap_or_default()),
+        None => base.preamp(),
+    };
+    let curve = Curve::new(preamp, base.filters().to_vec())?;
+    let filters: Vec<Value> = curve.filters().iter().map(|filter| {
+        let (width_unit, width) = match filter.width() { Width::Q(q) => ("q", q), Width::Octaves(o) => ("octaves", o) };
+        json!({ "kind": filter.kind().id(), "frequency": filter.frequency(), "gain": filter.gain(),
+            "width_unit": width_unit, "width": width, "enabled": filter.enabled() })
+    }).collect();
+    Ok(
+        json!({ "filters": filters, "auto_preamp": matches!(preamp, Preamp::Auto),
+        "preamp_db": curve.preamp_db(), "profile": apo::export(&curve), "skipped_lines": skipped }),
+    )
+}
+
+fn base_curve(
+    preset: &str,
+    profile: Option<&str>,
+    filters: Option<Vec<FilterSpec>>,
+) -> Result<(Curve, Vec<usize>)> {
+    if let Some(filters) = filters {
+        let filters = filters
+            .into_iter()
+            .map(FilterSpec::filter)
+            .collect::<Result<Vec<_>>>()?;
+        return Ok((Curve::new(Preamp::Auto, filters)?, Vec::new()));
+    }
+    if let Some(text) = profile {
+        if text.trim().is_empty() {
+            bail!("equalizer profile is empty");
+        }
+        let parsed =
+            apo::parse(text).map_err(|_| anyhow::anyhow!("cannot parse equalizer profile"))?;
+        return Ok((
+            parsed.curve,
+            parsed.skipped.into_iter().map(|line| line.line).collect(),
+        ));
+    }
+    let curve = Preset::ALL
+        .into_iter()
+        .find(|candidate| candidate.id() == preset)
+        .context("unknown equalizer preset")?
+        .curve();
+    Ok((curve, Vec::new()))
 }
 
 /// Stable category for the host's localized validation error, without exporting profile text.
@@ -60,20 +161,7 @@ fn configure_inner(config: Configuration) -> Result<Value> {
             bail!("audio value is out of range");
         }
     }
-    let mut skipped = Vec::new();
-    let base = match config.profile.as_deref().filter(|s| !s.trim().is_empty()) {
-        Some(text) => {
-            let parsed =
-                apo::parse(text).map_err(|_| anyhow::anyhow!("cannot parse equalizer profile"))?;
-            skipped = parsed.skipped.iter().map(|line| line.line).collect();
-            parsed.curve
-        }
-        None => Preset::ALL
-            .into_iter()
-            .find(|preset| preset.id() == config.preset)
-            .context("unknown equalizer preset")?
-            .curve(),
-    };
+    let (base, skipped) = base_curve(&config.preset, config.profile.as_deref(), config.filters)?;
     let preamp = match config.auto_preamp {
         true => Preamp::Auto,
         false => Preamp::Manual(config.preamp_db),

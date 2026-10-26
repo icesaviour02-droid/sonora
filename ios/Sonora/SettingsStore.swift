@@ -46,6 +46,7 @@ private enum ScrobbleKeychain {
 /// Persists desktop-equivalent Sonora settings, pins, listening history, and scrobbling on iPhone.
 @MainActor @Observable
 final class SettingsStore {
+    let soundProfiles = SoundProfileStore()
     var streamingQuality: AudioQuality {
         didSet { UserDefaults.standard.set(streamingQuality.rawValue, forKey: "sonora.settings.streamingQuality") }
     }

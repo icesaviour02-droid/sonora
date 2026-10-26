@@ -39,6 +39,7 @@ struct SonoraApp: App {
                 .fontDesign(settings.typefaceID == "rounded" ? .rounded : .default)
                 .font(InterfaceTypography.font(.body, typeface: settings.typefaceID))
                 .tint(appearance.color(for: settings.accent))
+                .onChange(of: settings.soundProfiles.revision) { _, _ in playback.applyAudioGain() }
                 .onChange(of: playback.current?.artworkURL, initial: true) { _, url in
                     appearance.updateArtwork(settings.accent == .artwork ? url : nil)
                 }

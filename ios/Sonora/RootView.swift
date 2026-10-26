@@ -14,6 +14,8 @@ struct RootView: View {
     @State private var selectedTab = Destination.library
     @State private var showImporter = false
     @State private var showFonts = false
+    @State private var showSoundProfiles = false
+    @State private var editingSoundProfile: SoundProfile?
     @State private var showSettings = false
     @State private var showPlayer = false
     @State private var playerMode = "artwork"
@@ -53,6 +55,8 @@ struct RootView: View {
         .modifier(PlayerAccessory(open: { showPlayer = true }))
         .preferredColorScheme(settings.theme.colorScheme)
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showSoundProfiles) { NavigationStack { SoundProfilesView() } }
+        .sheet(item: $editingSoundProfile) { profile in NavigationStack { SoundProfileEditor(profile: profile) } }
         .sheet(isPresented: $showFonts) {
             NavigationStack {
                 FontSettingsView().toolbar {
@@ -118,6 +122,18 @@ struct RootView: View {
         }
         if url.host == "localreview" {
             library.reviewLocalPlayback(playback)
+            return
+        }
+        if url.host == "soundprofilesreview" {
+            settings.soundProfiles.review {
+                settings.equalizerPreset = .custom
+                playback.applyAudioGain()
+                showSoundProfiles = true
+            }
+            return
+        }
+        if url.host == "soundprofileeditor", let profile = settings.soundProfiles.selected {
+            editingSoundProfile = profile
             return
         }
         #endif
@@ -1911,57 +1927,7 @@ struct SettingsView: View {
                 }
 
                 Section("ios-equalizer") {
-                    Toggle("ios-equalizer-enable", isOn: $settings.equalizerEnabled)
-                        .onChange(of: settings.equalizerEnabled) { _, _ in playback.applyAudioGain() }
-                    Picker("ios-equalizer-preset", selection: $settings.equalizerPreset) {
-                        ForEach(EqualizerPreset.allCases) { preset in
-                            Text(preset.labelKey).tag(preset)
-                        }
-                    }
-                    .onChange(of: settings.equalizerPreset) { _, _ in playback.applyAudioGain() }
-                    Toggle("ios-equalizer-auto-preamp", isOn: $settings.autoPreamp)
-                        .onChange(of: settings.autoPreamp) { _, _ in playback.applyAudioGain() }
-                    LabeledContent("ios-equalizer-effective-preamp", value: String(format: "%+.1f dB", playback.audioEffects.preampDB))
-                    if let error = playback.audioEffects.error { Text(error).foregroundStyle(.secondary) }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("ios-equalizer-preamp")
-                            Spacer()
-                            Text(String(format: "%+.1f dB", settings.preampDB))
-                                .appFont(.caption).monospacedDigit()
-                                .foregroundStyle(.secondary)
-                        }
-                        Slider(value: $settings.preampDB, in: -30...12, step: 0.5)
-                            .disabled(settings.autoPreamp)
-                            .onChange(of: settings.preampDB) { _, _ in playback.applyAudioGain() }
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("ios-equalizer-bass")
-                            Spacer()
-                            Text(String(format: "%+.1f dB", settings.bassDB))
-                                .appFont(.caption).monospacedDigit()
-                                .foregroundStyle(.secondary)
-                        }
-                        Slider(value: $settings.bassDB, in: -12...12, step: 0.5)
-                            .onChange(of: settings.bassDB) { _, _ in playback.applyAudioGain() }
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("ios-equalizer-treble")
-                            Spacer()
-                            Text(String(format: "%+.1f dB", settings.trebleDB))
-                                .appFont(.caption).monospacedDigit()
-                                .foregroundStyle(.secondary)
-                        }
-                        Slider(value: $settings.trebleDB, in: -12...12, step: 0.5)
-                            .onChange(of: settings.trebleDB) { _, _ in playback.applyAudioGain() }
-                    }
-                    Button("ios-equalizer-reset") {
-                        settings.resetEqualizer()
-                        playback.applyAudioGain()
-                    }
+                    NavigationLink("ios-equalizer") { SoundSettingsView() }
                 }
 
                 Section("ios-lyrics") {

@@ -33,6 +33,17 @@ private func receiveNativeReply(_ context: UnsafeMutableRawPointer?, _ json: Uns
 
 /// Thin asynchronous adapter. All provider sockets and stream resolution run in the Rust core.
 enum NativeProvider {
+    struct EqualizerDescription: Decodable {
+        let filters: [SoundFilter]
+        let auto_preamp: Bool
+        let preamp_db: Double
+        let profile: String
+        let skipped_lines: [Int]
+    }
+
+    static func describeEqualizer(_ payload: [String: Any]) async throws -> EqualizerDescription {
+        try await request(payload)
+    }
     struct EqualizerState: Decodable {
         let applied: Bool
         let preamp_db: Double

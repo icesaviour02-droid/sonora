@@ -35,6 +35,11 @@ class NativeDSP:
                        preset="flat", auto_preamp=False, preamp_db=0, bass_db=0, treble_db=0,
                        normalization_db=0)
         payload.update(changes)
+        result = self.request(payload)
+        assert result["ok"], result.get("error")
+        return result["data"]
+
+    def request(self, payload):
         done = threading.Event()
         result = []
 
@@ -49,8 +54,7 @@ class NativeDSP:
         CALLBACKS.append(callback)
         assert self.lib.sonora_mobile_request(json.dumps(payload).encode(), None, callback) == 0
         assert done.wait(10), "audio configuration did not complete"
-        assert result[0]["ok"], result[0].get("error")
-        return result[0]["data"]
+        return result[0]
 
     def process(self, signals, interleaved=False):
         frames = len(signals[0])
@@ -104,14 +108,32 @@ def check(path):
     imported = dsp.configure(enabled=True, preamp_db=-3,
         profile="Preamp: -3 dB\nFilter 1: ON PK Fc 1000 Hz Gain 6 dB Q 2\n")
     assert imported["filter_count"] == 1 and not imported["skipped_lines"]
+    at_peak = tone(1_000)
+    prior_sound = dsp.process([at_peak])[0]
+    notch = dict(kind="notch", frequency=1_000, gain=0, width_unit="q", width=4, enabled=True)
+    description = dsp.request(dict(operation="equalizer_describe", preset="flat", filters=[notch]))
+    assert description["ok"] and description["data"]["filters"][0]["kind"] == "notch"
+    assert dsp.process([at_peak])[0] == prior_sound, "profile preview changed the playing curve"
+    roundtrip = dsp.request(dict(operation="equalizer_describe", preset="flat", profile=description["data"]["profile"]))
+    assert roundtrip["ok"] and roundtrip["data"]["filters"][0]["width"] == 4
+    warning = dsp.request(dict(operation="equalizer_describe", preset="flat", profile=description["data"]["profile"] + "\nChannel: L\n"))
+    assert warning["ok"] and warning["data"]["skipped_lines"], "unsupported commands were silently accepted"
+    for filters in ([notch] * 21, [dict(notch, kind="low-shelf", width_unit="octaves")]):
+        refused = dsp.request(dict(operation="equalizer_describe", preset="flat", filters=filters))
+        assert not refused["ok"] and refused["error"] == "equalizer_invalid"
     stale = dsp.configure(revision=0, preamp_db=12)
     assert not stale["applied"] and stale["preamp_db"] == imported["preamp_db"]
+    dsp.configure(enabled=True, filters=[notch])
+    notch_db = gain_db(at_peak, dsp.process([at_peak])[0])
+    assert notch_db < -50, notch_db
     dsp.configure(normalization_db=6)
     normalized = dsp.process([low])[0]
     assert abs(gain_db(low, normalized) - 6) < 0.01
     result = dict(passed=True, bypass_exact=True, channel_layouts_match=True,
                   bass_gain_db=low_db, upper_gain_db=high_db, preset_contrast_db=contrast,
                   preset_headroom_db=preset["preamp_db"], profile_import=True,
+                  parametric_notch_db=notch_db, profile_preview_preserves_sound=True,
+                  invalid_filters_rejected=True, import_warnings=True, profile_roundtrip=True,
                   stale_configuration_ignored=True, normalization_gain_db=gain_db(low, normalized))
     output = IOS / "build/audio-effects-check.json"
     output.parent.mkdir(parents=True, exist_ok=True)

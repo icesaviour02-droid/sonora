@@ -117,6 +117,14 @@ if __name__ == "__main__":
         search_evidence = evidence(container, "search-review.json")
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-youtube-search.png"))
         fixture = json.loads((IOS / "scripts/review-track.json").read_text())
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://soundprofilesreview")
+        sound_profiles = evidence(container, "sound-profiles-review.json", timeout=90)
+        if not sound_profiles or not sound_profiles.get("passed"):
+            raise RuntimeError("Sound profile create/edit/import/export/restore/delete checks failed")
+        sim("io", udid, "screenshot", str(OUTPUT / "iphone13-sound-profiles.png"))
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://soundprofileeditor")
+        time.sleep(2)
+        sim("io", udid, "screenshot", str(OUTPUT / "iphone13-sound-profile-editor.png"))
         metadata = {"id": fixture["id"], "title": fixture["title"], "artist": fixture["artist"], "artwork": fixture["artwork_url"]}
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://queuereview?" + urllib.parse.urlencode(metadata))
         queue_review = evidence(container, "queue-review.json")

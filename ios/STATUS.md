@@ -141,3 +141,26 @@ C-boundary checks on the Mac host, and both iPhone/simulator static-library buil
 40259560062 has compiled the device app and is checking simulator/runtime behavior for snapshot
 0c4607bd. Re-poll that same run rather than restarting it. Its positive tap-frame assertion is the
 required evidence for actual AVFoundation integration; compilation and core tests alone are insufficient.
+
+Run 40259560062 completed. Its local-playback-review.json confirms seven passed checks, including
+positive native audio-tap processing, real clock advancement, pause and seek/resume. The iOS DSP
+bridge is therefore exercised through AVFoundation, not only compiled. The run again failed later
+at Guest verification, and did not publish an IPA.
+
+## Named profiles and parametric filters (26 October 2026)
+
+Native Sound settings now have profile creation from desktop presets, selection, renaming,
+deletion, up to 20 editable/reorderable filters with all eight desktop types, Q/octave widths,
+frequency/gain/enable controls and per-profile automatic/manual preamp. Files import/export uses
+the actual desktop Equalizer APO parser/exporter; unsupported lines are reported rather than hidden.
+Descriptions validate drafts without changing playback. Profile JSON writes are atomic, corrupt
+saved files are preserved, and the selected profile survives relaunch. Sound-specific device rules
+are still missing, and touch interaction/Files-picker acceptance remains separate from store checks.
+
+The extended generated-PCM check passes valid profile edits/round-trip, rejected invalid shelves
+and filter counts, import warnings, unchanged audio during preview, and a frequency-selective notch.
+Swift syntax and canonical localization checks pass. Apple compilation and a new native profile-store
+acceptance sequence (create, validate/edit/save, export, import/warnings, reload and delete) are pending.
+
+The user explicitly cancelled two-hour scheduling. Automation `continue-sonora-iphone-feature-parity`
+has been deleted; the full goal remains active for continuous work in this chat. Do not recreate it.
