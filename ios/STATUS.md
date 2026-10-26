@@ -374,3 +374,12 @@ populated screenshots, and records review-scope.json with full_provider_acceptan
 normal unsigned acceptance artifact is not uploaded by this scope. Default push and full manual
 runs keep the complete existing acceptance gate. This avoids rerunning unchanged network lyrics,
 fonts and Guest checks for visual repairs; it does not establish successful Guest playback.
+
+Focused run 40307540029 at 8e25098f compiled device and simulator plus the XCUITest runner. Native
+playback/download/local-store/relaunch checks passed again. Downloads category/song/album/playlist
+touch navigation passed. Queue drag did not reorder; a grip nested inside the row's playback Button
+was not a reliable independent drag target. It is now a separate native drag source with a private
+app-only occurrence payload, drop-enter reordering through PlaybackController, and VoiceOver Move
+Up/Down actions. Swipe removal remains in ordinary list mode. The rename test reached its real
+alert but failed because the accessibility tree exposed two Save button wrappers; the test now
+selects the first matching button. No claim of passing these two touch flows is made yet.

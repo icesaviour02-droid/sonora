@@ -18,7 +18,7 @@ final class MusicInteractionTests: XCTestCase {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
         }
         field.typeText("Sonora Touch Playlist")
-        app.alerts.buttons["Save"].tap()
+        app.alerts.buttons["Save"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Sonora Touch Playlist"].firstMatch.waitForExistence(timeout: 10))
     }
 
@@ -53,9 +53,13 @@ final class MusicInteractionTests: XCTestCase {
         let firstCell = app.cells.containing(.button, identifier: firstID).firstMatch
         let secondCell = app.cells.containing(.button, identifier: secondID).firstMatch
         XCTAssertTrue(firstCell.exists && secondCell.exists)
-        firstCell.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
-            .press(forDuration: 0.8, thenDragTo: secondCell.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.9)))
-        let moved = NSPredicate { _, _ in app.buttons[secondID].frame.minY < app.buttons[firstID].frame.minY }
+        let grip = app.descendants(matching: .any).matching(identifier: firstID.replacingOccurrences(of: "queue-row-", with: "queue-grip-")).firstMatch
+        XCTAssertTrue(grip.exists)
+        grip.press(forDuration: 1, thenDragTo: secondCell.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.8)))
+        let moved = NSPredicate { _, _ in
+            app.buttons[secondID].exists && app.buttons[firstID].exists &&
+            app.buttons[secondID].frame.minY < app.buttons[firstID].frame.minY
+        }
         expectation(for: moved, evaluatedWith: app)
         waitForExpectations(timeout: 8)
         app.buttons[firstID].swipeLeft()

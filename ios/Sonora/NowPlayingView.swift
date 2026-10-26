@@ -1,6 +1,7 @@
 import AVKit
 import MediaPlayer
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The system tab accessory automatically moves with the Liquid Glass tab bar and pops up into Now Playing on tap or upward swipe.
 struct MiniPlayer: View {
@@ -98,6 +99,7 @@ struct NowPlayingView: View {
     @State private var lyrics = LyricsStore()
     @State private var chooseLocalPlaylist = false
     @State private var addQueueSongs = false
+    @State private var draggedQueueID: UUID?
 
     init(initialMode: String = "artwork") {
         _mode = State(initialValue: initialMode == "lyrics" ? .lyrics : (initialMode == "queue" ? .queue : .artwork))
@@ -137,7 +139,7 @@ struct NowPlayingView: View {
         .onChange(of: settings.localFileLyrics) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: settings.lyricsSources) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: mode) { _, _ in loadLyricsIfNeeded() }
-        .onDisappear { lyrics.cancel() }
+        .onDisappear { lyrics.cancel(); draggedQueueID = nil }
         .sheet(isPresented: $addQueueSongs) {
             NavigationStack { QueueSongsPicker() }
         }
@@ -469,14 +471,14 @@ struct NowPlayingView: View {
                     }
                     Section {
                         ForEach(playback.upcomingItems) { item in
-                            queueRow(item.track, reorderable: true) { playback.selectQueueItem(item.id) }
-                                .accessibilityIdentifier("queue-row-" + item.id.uuidString)
+                            queueRow(item.track, queueID: item.id) { playback.selectQueueItem(item.id) }
+                                .onDrop(of: [.sonoraQueueEntry], delegate: QueueEntryDrop(
+                                    target: item.id, dragged: $draggedQueueID, move: moveQueueEntry))
                                 .swipeActions {
                                     Button("ios-remove-from-queue", role: .destructive) { playback.removeQueueItem(item.id) }
                                         .accessibilityIdentifier("queue-remove-" + item.id.uuidString)
                                 }
                         }
-                        .onMove(perform: playback.moveUpcoming)
                         Button { addQueueSongs = true } label: {
                             HStack(spacing: Layout.compact) {
                                 Image(systemName: "plus")
@@ -528,29 +530,70 @@ struct NowPlayingView: View {
     }
 
     /// Shares queue/history metadata while each caller selects the correct queue occurrence.
-    private func queueRow(_ track: MusicTrack, reorderable: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: Layout.compact) {
-                ArtworkView(track: track, side: Layout.rowArtwork, cornerRadius: Layout.compact)
-                VStack(alignment: .leading, spacing: Layout.compact / 2) {
-                    Text(track.title).appFont(.subheadline, weight: .medium)
-                        .foregroundStyle(.white).lineLimit(1)
-                    Text(track.artist).appFont(.caption)
-                        .foregroundStyle(.white.opacity(0.68)).lineLimit(1)
-                }
-                Spacer(minLength: Layout.compact)
-                if reorderable {
-                    Image(systemName: "line.3.horizontal").foregroundStyle(.white.opacity(0.4))
-                        .frame(width: Layout.control, height: Layout.control).accessibilityHidden(true)
-                }
+    private func queueRow(_ track: MusicTrack, queueID: UUID? = nil, action: @escaping () -> Void) -> some View {
+        HStack(spacing: Layout.compact) {
+            Button(action: action) { queueTrackContent(track) }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(queueID.map { "queue-row-" + $0.uuidString } ?? "queue-history-" + track.id)
+            if let queueID {
+                Image(systemName: "line.3.horizontal")
+                    .foregroundStyle(.white.opacity(0.4))
+                    .frame(width: Layout.control, height: Layout.control)
+                    .contentShape(Rectangle())
+                    .onDrag {
+                        draggedQueueID = queueID
+                        let provider = NSItemProvider()
+                        provider.registerDataRepresentation(forTypeIdentifier: UTType.sonoraQueueEntry.identifier,
+                            visibility: .ownProcess) { completion in
+                            completion(Data(queueID.uuidString.utf8), nil)
+                            return nil
+                        }
+                        return provider
+                    } preview: {
+                        queueTrackContent(track)
+                            .padding(Layout.compact)
+                            .frame(width: Layout.queuePreviewWidth)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: Layout.cardRadius))
+                    }
+                    .accessibilityElement()
+                    .accessibilityLabel(Text("ios-reorder-song"))
+                    .accessibilityIdentifier("queue-grip-" + queueID.uuidString)
+                    .accessibilityAction(named: Text("ios-move-up")) { nudgeQueueEntry(queueID, by: -1) }
+                    .accessibilityAction(named: Text("ios-move-down")) { nudgeQueueEntry(queueID, by: 1) }
             }
-            .frame(minHeight: Layout.control)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: Layout.compact / 2, leading: 0, bottom: Layout.compact / 2, trailing: 0))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
+    }
+
+    private func queueTrackContent(_ track: MusicTrack) -> some View {
+        HStack(spacing: Layout.compact) {
+            ArtworkView(track: track, side: Layout.rowArtwork, cornerRadius: Layout.compact).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Layout.compact / 2) {
+                Text(track.title).appFont(.subheadline, weight: .medium).foregroundStyle(.white).lineLimit(1)
+                Text(track.artist).appFont(.caption).foregroundStyle(.white.opacity(0.68)).lineLimit(1)
+            }
+            Spacer(minLength: Layout.compact)
+        }
+        .frame(maxWidth: .infinity, minHeight: Layout.control, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    /// Resolve current occurrence positions at every drop entry, so repeated songs stay distinct.
+    private func moveQueueEntry(_ source: UUID, _ target: UUID) {
+        let entries = playback.upcomingItems
+        guard let from = entries.firstIndex(where: { $0.id == source }),
+              let to = entries.firstIndex(where: { $0.id == target }), from != to else { return }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
+            playback.moveUpcoming(fromOffsets: IndexSet(integer: from), toOffset: from < to ? to + 1 : to)
+        }
+    }
+
+    private func nudgeQueueEntry(_ id: UUID, by distance: Int) {
+        let entries = playback.upcomingItems
+        guard let source = entries.firstIndex(where: { $0.id == id }), entries.indices.contains(source + distance) else { return }
+        moveQueueEntry(id, entries[source + distance].id)
     }
 
     private func queueModePill(symbol: String, label: LocalizedStringKey, isActive: Bool, action: @escaping () -> Void) -> some View {

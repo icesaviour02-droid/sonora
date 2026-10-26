@@ -1666,3 +1666,7 @@ ios-offline-songs-only = Only songs available offline are shown.
 ios-edit-playlist = Edit Playlist
 
 ios-delete-from-iphone = Delete from iPhone
+
+ios-reorder-song = Reorder Song
+ios-move-up = Move Up
+ios-move-down = Move Down

@@ -179,6 +179,8 @@
 "ios-maloja-key" = "Maloja API Key";
 "ios-maloja-url" = "Maloja Server URL";
 "ios-missing-file" = "This audio file is missing. Import it again from Files.";
+"ios-move-down" = "Move Down";
+"ios-move-up" = "Move Up";
 "ios-music-service" = "Music service";
 "ios-next" = "Next track";
 "ios-no-lyrics-description" = "YouTube Music has no lyrics for this recording.";
@@ -227,6 +229,7 @@
 "ios-remove-from-library" = "Remove from Library";
 "ios-remove-from-queue" = "Remove from Queue";
 "ios-rename-playlist" = "Rename Playlist";
+"ios-reorder-song" = "Reorder Song";
 "ios-repeat" = "Repeat";
 "ios-repeat-all" = "Repeat all";
 "ios-repeat-one" = "Repeat one";
