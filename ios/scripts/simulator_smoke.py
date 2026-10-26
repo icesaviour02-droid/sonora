@@ -190,6 +190,9 @@ def review_functionality(udid, container):
     except (subprocess.SubprocessError, RuntimeError):
         record("touch_interactions", False)
 
+    # XCTest may replace the AUT data container while installing its application-under-test.
+    container = Path(sim("get_app_container", udid, BUNDLE, "data"))
+
     for route, filename, count in [("home", "home-review.json", "items"),
                                    ("search?q=Beethoven", "search-review.json", "songs")]:
         (container / "Library/Application Support" / filename).unlink(missing_ok=True)
@@ -468,6 +471,10 @@ if __name__ == "__main__":
         (OUTPUT / "device.json").write_text(json.dumps({"device": "iPhone 13 simulator", "runtime": runtime, "launch": launch, "limitations": "Simulator launch, appearance, streaming and download review. Physical-device behavior remains unverified."}, indent=2))
     finally:
         if "container" in locals():
+            try:
+                container = Path(sim("get_app_container", udid, BUNDLE, "data"))
+            except subprocess.SubprocessError:
+                pass
             for filename in ("potoken-review.json", "provider-failure.json"):
                 path = container / "Library/Application Support" / filename
                 if path.exists(): (OUTPUT / filename).write_text(path.read_text())

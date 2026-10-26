@@ -531,3 +531,22 @@ height. System menus/submenus and native collection row drag/swipe behavior are 
 Reduce Motion remains respected. A fourth touch flow checks mode changes, menus, dismissal and
 reopening. No appearance screenshots are requested or analyzed. Exact animation parity cannot
 be certified from static screenshots, and unsupported AutoMix/crossfade buttons are not faked.
+
+Run 40374499230 at 3921f918 compiled both targets and ran on iPhone 13/iOS 27.0. All ten native
+state/playback groups passed (88 boolean checks): cancellation, sound observation/profiles,
+lyrics storage, scrobbling fixtures, AAC/local playback, download storage, local playlists,
+relaunch and queue occurrence/order checks. Downloads navigation, playlist rename and the new
+player modes/menu/dismiss/reopen touch flow passed. Native drag and swipe removal passed, but
+Add Songs still had no hittable identified selection row. The picker now uses explicit native
+row Buttons and selection circles instead of relying on a passive List selection label, with
+full-row hit regions and selected accessibility traits.
+
+The real Keychain check failed before its first assertion in the unsigned simulator app. The
+simulator app is now ad-hoc signed with a simulator-only application identifier/access group;
+the unsigned device IPA is unaffected and remains signed by iLoader at installation. Actual
+Keychain failures now record only their OSStatus code for diagnosis, without credentials.
+
+The runner also reused a pre-XCTest data-container path for later Home/Search/Guest evidence.
+It now re-fetches the AUT container after XCTest installation and again for final diagnostics.
+Those earlier missing files/null Guest result do not establish a provider pass or a Google
+verification response. Live network results must be collected again from the active container.

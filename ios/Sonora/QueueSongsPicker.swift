@@ -17,14 +17,28 @@ struct QueueSongsPicker: View {
     }
 
     var body: some View {
-        List(selection: $selected) {
+        List {
             ForEach(songs.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || $0.artist.localizedCaseInsensitiveContains(query) }) { track in
-                TrackRow(track: track) {}.selecting().tag(track.id)
-                    .accessibilityIdentifier("queue-picker-song-" + track.id)
+                Button {
+                    if selected.contains(track.id) { selected.remove(track.id) }
+                    else { selected.insert(track.id) }
+                } label: {
+                    HStack(spacing: Layout.compact) {
+                        Image(systemName: selected.contains(track.id) ? "checkmark.circle.fill" : "circle")
+                            .appFont(.title2)
+                            .foregroundStyle(selected.contains(track.id) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                            .frame(width: Layout.control, height: Layout.control)
+                        TrackRow(track: track) {}.selecting().accessibilityHidden(true)
+                    }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(track.title) + Text(", ") + Text(track.artist))
+                .accessibilityAddTraits(selected.contains(track.id) ? .isSelected : [])
+                .accessibilityIdentifier("queue-picker-song-" + track.id)
             }
         }
         .listStyle(.plain)
-        .environment(\.editMode, .constant(.active))
+        .sensoryFeedback(.selection, trigger: selected)
         .searchable(text: $query)
         .navigationTitle("ios-add-songs-to-queue")
         .navigationBarTitleDisplayMode(.inline)

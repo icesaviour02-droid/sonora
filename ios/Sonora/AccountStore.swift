@@ -10,6 +10,9 @@ private struct SavedSession: Codable {
     let pageID: String?
 }
 
+/// Carries only the OS status for diagnostics; account data never appears in error reports.
+private struct AccountStorageError: Error { let status: OSStatus }
+
 /// Stores the account session in this device's Keychain; credentials never enter preferences or logs.
 private enum AccountKeychain {
     private static var query: [String: Any] {
@@ -25,7 +28,8 @@ private enum AccountKeychain {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = item as? Data else { throw CocoaError(.fileReadUnknown) }
+        guard status == errSecSuccess else { throw AccountStorageError(status: status) }
+        guard let data = item as? Data else { throw CocoaError(.fileReadUnknown) }
         if let decoded = try? JSONDecoder().decode(SavedSession.self, from: data) {
             return decoded
         }
@@ -42,13 +46,14 @@ private enum AccountKeychain {
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if status == errSecItemNotFound {
             let add = query.merging(attributes) { _, new in new }
-            guard SecItemAdd(add as CFDictionary, nil) == errSecSuccess else { throw CocoaError(.fileWriteUnknown) }
-        } else if status != errSecSuccess { throw CocoaError(.fileWriteUnknown) }
+            let added = SecItemAdd(add as CFDictionary, nil)
+            guard added == errSecSuccess else { throw AccountStorageError(status: added) }
+        } else if status != errSecSuccess { throw AccountStorageError(status: status) }
     }
 
     static func remove() throws {
         let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw CocoaError(.fileWriteUnknown) }
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw AccountStorageError(status: status) }
     }
 }
 
@@ -241,6 +246,7 @@ final class AccountStore {
     func reviewSessionStorage() {
         guard ProcessInfo.processInfo.arguments.contains("--sonora-review-url") else { return }
         var checks: [String: Bool] = [:]
+        var osStatus: OSStatus?
         do {
             let previous = try AccountKeychain.read()
             defer {
@@ -255,8 +261,12 @@ final class AccountStore {
             checks["account_selection_preserved"] = updated?.authuser == 2 && updated?.pageID == "sonora-review-page"
             try AccountKeychain.remove()
             checks["signed_out_credentials_removed"] = try AccountKeychain.read() == nil
-        } catch { checks["keychain_operation"] = false }
-        let report: [String: Any] = ["passed": checks.count == 4 && checks.values.allSatisfy { $0 }, "checks": checks]
+        } catch {
+            checks["keychain_operation"] = false
+            osStatus = (error as? AccountStorageError)?.status
+        }
+        var report: [String: Any] = ["passed": checks.count == 4 && checks.values.allSatisfy { $0 }, "checks": checks]
+        if let osStatus { report["os_status"] = osStatus }
         if let data = try? JSONSerialization.data(withJSONObject: report) {
             try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("account-storage-review.json"), options: .atomic)
         }
