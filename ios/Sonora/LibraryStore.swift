@@ -63,6 +63,15 @@ final class LibraryStore {
         } catch { return nil }
     }
 
+    /// The populated Downloads capture uses the same import and persistent transfer models.
+    func reviewDownloads(_ downloads: DownloadsStore) {
+        reviewTask?.cancel()
+        reviewTask = Task { [weak self] in
+            guard let self, let track = await self.importReviewRecording() else { return }
+            await downloads.reviewDownloads(file: self.url(for: track), track: track)
+        }
+    }
+
     /// Imports the runner's generated WAV, checks the real player clock and removes that import.
     func reviewLocalPlayback(_ playback: PlaybackController) {
         reviewTask?.cancel()
@@ -116,6 +125,8 @@ final class LibraryStore {
                 playback.resume()
                 checks["seek_resume"] = await self.waitForClock(playback, beyond: 6)
                 playback.pause()
+                let timeline = await playback.reviewTimeline(track: track, url: self.url(for: track))
+                checks.merge(timeline) { _, new in new }
                 await self.remove(track)
                 playback.reconcile(with: self.tracks)
                 checks["remove_import"] = Set(self.tracks.map(\.id)) == before && !FileManager.default.fileExists(atPath: self.url(for: track).path)

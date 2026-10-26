@@ -12,8 +12,18 @@ struct DownloadEntry: Codable, Identifiable {
     var state: State
     var taskID: Int?
     var expectedBytes: UInt64?
+    var sourceDuration: Double? = nil
     var progress: Double = 0
     var failureCode: String? = nil
+}
+
+/// A downloaded playlist retains its name and original ordering, independent of an online reload.
+struct DownloadedPlaylist: Codable, Identifiable {
+    let id: String
+    let title: String
+    let author: String
+    let artworkURL: URL?
+    let trackIDs: [String]
 }
 
 /// Delays the OS completion handler until all downloaded files and their metadata are finalized.
@@ -61,6 +71,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
     }
 
     private(set) var entries: [DownloadEntry] = []
+    private(set) var playlists: [DownloadedPlaylist] = []
     private(set) var isRestoring = true
     var error: String?
     var allowsCellular: Bool {
@@ -72,6 +83,14 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private var restoration: Task<Void, Never>?
     @ObservationIgnored private var lastProgress: [Int: Date] = [:]
     private var indexURL: URL { Self.root.appendingPathComponent("downloads.json") }
+    private var playlistsURL: URL { Self.root.appendingPathComponent("playlists.json") }
+
+    var completedTracks: [MusicTrack] { entries.filter { $0.state == .downloaded }.map(\.track) }
+
+    func tracks(in playlist: DownloadedPlaylist) -> [MusicTrack] {
+        let byID = Dictionary(completedTracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return playlist.trackIDs.compactMap { byID[$0] }
+    }
 
     var totalBytesUsed: UInt64 {
         entries.reduce(0) { sum, entry in
@@ -93,6 +112,9 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
                 guard entries.allSatisfy({ UUID(uuidString: ($0.filename as NSString).deletingPathExtension) != nil && ($0.filename as NSString).pathExtension == "m4a" }) else {
                     throw CocoaError(.fileReadCorruptFile)
                 }
+            }
+            if FileManager.default.fileExists(atPath: playlistsURL.path) {
+                playlists = try JSONDecoder().decode([DownloadedPlaylist].self, from: Data(contentsOf: playlistsURL))
             }
         } catch { self.error = String(localized: "ios-download-restore-error") }
         let config = URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
@@ -163,6 +185,19 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         }
     }
 
+    /// Save the collection before scheduling transfers, so an offline relaunch retains its order.
+    func enqueuePlaylist(id: String, title: String, author: String, artwork: URL?, tracks: [MusicTrack]) {
+        guard error == nil, !tracks.isEmpty else { return }
+        let playlist = DownloadedPlaylist(id: id, title: title, author: author, artworkURL: artwork,
+            trackIDs: tracks.filter { $0.youtubeID != nil && $0.available != false }.map(\.id))
+        let updated = playlists.filter { $0.id != id } + [playlist]
+        do {
+            try JSONEncoder().encode(updated).write(to: playlistsURL, options: .atomic)
+            playlists = updated
+            enqueueAll(tracks)
+        } catch { self.error = String(localized: "ios-download-save-error") }
+    }
+
     func retry(_ id: String) {
         guard let index = entries.firstIndex(where: { $0.id == id }), entries[index].state == .failed else { return }
         try? FileManager.default.removeItem(at: Self.root.appendingPathComponent(entries[index].filename))
@@ -205,6 +240,44 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         for entry in queued { start(entry) }
     }
 
+    #if DEBUG
+    /// Seeds only self-generated, real AAC files for the simulator's populated Downloads review.
+    func reviewDownloads(file: URL, track: MusicTrack) async {
+        for _ in 0..<150 {
+            if !isRestoring { break }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        var checks: [String: Bool] = [:]
+        do {
+            let filename = UUID().uuidString + ".m4a"
+            try FileManager.default.copyItem(at: file, to: Self.root.appendingPathComponent(filename))
+            var saved = track
+            saved = MusicTrack(id: "youtube:reviewSaved", title: track.title, artist: track.artist,
+                filename: "", addedAt: .now, youtubeID: "reviewSaved", albumTitle: track.albumTitle,
+                artworkURL: track.displayArtworkURL, durationSeconds: 8)
+            let entry = DownloadEntry(track: saved, filename: filename, state: .downloaded, sourceDuration: 8, progress: 1)
+            entries.append(entry)
+            checks["saved_download"] = persist() && fileURL(for: saved.id) != nil
+            let restored = try JSONDecoder().decode([DownloadEntry].self, from: Data(contentsOf: indexURL))
+            checks["duration_persisted"] = restored.last?.sourceDuration == 8
+            var legacy = try JSONSerialization.jsonObject(with: JSONEncoder().encode(entry)) as! [String: Any]
+            legacy.removeValue(forKey: "sourceDuration")
+            let old = try JSONDecoder().decode(DownloadEntry.self, from: JSONSerialization.data(withJSONObject: legacy))
+            checks["old_download_migration"] = old.sourceDuration == nil && old.filename == filename
+            let playlist = DownloadedPlaylist(id: "review-playlist", title: "Sonora Saved Playlist",
+                author: track.artist, artworkURL: track.displayArtworkURL, trackIDs: [saved.id])
+            playlists.append(playlist)
+            try JSONEncoder().encode(playlists).write(to: playlistsURL, options: .atomic)
+            let reopened = try JSONDecoder().decode([DownloadedPlaylist].self, from: Data(contentsOf: playlistsURL))
+            checks["playlist_order_restored"] = reopened.last?.trackIDs == [saved.id] && tracks(in: playlist).map(\.id) == [saved.id]
+        } catch { checks["saved_download"] = false }
+        let report: [String: Any] = ["passed": checks.count == 4 && checks.values.allSatisfy { $0 }, "checks": checks]
+        if let data = try? JSONSerialization.data(withJSONObject: report) {
+            try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("downloads-layout-review.json"), options: .atomic)
+        }
+    }
+    #endif
+
     private func start(_ entry: DownloadEntry) {
         guard let videoID = entry.track.youtubeID,
               let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
@@ -230,6 +303,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
                 self.entries[index].taskID = transfer.taskIdentifier
                 self.transfers[transfer.taskIdentifier] = transfer
                 self.entries[index].expectedBytes = length
+                self.entries[index].sourceDuration = stream.duration_seconds
                 self.entries[index].state = .downloading
                 self.resolving.removeValue(forKey: entry.id)
                 guard self.persist() else {

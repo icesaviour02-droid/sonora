@@ -5,6 +5,7 @@ import SwiftUI
 /// The system tab accessory automatically moves with the Liquid Glass tab bar and pops up into Now Playing on tap or upward swipe.
 struct MiniPlayer: View {
     @Environment(PlaybackController.self) private var playback
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
     let open: () -> Void
 
     var body: some View {
@@ -53,7 +54,7 @@ struct MiniPlayer: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text((playback.isPlaying || playback.isLoading) ? LocalizedStringKey("ios-pause") : LocalizedStringKey("ios-play")))
 
-            Button {
+            if placement == .expanded { Button {
                 playback.next()
             } label: {
                 Image(systemName: "forward.fill")
@@ -62,6 +63,7 @@ struct MiniPlayer: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text("ios-next"))
+            }
         }
         .padding(.horizontal, Layout.compact + 4)
         .gesture(
@@ -78,7 +80,6 @@ struct MiniPlayer: View {
 /// Full-screen Apple Music-style Now Playing sheet with scaling artwork, inline synced lyrics, and inline Up Next queue.
 struct NowPlayingView: View {
     private enum Mode: Hashable { case artwork, lyrics, queue }
-    private enum QueueListMode: Hashable { case upNext, history }
 
     @Environment(PlaybackController.self) private var playback
     @Environment(DownloadsStore.self) private var downloads
@@ -91,11 +92,11 @@ struct NowPlayingView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     @State private var mode: Mode = .artwork
-    @State private var queueMode: QueueListMode = .upNext
     @State private var seekValue: Double = 0
     @State private var isSeeking = false
     @State private var lyrics = LyricsStore()
     @State private var chooseLocalPlaylist = false
+    @State private var addQueueSongs = false
 
     init(initialMode: String = "artwork") {
         _mode = State(initialValue: initialMode == "lyrics" ? .lyrics : (initialMode == "queue" ? .queue : .artwork))
@@ -136,6 +137,9 @@ struct NowPlayingView: View {
         .onChange(of: settings.lyricsSources) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: mode) { _, _ in loadLyricsIfNeeded() }
         .onDisappear { lyrics.cancel() }
+        .sheet(isPresented: $addQueueSongs) {
+            NavigationStack { QueueSongsPicker() }
+        }
         .sheet(isPresented: $chooseLocalPlaylist) {
             NavigationStack { AddToLocalPlaylistView(trackIDs: playback.current.map { [$0.id] } ?? []) }
         }
@@ -329,6 +333,7 @@ struct NowPlayingView: View {
             }
             .buttonStyle(.plain)
             Spacer(minLength: Layout.compact)
+            favoriteControl
             overflowMenu
         }
     }
@@ -433,85 +438,78 @@ struct NowPlayingView: View {
     }
 
     private var queueStage: some View {
-        @Bindable var settings = settings
-        return VStack(alignment: .leading, spacing: Layout.compact) {
+        VStack(alignment: .leading, spacing: Layout.spacing) {
             compactTrackHeader
-
             HStack(spacing: Layout.compact) {
-                queueModePill(
-                    symbol: "shuffle",
-                    label: "ios-shuffle",
-                    isActive: playback.isShuffled,
-                    action: playback.toggleShuffle
-                )
-                queueModePill(
-                    symbol: playback.repeatMode.symbol,
-                    label: repeatLabel,
-                    isActive: playback.repeatMode != .off,
-                    action: playback.cycleRepeat
-                )
-                queueModePill(
-                    symbol: "infinity",
-                    label: "ios-autoplay-radio",
-                    isActive: settings.autoplayRadio,
-                    action: { settings.autoplayRadio.toggle() }
-                )
+                queueModePill(symbol: "shuffle", label: "ios-shuffle", isActive: playback.isShuffled,
+                    action: playback.toggleShuffle)
+                queueModePill(symbol: playback.repeatMode.symbol, label: repeatLabel,
+                    isActive: playback.repeatMode != .off, action: playback.cycleRepeat)
+                queueModePill(symbol: "infinity", label: "ios-autoplay-radio", isActive: settings.autoplayRadio,
+                    action: { settings.autoplayRadio.toggle() })
             }
-
-            HStack {
-                Picker("ios-queue", selection: $queueMode) {
-                    Text("ios-playing-next").tag(QueueListMode.upNext)
-                    Text("ios-history").tag(QueueListMode.history)
-                }
-                .pickerStyle(.segmented)
-
-                if queueMode == .upNext && !playback.upcomingItems.isEmpty {
-                    Button("ios-clear") {
-                        playback.clearUpcomingQueue()
-                    }
-                    .appFont(.caption, weight: .semibold)
-                    .foregroundStyle(.white.opacity(0.8))
-                } else if queueMode == .history && !settings.history.isEmpty {
-                    Button("ios-clear") {
-                        settings.clearHistory()
-                    }
-                    .appFont(.caption, weight: .semibold)
-                    .foregroundStyle(.white.opacity(0.8))
-                }
-            }
-
-            List {
-                if queueMode == .upNext {
-                    ForEach(playback.upcomingItems) { item in
-                        queueRow(item.track) { playback.selectQueueItem(item.id) }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                    }
-                    .onMove(perform: playback.moveUpcoming)
-                    .onDelete { offsets in
-                        let entries = playback.upcomingItems
-                        for index in offsets where entries.indices.contains(index) {
-                            playback.removeQueueItem(entries[index].id)
+            ScrollViewReader { proxy in
+                List {
+                    if !settings.history.isEmpty {
+                        Section {
+                            ForEach(settings.history.reversed()) { track in
+                                queueRow(track) { playback.play(track, in: settings.history) }
+                                    .swipeActions {
+                                        Button("ios-delete", role: .destructive) { settings.removeFromHistory(track) }
+                                    }
+                            }
+                        } header: {
+                            HStack {
+                                Text("ios-history")
+                                Spacer()
+                                Button("ios-clear") { settings.clearHistory() }
+                            }.textCase(nil)
                         }
                     }
-                    if playback.upcomingItems.isEmpty {
-                        Text("ios-queue-empty").foregroundStyle(.white.opacity(0.75))
-                            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    Section {
+                        ForEach(playback.upcomingItems) { item in
+                            queueRow(item.track) { playback.selectQueueItem(item.id) }
+                                .swipeActions {
+                                    Button("ios-remove-from-queue", role: .destructive) { playback.removeQueueItem(item.id) }
+                                }
+                        }
+                        .onMove(perform: playback.moveUpcoming)
+                        Button { addQueueSongs = true } label: {
+                            HStack(spacing: Layout.compact) {
+                                Image(systemName: "plus")
+                                    .appFont(.title2)
+                                    .frame(width: Layout.rowArtwork, height: Layout.rowArtwork)
+                                    .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: Layout.compact))
+                                Text("ios-add-songs-to-queue").appFont(.body)
+                            }.foregroundStyle(.white)
+                        }.buttonStyle(.plain)
+                    } header: {
+                        HStack {
+                            Text("ios-queue").appFont(.headline)
+                            Spacer()
+                            Button("ios-clear") { playback.clearUpcomingQueue() }
+                                .disabled(playback.upcomingItems.isEmpty)
+                        }
+                        .foregroundStyle(.white).textCase(nil)
+                        .padding(.vertical, Layout.compact)
+                        .id("queue-start")
                     }
-                } else {
-                    ForEach(settings.history) { track in
-                        queueRow(track) { playback.play(track, in: settings.history) }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .swipeActions {
-                                Button("ios-delete", role: .destructive) { settings.removeFromHistory(track) }
+                    if settings.autoplayRadio {
+                        Section {
+                            VStack(alignment: .leading, spacing: Layout.compact / 2) {
+                                Label("ios-autoplay-radio", systemImage: "infinity").appFont(.headline)
+                                Text("ios-autoplay-description").appFont(.subheadline).foregroundStyle(.white.opacity(0.65))
                             }
+                        }
                     }
                 }
+                .listStyle(.plain)
+                .listRowSpacing(Layout.compact / 2)
+                .scrollContentBackground(.hidden)
+                .listSectionSeparator(.hidden)
+                .environment(\.editMode, .constant(.active))
+                .onAppear { proxy.scrollTo("queue-start", anchor: .top) }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .environment(\.editMode, .constant(queueMode == .upNext ? .active : .inactive))
         }
     }
 
@@ -532,6 +530,9 @@ struct NowPlayingView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: Layout.compact / 2, leading: 0, bottom: Layout.compact / 2, trailing: 0))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     private func queueModePill(symbol: String, label: LocalizedStringKey, isActive: Bool, action: @escaping () -> Void) -> some View {

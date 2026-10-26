@@ -180,20 +180,16 @@ struct LocalPlaylistView: View {
     }
 
     private func header(_ playlist: LocalPlaylist) -> some View {
-        VStack(spacing: Layout.spacing) {
-            ArtworkView(track: tracks.first { $0.displayArtworkURL != nil } ?? tracks.first, side: Layout.detailArtwork, cornerRadius: Layout.artworkRadius).placeholderSymbol("music.note.list")
-            Text(playlist.title).appFont(.title2, weight: .bold).multilineTextAlignment(.center)
-            Text("ios-on-my-iphone").foregroundStyle(.secondary)
-            HStack(spacing: Layout.spacing) {
-                Button("ios-play", systemImage: "play.fill") { if let first = tracks.first { playback.play(first, in: tracks) } }
-                    .buttonStyle(.glassProminent)
-                Button("ios-shuffle", systemImage: "shuffle") { playback.playShuffled(tracks) }.buttonStyle(.glass)
-            }
-            .controlSize(.large).disabled(tracks.isEmpty)
-            Button("ios-add-songs", systemImage: "plus") { picking = true }.buttonStyle(.glass)
+        VStack(alignment: .leading, spacing: Layout.compact) {
+            MusicCollectionHeader(title: playlist.title, subtitle: String(localized: "ios-on-my-iphone"),
+                artworkURL: tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL, tracks: tracks)
+            Button("ios-add-songs", systemImage: "plus") { picking = true }
+                .appFont(.body, weight: .semibold)
+                .frame(minHeight: Layout.control)
                 .disabled(local.isBusy)
         }
-        .frame(maxWidth: .infinity).listRowSeparator(.hidden)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 }
 

@@ -46,5 +46,11 @@
     "url": "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/67/04/a6/6704a634-d243-e850-2b93-fd38c1915e62/iPhone6p9-iOS26-USEN-Music-Wrapper6.png/1290x2796bb.png",
     "source_page": "https://apps.apple.com/us/app/apple-music/id1108187390?uo=4",
     "description": "Official Apple Music App Store screenshot; inspect to identify the screen."
+  },
+  {
+    "file": "queue-official.png",
+    "url": "https://ipcdn-web.apple.com/assets/v2/web/5b954199-4339-4d17-b01a-5da802f5b92e",
+    "source_page": "https://support.apple.com/guide/iphone/queue-up-your-music-ipha4521ef7d/ios",
+    "description": "Official queue reference inspected: compact artwork/song header, mode pills, Queue/Clear, drag handles, Add Songs row, AutoPlay and shared transport."
   }
 ]

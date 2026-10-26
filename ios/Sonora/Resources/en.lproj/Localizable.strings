@@ -26,6 +26,7 @@
 "ios-account-verifying" = "Verifying account…";
 "ios-add" = "Add";
 "ios-add-songs" = "Add Songs";
+"ios-add-songs-to-queue" = "Add Songs to Queue";
 "ios-add-to-playlist" = "Add to a Playlist";
 "ios-add-to-queue" = "Add to Queue";
 "ios-albums" = "Albums";
@@ -36,12 +37,14 @@
 "ios-artists-empty-description" = "Artists from your library and subscriptions appear here.";
 "ios-audio-effects-error" = "Audio processing is unavailable for this track.";
 "ios-audio-session-error" = "Audio playback could not start. Check your audio connection and try again.";
+"ios-autoplay-description" = "Similar music will keep playing.";
 "ios-autoplay-radio" = "Autoplay Similar Songs";
 "ios-backing-vocals" = "Background Vocals";
 "ios-blur-inactive-lyrics" = "Blur Inactive Lines";
 "ios-browse-categories" = "Browse Categories";
 "ios-cache-space" = "Stream Cache";
 "ios-cancel" = "Cancel";
+"ios-cancel-download" = "Cancel Download";
 "ios-cellular-downloads" = "Download over cellular";
 "ios-cellular-downloads-description" = "New downloads use Wi-Fi by default. Enable this to also allow cellular data; your carrier’s data charges may apply.";
 "ios-clear" = "Clear";
@@ -65,6 +68,7 @@
 "ios-download-save-error" = "Download information could not be saved. Check your available storage.";
 "ios-download-storage-failed" = "The audio file could not be saved. Check your available storage.";
 "ios-downloaded" = "Available offline";
+"ios-downloaded-playlists-description" = "Download a playlist from its menu to keep its songs together here.";
 "ios-downloading" = "Downloading";
 "ios-downloads" = "Downloads";
 "ios-downloads-description" = "Choose Download from a song’s menu to keep it here for offline listening. Downloads use Wi-Fi unless you enable cellular data in Settings.";
@@ -179,6 +183,7 @@
 "ios-normalize-loudness" = "Normalize Loudness";
 "ios-now-playing" = "Now Playing";
 "ios-off" = "Off";
+"ios-offline-songs-only" = "Only songs available offline are shown.";
 "ios-on" = "On";
 "ios-on-my-iphone" = "On My iPhone";
 "ios-open-player" = "Opens Now Playing";
@@ -211,12 +216,14 @@
 "ios-queue" = "Queue";
 "ios-queue-empty" = "No upcoming songs. Add music with Play Next or Add to Queue.";
 "ios-recently-added" = "Recently Added";
+"ios-recently-downloaded" = "Recently Downloaded";
 "ios-recently-played" = "Recently Played";
 "ios-refresh-lyrics" = "Refresh Lyrics";
 "ios-remove-all-downloads" = "Remove All Downloads";
 "ios-remove-download" = "Remove download";
 "ios-remove-favorite" = "Undo Favorite";
 "ios-remove-from-library" = "Remove from Library";
+"ios-remove-from-queue" = "Remove from Queue";
 "ios-rename-playlist" = "Rename Playlist";
 "ios-repeat" = "Repeat";
 "ios-repeat-all" = "Repeat all";
@@ -256,6 +263,7 @@
 "ios-sleep-off" = "Off";
 "ios-sleep-timer" = "Sleep Timer";
 "ios-songs" = "Songs";
+"ios-sort-by" = "Sort By";
 "ios-sound-filter" = "Filter";
 "ios-sound-filters" = "Filters";
 "ios-sound-filters-description" = "Add up to 20 filters. Drag to reorder them while editing.";
@@ -290,6 +298,7 @@
 "ios-theme-dark" = "Dark";
 "ios-theme-light" = "Light";
 "ios-theme-system" = "System";
+"ios-title" = "Title";
 "ios-tone-controls" = "Tone Controls";
 "ios-top-songs" = "Top Songs";
 "ios-track-actions" = "Song actions";

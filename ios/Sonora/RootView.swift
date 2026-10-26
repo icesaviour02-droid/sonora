@@ -132,6 +132,11 @@ struct RootView: View {
         guard url.scheme == "sonora",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
         #if DEBUG
+        if url.host == "downloadsreview" {
+            selectedTab = .downloads
+            library.reviewDownloads(downloads)
+            return
+        }
         if url.host == "guestprobe" {
             guestProbe.start(playback: playback) { playerMode = "artwork"; showPlayer = true }
             return
@@ -258,7 +263,7 @@ private struct PlayerAccessory: ViewModifier {
 
 /// Centers short native empty states, while letting large accessibility text scroll above
 /// the safe area instead of pushing actions underneath the tab bar.
-private struct ScrollableEmptyState: ViewModifier {
+struct ScrollableEmptyState: ViewModifier {
     func body(content: Content) -> some View {
         GeometryReader { geometry in
             ScrollView {
@@ -471,7 +476,7 @@ struct HomeView: View {
 }
 
 /// Reusable square or circular artwork card for Apple Music shelves and grids.
-private struct SquareCard: View {
+struct SquareCard: View {
     let title: String
     let subtitle: String
     let artworkURL: URL?
@@ -995,7 +1000,7 @@ struct PinsCollectionView: View {
 }
 
 /// Apple Music dual Play & Shuffle pill buttons for Album, Playlist, Artist, and Collection headers.
-private struct CollectionPlayShuffleHeader: View {
+struct CollectionPlayShuffleHeader: View {
     let playAction: () -> Void
     let shuffleAction: () -> Void
 
@@ -1006,15 +1011,16 @@ private struct CollectionPlayShuffleHeader: View {
                     .appFont(.subheadline, weight: .bold)
                     .frame(maxWidth: .infinity, minHeight: Layout.control)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)
 
             Button(action: shuffleAction) {
                 Label("ios-shuffle", systemImage: "shuffle")
                     .appFont(.subheadline, weight: .bold)
                     .frame(maxWidth: .infinity, minHeight: Layout.control)
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
         }
+        .buttonBorderShape(.roundedRectangle(radius: Layout.cardRadius))
         .padding(.vertical, 4)
     }
 }
@@ -1163,46 +1169,10 @@ struct PlaylistDetailView: View {
     var body: some View {
         List {
             Section {
-                VStack(spacing: Layout.spacing) {
-                    AsyncImage(url: ArtworkRendition.url(detail?.artwork_url ?? fallbackArtwork, side: Layout.detailArtwork)) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Image(systemName: "music.note.list")
-                            .appFont(.largeTitle)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(.quaternary)
-                    }
-                    .frame(width: Layout.detailArtwork, height: Layout.detailArtwork)
-                    .clipShape(RoundedRectangle(cornerRadius: Layout.cardRadius))
-                    .shadow(color: .black.opacity(0.22), radius: 14, y: 8)
-
-                    VStack(spacing: 4) {
-                        Text(detail?.title ?? fallbackTitle)
-                            .appFont(.title2, weight: .bold)
-                            .multilineTextAlignment(.center)
-                        Text(detail?.author ?? fallbackAuthor)
-                            .appFont(.headline)
-                            .foregroundStyle(.secondary)
-                        if let desc = detail?.description, !desc.isEmpty {
-                            Text(desc)
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.center)
-                        }
-                    }
-
-                    CollectionPlayShuffleHeader(
-                        playAction: {
-                            if let first = tracks.first { playback.play(first, in: tracks) }
-                        },
-                        shuffleAction: { playback.playShuffled(tracks) }
-                    )
-                    .disabled(tracks.isEmpty)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, Layout.compact)
+                MusicCollectionHeader(title: detail?.title ?? fallbackTitle,
+                    subtitle: detail?.author ?? fallbackAuthor,
+                    artworkURL: detail?.artwork_url ?? fallbackArtwork, tracks: tracks,
+                    description: detail?.description)
             }
 
             if isLoading {
@@ -1237,7 +1207,8 @@ struct PlaylistDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("ios-download", systemImage: "arrow.down.circle") {
-                        downloads.enqueueAll(tracks)
+                        downloads.enqueuePlaylist(id: playlistID, title: detail?.title ?? fallbackTitle,
+                            author: detail?.author ?? fallbackAuthor, artwork: detail?.artwork_url ?? fallbackArtwork, tracks: tracks)
                     }
                     .disabled(tracks.isEmpty)
                     Button("ios-add-to-queue", systemImage: "text.badge.plus") {
@@ -1796,80 +1767,6 @@ struct SearchView: View {
                 }
             }
             .listStyle(.plain)
-        }
-    }
-}
-
-struct DownloadsView: View {
-    @Environment(DownloadsStore.self) private var downloads
-    @Environment(PlaybackController.self) private var playback
-
-    private var completedTracks: [MusicTrack] {
-        downloads.entries.filter { $0.state == .downloaded }.map(\.track)
-    }
-
-    var body: some View {
-        Group {
-            if downloads.isRestoring {
-                ProgressView("ios-restoring-downloads")
-            } else if downloads.entries.isEmpty {
-                ContentUnavailableView {
-                    Label("ios-downloads-empty", systemImage: "arrow.down.circle")
-                } description: {
-                    Text(downloads.error ?? String(localized: "ios-downloads-description"))
-                }
-                .modifier(ScrollableEmptyState())
-            } else {
-                List {
-                    if !completedTracks.isEmpty {
-                        Section {
-                            CollectionPlayShuffleHeader(
-                                playAction: {
-                                    if let first = completedTracks.first { playback.play(first, in: completedTracks) }
-                                },
-                                shuffleAction: { playback.playShuffled(completedTracks) }
-                            )
-                        }
-                    }
-                    if let error = downloads.error { Text(error).foregroundStyle(.secondary) }
-                    ForEach(downloads.entries) { entry in
-                        VStack(alignment: .leading, spacing: Layout.compact) {
-                            TrackRow(track: entry.track) {
-                                playback.play(entry.track, in: completedTracks)
-                            }
-                            .disabled(entry.state != .downloaded)
-                            if entry.state == .downloading {
-                                ProgressView(value: entry.progress).accessibilityLabel(Text("ios-download-progress"))
-                            }
-                            HStack {
-                                Text(stateLabel(entry)).appFont(.caption).foregroundStyle(.secondary)
-                                Spacer()
-                                if entry.state == .failed {
-                                    Button("ios-retry") { downloads.retry(entry.id) }.buttonStyle(.glass)
-                                }
-                            }
-                        }
-                        .swipeActions {
-                            Button("ios-remove-download", role: .destructive) { downloads.remove(entry.id) }
-                        }
-                    }
-                }
-                .listStyle(.plain)
-            }
-        }
-        .navigationTitle("ios-downloads")
-    }
-
-    private func stateLabel(_ entry: DownloadEntry) -> LocalizedStringKey {
-        switch entry.state {
-        case .queued: "ios-download-queued"
-        case .resolving: "ios-download-preparing"
-        case .downloading: "ios-downloading"
-        case .downloaded: "ios-downloaded"
-        case .failed:
-            if entry.failureCode == "size_mismatch" || entry.failureCode == "unplayable" { "ios-download-invalid" }
-            else if entry.failureCode?.hasPrefix("file_") == true { "ios-download-storage-failed" }
-            else { "ios-download-failed" }
         }
     }
 }

@@ -184,6 +184,11 @@ if __name__ == "__main__":
         local_review = evidence(container, "local-playback-review.json", timeout=60)
         if not local_review or not local_review.get("passed"):
             raise RuntimeError("Local import, playback, pause, seek or removal checks failed")
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://downloadsreview")
+        download_layout = evidence(container, "downloads-layout-review.json")
+        if not download_layout or not download_layout.get("passed"):
+            raise RuntimeError("Download duration, legacy data or playlist restoration failed")
+        sim("io", udid, "screenshot", str(OUTPUT / "iphone13-downloads-populated.png"))
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://localplaylistreview")
         local_library = evidence(container, "local-library-review.json", timeout=90)
         if not local_library or not local_library.get("passed"):

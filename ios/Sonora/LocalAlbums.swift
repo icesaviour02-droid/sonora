@@ -37,21 +37,9 @@ struct LocalAlbumView: View {
         Group {
             if let album {
                 List {
-                    VStack(spacing: Layout.spacing) {
-                        ArtworkView(track: album.tracks.first { $0.displayArtworkURL != nil } ?? album.tracks.first,
-                                    side: Layout.detailArtwork, cornerRadius: Layout.artworkRadius)
-                        Text(album.title).appFont(.title2, weight: .bold).multilineTextAlignment(.center)
-                        Text(album.artist).appFont(.title3).foregroundStyle(.secondary)
-                        HStack(spacing: Layout.spacing) {
-                            Button("ios-play", systemImage: "play.fill") { playback.play(album.tracks[0], in: album.tracks) }
-                                .buttonStyle(.glassProminent)
-                            Button("ios-shuffle", systemImage: "shuffle") { playback.playShuffled(album.tracks) }
-                                .buttonStyle(.glass)
-                        }
-                        .controlSize(.large)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
+                    MusicCollectionHeader(title: album.title, subtitle: album.artist,
+                        artworkURL: album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL,
+                        tracks: album.tracks, symbol: "square.stack")
                     ForEach(album.tracks) { track in
                         TrackRow(track: track) { playback.play(track, in: album.tracks) }
                     }

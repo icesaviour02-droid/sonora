@@ -320,3 +320,33 @@ supplied headers when its cookie file exists. The current authenticate builder a
 file, so an old saved store can shadow a new login. Account restore/renewal also needs reliable
 Keychain persistence of rotated cookies. This has been confirmed by source inspection, not fixed
 or accepted with a real account. System Safari Google OAuth remains unimplemented.
+
+## Build 12 user-reported playback and interface changes (26 October 2026)
+
+The user reports that every YouTube song on build 11 has twice its normal duration, with a
+silent second half, both downloaded and streaming. Desktop playback works. A CLI-resolved AAC
+reference file reports 266.773333 seconds in ffprobe at 44.1 kHz; the old bridge truncated it to
+266 seconds. The iPhone periodic observer unconditionally replaced provider duration with item
+duration. A new timeline policy preserves precise source duration, reads native audio-track extent,
+and sets AVPlayerItem.forwardPlaybackEndTime for both streaming and completed downloads. Legacy
+downloads lacking source duration correct only a clearly doubled container against catalog data;
+no blind divide-by-two or silence detection is used. Actual user recording/hardware acceptance is
+still needed; the exact native cause of the doubled duration has not been independently reproduced.
+
+Native regression checks now cover duration policies, a real AAC item reaching its bounded end,
+persisted download source duration, old JSON decoding and saved playlist order. Apple runtime
+results are pending. Shared Rust tests (53) pass locally. No user download is deleted for migration.
+
+The inline tab accessory hides Next while the expanded accessory retains it. Queue removes the
+segmented selector and edit-mode delete circles, keeps native reorder handles and swipe deletion,
+provides Add Songs multi-selection, and reveals history above Queue by scrolling. The official
+Apple queue screenshot and behavior source are recorded in References/AppleMusic/sources.json.
+Sonora has no working AutoMix/Crossfade implementation, so no inert control was added for it.
+
+Downloads now separates active transfers from completed categories (songs/albums/artists/playlists),
+adds song search/sorting and recent tiles, and keeps retry/cancel accessible. Downloading a whole
+playlist saves a separate atomic manifest of its name, cover and song order; existing individually
+downloaded songs are preserved but cannot retroactively recover playlist membership. Detail pages
+show only completed songs. Playlist, downloaded-collection and local-album heroes share responsive
+cover sizing, title hierarchy and transport controls. Native visual and touch acceptance is pending;
+this work does not establish an exact copy of every Apple Music page.

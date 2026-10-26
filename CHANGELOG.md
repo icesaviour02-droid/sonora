@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iPhone Downloads groups saved music into songs, albums, artists and downloaded playlists, with search, sorting and separate retry/cancel controls for unfinished transfers.
+
 - iPhone users can create and edit local playlists without a streaming account, reorder their songs, and keep track, album and artist favorites on the device.
 
 - iPhone sound-profile editors show the frequency response calculated by the audio filters before a profile is saved.
@@ -35,6 +37,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Account playback compatibility is still under verification.
 
 ### Fixed
+
+- iPhone playback keeps precise provider duration for streaming and downloads and bounds native playback to the song end instead of displaying container padding. The collapsed player keeps only Play/Pause, and the queue uses inline history, swipe removal and native reorder handles.
 
 - Local playlist edits preserve existing songs when a save fails. Imported music loads before remote account restoration so local controls can remain available offline.
 

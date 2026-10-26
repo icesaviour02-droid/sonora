@@ -289,6 +289,7 @@ enum Layout {
     static let control: CGFloat = 44
     static let artwork: CGFloat = 296
     static let detailArtwork: CGFloat = 220
+    static let collectionArtwork: CGFloat = 260
     static let cardArtwork: CGFloat = 152
     static let cardRadius: CGFloat = 12
     static let soundResponseHeight: CGFloat = 180

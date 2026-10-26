@@ -1644,3 +1644,21 @@ ios-local-playlist-missing = This local playlist is no longer available.
 ios-add = Add
 
 ios-track-unavailable = This song is no longer in your imported library.
+
+ios-add-songs-to-queue = Add Songs to Queue
+
+ios-remove-from-queue = Remove from Queue
+
+ios-autoplay-description = Similar music will keep playing.
+
+ios-recently-downloaded = Recently Downloaded
+
+ios-cancel-download = Cancel Download
+
+ios-sort-by = Sort By
+
+ios-title = Title
+
+ios-downloaded-playlists-description = Download a playlist from its menu to keep its songs together here.
+
+ios-offline-songs-only = Only songs available offline are shown.

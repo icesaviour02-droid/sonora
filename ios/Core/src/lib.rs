@@ -612,7 +612,7 @@ async fn execute(request: Request) -> Result<Value> {
                 "bitrate_kbps": format.bitrate / 1000,
                 "loudness_db": format.loudness_db,
                 "user_agent": format.user_agent,
-                "duration_seconds": format.duration.map(|duration| duration.as_secs()),
+                "duration_seconds": format.duration.map(|duration| duration.as_secs_f64()),
                 "content_length": format.content_length,
             }))
         }

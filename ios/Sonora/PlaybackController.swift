@@ -37,6 +37,9 @@ final class PlaybackController {
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var statusObserver: NSKeyValueObservation?
     @ObservationIgnored private var itemObserver: NSKeyValueObservation?
+    @ObservationIgnored private var timelineTask: Task<Void, Never>?
+    @ObservationIgnored private var sourceDuration: Double?
+    @ObservationIgnored private var audioEnd: Double?
     @ObservationIgnored private var notifications: [NSObjectProtocol] = []
     @ObservationIgnored private var commands: [(MPRemoteCommand, Any)] = []
     @ObservationIgnored private var originalQueue: [QueuedTrack] = []
@@ -74,12 +77,7 @@ final class PlaybackController {
                 #if DEBUG
                 self.writeReviewState()
                 #endif
-                let seconds = self.player.currentItem?.duration.seconds ?? 0
-                let duration = seconds.isFinite ? max(0, seconds) : (self.current?.durationSeconds ?? 0)
-                if self.duration != duration {
-                    self.duration = duration
-                    self.publishNowPlaying()
-                }
+                self.updateTimeline()
                 self.trackListen()
             }
         }
@@ -372,8 +370,23 @@ final class PlaybackController {
         player.volume = audioEffects.isAttached ? 1 : Float(min(max(pow(10.0, totalDB / 20.0), 0), 1))
     }
 
-    private func install(_ item: AVPlayerItem) {
+    private func install(_ item: AVPlayerItem, sourceDuration: Double? = nil) {
+        timelineTask?.cancel()
+        self.sourceDuration = sourceDuration ?? current.flatMap { downloads.entry(for: $0.id)?.sourceDuration }
+        audioEnd = nil
         player.replaceCurrentItem(with: item)
+        updateTimeline()
+        timelineTask = Task { [weak self, weak item] in
+            guard let item else { return }
+            let assetDuration = try? await item.asset.load(.duration)
+            let tracks = try? await item.asset.loadTracks(withMediaType: .audio)
+            let range: CMTimeRange?
+            if let first = tracks?.first { range = try? await first.load(.timeRange) }
+            else { range = nil }
+            guard !Task.isCancelled, let self, self.player.currentItem === item else { return }
+            self.audioEnd = range.map { CMTimeRangeGetEnd($0).seconds }
+            self.updateTimeline(native: assetDuration?.seconds)
+        }
         applyAudioGain()
         audioEffects.attach(to: item) { [weak self, weak item] in
             guard let self, let item, self.player.currentItem === item else { return }
@@ -388,6 +401,18 @@ final class PlaybackController {
                 self.pause()
             }
         }
+    }
+
+    /// Both streamed and downloaded items stop at the same verified media boundary.
+    private func updateTimeline(native: Double? = nil) {
+        guard let item = player.currentItem else { return }
+        let end = PlaybackTimeline.end(native: native ?? item.duration.seconds,
+            audioEnd: audioEnd, source: sourceDuration,
+            catalog: current?.youtubeID != nil ? current?.durationSeconds : nil)
+        guard let end else { return }
+        let time = CMTime(seconds: end, preferredTimescale: 60_000)
+        if item.forwardPlaybackEndTime != time { item.forwardPlaybackEndTime = time }
+        if duration != end { duration = end; publishNowPlaying() }
     }
 
     /// History and submissions begin only after the native player actually starts output.
@@ -478,8 +503,7 @@ final class PlaybackController {
                     self.streamBadge = codec
                 }
                 let asset = AVURLAsset(url: stream.url, options: [AVURLAssetHTTPUserAgentKey: stream.user_agent])
-                self.install(AVPlayerItem(asset: asset))
-                self.duration = stream.duration_seconds ?? self.duration
+                self.install(AVPlayerItem(asset: asset), sourceDuration: stream.duration_seconds)
                 self.resolutionTask = nil
                 self.isLoading = false
                 self.startAudio()
@@ -692,6 +716,37 @@ final class PlaybackController {
     }
 
     #if DEBUG
+    /// Runs a real native item to its supplied end, rather than accepting clock advancement alone.
+    func reviewTimeline(track: MusicTrack, url: URL) async -> [String: Bool] {
+        var checks: [String: Bool] = [:]
+        checks["doubled_container"] = PlaybackTimeline.end(native: 32, audioEnd: 16, source: nil, catalog: nil) == 16
+        checks["legacy_download"] = PlaybackTimeline.end(native: 32, audioEnd: 32, source: nil, catalog: 16) == 16
+        checks["unrelated_duration_kept"] = PlaybackTimeline.end(native: 17, audioEnd: 17, source: nil, catalog: 16) == 17
+        checks["precise_source"] = PlaybackTimeline.end(native: 32, audioEnd: 32, source: 16.125, catalog: 16) == 16.125
+        checks["invalid_durations"] = PlaybackTimeline.end(native: .nan, audioEnd: -.infinity, source: -1, catalog: nil) == nil
+        let autoplay = settings.autoplayRadio
+        settings.autoplayRadio = false
+        repeatMode = .off
+        prepareReview(track)
+        install(AVPlayerItem(url: url), sourceDuration: 8)
+        resume()
+        for _ in 0..<150 {
+            if isPlaying && elapsed > 0.5 { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        checks["bounded_playback_started"] = isPlaying && duration == 8 && audioEffects.processedFrames > 0
+        seek(to: 7)
+        for _ in 0..<60 {
+            if !isPlaying && elapsed >= 7.8 { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        checks["native_end_stops_silent_tail"] = !isPlaying && elapsed >= 7.8 && elapsed <= 8.3
+        checks["native_end_boundary"] = player.currentItem?.forwardPlaybackEndTime.seconds == 8
+        pause()
+        settings.autoplayRadio = autoplay
+        return checks
+    }
+
     /// Records playback advancement for the CLI simulator review, without stream URLs or audio.
     private func writeReviewState() {
         guard ProcessInfo.processInfo.arguments.contains("--sonora-review-url"), let current else { return }

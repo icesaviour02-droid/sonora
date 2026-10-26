@@ -1,0 +1,219 @@
+import SwiftUI
+
+/// Downloaded music mirrors Library categories; active transfers have separate, actionable rows.
+struct DownloadsView: View {
+    @Environment(DownloadsStore.self) private var downloads
+    private var tracks: [MusicTrack] { downloads.completedTracks }
+    private var pending: [DownloadEntry] { downloads.entries.filter { $0.state != .downloaded } }
+
+    var body: some View {
+        List {
+            if !tracks.isEmpty {
+                Section {
+                    NavigationLink { DownloadedPlaylistsView() } label: { Label("ios-playlists", systemImage: "music.note.list") }
+                    NavigationLink { DownloadedArtistsView() } label: { Label("ios-artists", systemImage: "music.mic") }
+                    NavigationLink { DownloadedAlbumsView() } label: { Label("ios-albums", systemImage: "square.stack") }
+                    NavigationLink { DownloadedSongsView() } label: { Label("ios-songs", systemImage: "music.note") }
+                }.appFont(.title3)
+            }
+            if !pending.isEmpty {
+                Section("ios-downloading") {
+                    ForEach(pending) { entry in DownloadTransferRow(entry: entry) }
+                }
+            }
+            if let error = downloads.error {
+                Section { Text(error).appFont(.subheadline).foregroundStyle(.secondary) }
+            }
+            if !tracks.isEmpty {
+                Section("ios-recently-downloaded") {
+                    let recent = Array(tracks.suffix(8).reversed())
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardArtwork), spacing: Layout.spacing)],
+                              alignment: .leading, spacing: Layout.spacing) {
+                        ForEach(recent) { track in
+                            NavigationLink {
+                                DownloadedCollectionView(title: track.albumTitle ?? track.title, subtitle: track.artist,
+                                    artwork: track.displayArtworkURL, trackIDs: albumTracks(for: track).map(\.id))
+                            } label: {
+                                SquareCard(title: track.albumTitle ?? track.title, subtitle: track.artist,
+                                    artworkURL: track.displayArtworkURL)
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, Layout.compact)
+                    .listRowSeparator(.hidden)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .navigationTitle("ios-downloads")
+        .overlay {
+            if downloads.isRestoring { ProgressView("ios-restoring-downloads") }
+            else if downloads.entries.isEmpty {
+                ContentUnavailableView("ios-downloads-empty", systemImage: "arrow.down.circle",
+                    description: Text("ios-downloads-description"))
+            }
+        }
+    }
+
+    private func albumTracks(for track: MusicTrack) -> [MusicTrack] {
+        guard let album = LocalAlbum.collect(tracks).first(where: { $0.tracks.contains { $0.id == track.id } }) else { return [track] }
+        return album.tracks
+    }
+}
+
+/// A transfer's controls stay enabled while its song is not yet playable.
+private struct DownloadTransferRow: View {
+    @Environment(DownloadsStore.self) private var downloads
+    let entry: DownloadEntry
+    var body: some View {
+        HStack(spacing: Layout.spacing) {
+            ArtworkView(track: entry.track, side: Layout.rowArtwork)
+            VStack(alignment: .leading, spacing: Layout.compact / 2) {
+                Text(entry.track.title).appFont(.body).lineLimit(1)
+                Text(entry.track.artist).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                if entry.state == .downloading {
+                    ProgressView(value: entry.progress).accessibilityLabel(Text("ios-download-progress"))
+                }
+                Text(status).appFont(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            if entry.state == .failed {
+                Button { downloads.retry(entry.id) } label: { Image(systemName: "arrow.clockwise").frame(width: Layout.control, height: Layout.control) }
+                    .buttonStyle(.borderless).accessibilityLabel(Text("ios-retry"))
+            }
+            Button { downloads.remove(entry.id) } label: {
+                Image(systemName: "xmark.circle").frame(width: Layout.control, height: Layout.control)
+            }.buttonStyle(.borderless).accessibilityLabel(Text("ios-cancel-download"))
+        }
+        .swipeActions { Button("ios-remove-download", role: .destructive) { downloads.remove(entry.id) } }
+    }
+
+    private var status: LocalizedStringKey {
+        switch entry.state {
+        case .queued: "ios-download-queued"
+        case .resolving: "ios-download-preparing"
+        case .downloading: "ios-downloading"
+        case .downloaded: "ios-downloaded"
+        case .failed:
+            if entry.failureCode == "size_mismatch" || entry.failureCode == "unplayable" { "ios-download-invalid" }
+            else if entry.failureCode?.hasPrefix("file_") == true { "ios-download-storage-failed" }
+            else { "ios-download-failed" }
+        }
+    }
+}
+
+/// Search and sorting apply only to completed files. Transfer rows never start a stream.
+struct DownloadedSongsView: View {
+    @Environment(DownloadsStore.self) private var downloads
+    @Environment(PlaybackController.self) private var playback
+    @State private var query = ""
+    @State private var sort = DownloadSort.recent
+    private var tracks: [MusicTrack] { sort.tracks(downloads.completedTracks).filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || $0.artist.localizedCaseInsensitiveContains(query) } }
+    var body: some View {
+        List {
+            CollectionPlayShuffleHeader(playAction: { if let first = tracks.first { playback.play(first, in: tracks) } },
+                shuffleAction: { playback.playShuffled(tracks) }).disabled(tracks.isEmpty).listRowSeparator(.hidden)
+            ForEach(tracks) { track in
+                TrackRow(track: track) { playback.play(track, in: tracks) }
+                    .swipeActions { Button("ios-remove-download", role: .destructive) { downloads.remove(track.id) } }
+            }
+        }
+        .listStyle(.plain).searchable(text: $query).navigationTitle("ios-songs")
+        .toolbar { ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Picker("ios-sort-by", selection: $sort) { ForEach(DownloadSort.allCases) { Text($0.label).tag($0) } }
+            } label: { Image(systemName: "arrow.up.arrow.down") }
+                .accessibilityLabel(Text("ios-sort-by"))
+        } }
+    }
+}
+
+private enum DownloadSort: String, CaseIterable, Identifiable {
+    case recent, title, artist
+    var id: String { rawValue }
+    var label: LocalizedStringKey { switch self { case .recent: "ios-recently-downloaded"; case .title: "ios-title"; case .artist: "ios-artists" } }
+    func tracks(_ tracks: [MusicTrack]) -> [MusicTrack] {
+        switch self {
+        case .recent: Array(tracks.reversed())
+        case .title: tracks.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .artist: tracks.sorted { $0.artist.localizedStandardCompare($1.artist) == .orderedAscending }
+        }
+    }
+}
+
+struct DownloadedAlbumsView: View {
+    @Environment(DownloadsStore.self) private var downloads
+    var body: some View {
+        List(LocalAlbum.collect(downloads.completedTracks)) { album in
+            NavigationLink {
+                DownloadedCollectionView(title: album.title, subtitle: album.artist, artwork: album.tracks.first?.displayArtworkURL, trackIDs: album.tracks.map(\.id))
+            } label: { DownloadedCollectionLabel(title: album.title, subtitle: album.artist, artwork: album.tracks.first?.displayArtworkURL) }
+        }.listStyle(.plain).navigationTitle("ios-albums")
+    }
+}
+
+struct DownloadedArtistsView: View {
+    @Environment(DownloadsStore.self) private var downloads
+    private var names: [String] { Array(Set(downloads.completedTracks.map(\.artist))).sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
+    var body: some View {
+        List(names, id: \.self) { name in
+            let tracks = downloads.completedTracks.filter { $0.artist == name }
+            NavigationLink {
+                DownloadedCollectionView(title: name, subtitle: String(localized: "ios-downloaded"), artwork: tracks.first?.displayArtworkURL, trackIDs: tracks.map(\.id))
+            } label: { DownloadedCollectionLabel(title: name, subtitle: "", artwork: tracks.first?.displayArtworkURL) }
+        }.listStyle(.plain).navigationTitle("ios-artists")
+    }
+}
+
+struct DownloadedPlaylistsView: View {
+    @Environment(DownloadsStore.self) private var downloads
+    private var playlists: [DownloadedPlaylist] { downloads.playlists.filter { !downloads.tracks(in: $0).isEmpty } }
+    var body: some View {
+        List(playlists) { playlist in
+            NavigationLink {
+                DownloadedCollectionView(title: playlist.title, subtitle: playlist.author, artwork: playlist.artworkURL,
+                    trackIDs: playlist.trackIDs)
+            } label: { DownloadedCollectionLabel(title: playlist.title, subtitle: playlist.author, artwork: playlist.artworkURL) }
+        }.listStyle(.plain).navigationTitle("ios-playlists")
+        .overlay { if playlists.isEmpty { ContentUnavailableView("ios-playlists", systemImage: "music.note.list", description: Text("ios-downloaded-playlists-description")) } }
+    }
+}
+
+/// Resolves saved IDs against available files on every render, including removals while browsing.
+struct DownloadedCollectionView: View {
+    @Environment(DownloadsStore.self) private var downloads
+    @Environment(PlaybackController.self) private var playback
+    let title: String
+    let subtitle: String
+    let artwork: URL?
+    let trackIDs: [String]
+    private var tracks: [MusicTrack] {
+        let byID = Dictionary(downloads.completedTracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return trackIDs.compactMap { byID[$0] }
+    }
+    var body: some View {
+        List {
+            MusicCollectionHeader(title: title, subtitle: subtitle, artworkURL: artwork, tracks: tracks,
+                description: String(localized: "ios-offline-songs-only"))
+            ForEach(tracks) { track in
+                TrackRow(track: track) { playback.play(track, in: tracks) }
+                    .swipeActions { Button("ios-remove-download", role: .destructive) { downloads.remove(track.id) } }
+            }
+        }.listStyle(.plain).navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct DownloadedCollectionLabel: View {
+    let title: String
+    let subtitle: String
+    let artwork: URL?
+    var body: some View {
+        HStack(spacing: Layout.spacing) {
+            ArtworkView(url: artwork, side: Layout.rowArtwork)
+            VStack(alignment: .leading, spacing: Layout.compact / 2) {
+                Text(title).appFont(.body).lineLimit(2)
+                if !subtitle.isEmpty { Text(subtitle).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1) }
+            }
+        }
+    }
+}
