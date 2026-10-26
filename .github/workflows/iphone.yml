@@ -2,6 +2,11 @@ name: iPhone IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_development:
+        description: 'Save a development snapshot before feature acceptance finishes'
+        type: boolean
+        default: false
   push:
     paths:
       - 'ios/Sonora/**'
@@ -77,7 +82,19 @@ jobs:
             -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
             -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO build
       - name: Package unsigned device IPA
+        env:
+          SONORA_BUILD_KIND: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_development && 'development' || 'acceptance-candidate' }}
         run: python3 ios/scripts/package_ipa.py
+      - name: Upload explicitly requested development snapshot
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_development
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sonora-iPhone-development
+          path: |
+            ios/build/Sonora-unsigned.ipa
+            ios/build/ipa-build-info.json
+          retention-days: 7
+          if-no-files-found: error
       - name: Build simulator app
         run: |
           xcodebuild -project ios/Sonora.xcodeproj -scheme Sonora \

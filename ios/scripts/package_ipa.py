@@ -2,6 +2,9 @@
 """Package a real device build for sideloading, refusing simulator apps and incomplete bundles."""
 
 import json
+import hashlib
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 import plistlib
 import shutil
@@ -39,9 +42,22 @@ def package():
             raise ValueError("The IPA archive failed integrity verification")
         if "Payload/Sonora.app/Info.plist" not in result.namelist():
             raise ValueError("The IPA does not contain the required Payload app bundle")
+    digest = hashlib.sha256()
+    with archive.open("rb") as source:
+        for chunk in iter(lambda: source.read(1_048_576), b""):
+            digest.update(chunk)
+    commit = os.environ.get("GITHUB_SHA") or subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=IOS.parent, text=True
+    ).strip()
     report = {
+        "source_commit": commit,
+        "workflow_run": os.environ.get("GITHUB_RUN_ID"),
+        "built_at_utc": datetime.now(timezone.utc).isoformat(),
+        "build_kind": os.environ.get("SONORA_BUILD_KIND", "local-development"),
+        "sha256": digest.hexdigest(),
         "bundle_id": info["CFBundleIdentifier"],
         "version": info["CFBundleShortVersionString"],
+        "build_number": info["CFBundleVersion"],
         "minimum_ios": info["MinimumOSVersion"],
         "architectures": architecture.split(),
         "platforms": info["CFBundleSupportedPlatforms"],

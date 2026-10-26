@@ -275,3 +275,12 @@ that an optimized production archive rejects the fixture and that optimized QA c
 Swift wrapper and sound-observation acceptance must still be rerun. The prior response graph was
 visually inspected; its deep notch drew below the plot into the caption. Plot clipping is included
 in 422e1bdf and awaits the new screenshot capture.
+
+## User-requested current development IPA (26 October 2026)
+
+The user explicitly requested an IPA with all current changes in ios/build/LATEST-VERSION.
+Manual workflow dispatch can now publish an explicitly labeled development snapshot after the real
+arm64 iPhone build and package integrity checks, while simulator acceptance still runs. Ordinary
+push builds and the final unsigned artifact retain the existing full acceptance gate. Development
+snapshots do not establish feature completeness. Package metadata now records source commit,
+workflow run, build kind/time, build number and SHA-256. This snapshot increments the build to 10.
