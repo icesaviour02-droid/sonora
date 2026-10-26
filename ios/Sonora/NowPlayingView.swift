@@ -17,17 +17,17 @@ struct MiniPlayer: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 4) {
                             Text(playback.current?.title ?? "")
-                                .font(.subheadline.weight(.semibold))
+                                .appFont(.subheadline, weight: .semibold)
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
                             if playback.current?.explicit == true {
                                 Image(systemName: "e.square.fill")
-                                    .font(.caption2)
+                                    .appFont(.caption2)
                                     .foregroundStyle(.secondary)
                             }
                         }
                         Text(playback.current?.artist ?? "")
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -45,7 +45,7 @@ struct MiniPlayer: View {
                         ProgressView()
                     } else {
                         Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.title3.weight(.semibold))
+                            .appFont(.title3, weight: .semibold)
                     }
                 }
                 .frame(minWidth: Layout.control, minHeight: Layout.control)
@@ -57,7 +57,7 @@ struct MiniPlayer: View {
                 playback.next()
             } label: {
                 Image(systemName: "forward.fill")
-                    .font(.body.weight(.semibold))
+                    .appFont(.body, weight: .semibold)
                     .frame(minWidth: Layout.control, minHeight: Layout.control)
             }
             .buttonStyle(.plain)
@@ -209,7 +209,7 @@ struct NowPlayingView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.yellow)
             Text(message)
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.white)
                 .lineLimit(2)
             Spacer(minLength: 4)
@@ -217,7 +217,7 @@ struct NowPlayingView: View {
                 playback.error = nil
                 playback.resume()
             }
-            .font(.caption.weight(.semibold))
+            .appFont(.caption, weight: .semibold)
             .buttonStyle(.glass)
             Button {
                 playback.error = nil
@@ -269,10 +269,10 @@ struct NowPlayingView: View {
     private var trackTitles: some View {
         VStack(alignment: .leading, spacing: Layout.compact) {
             Text(playback.current?.title ?? "")
-                .font(.title2.bold()).foregroundStyle(.white)
+                .appFont(.title2, weight: .bold).foregroundStyle(.white)
                 .lineLimit(textSize.isAccessibilitySize ? 3 : 1)
             Text(playback.current?.artist ?? "")
-                .font(.subheadline).foregroundStyle(.white.opacity(0.75))
+                .appFont(.subheadline).foregroundStyle(.white.opacity(0.75))
                 .lineLimit(textSize.isAccessibilitySize ? 2 : 1)
         }
     }
@@ -282,7 +282,7 @@ struct NowPlayingView: View {
         if let current = playback.current, current.youtubeID != nil {
             Button { catalog.toggleLike(current) } label: {
                 Image(systemName: catalog.isLiked(current) ? "star.fill" : "star")
-                    .font(.body.weight(.semibold))
+                    .appFont(.body, weight: .semibold)
                     .foregroundStyle(catalog.isLiked(current) ? .yellow : .white.opacity(0.88))
                     .frame(width: Layout.control, height: Layout.control)
                     .background(.white.opacity(0.14), in: Circle())
@@ -304,11 +304,11 @@ struct NowPlayingView: View {
                     ArtworkView(track: playback.current, side: 46, cornerRadius: 8)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(playback.current?.title ?? "")
-                            .font(.subheadline.weight(.semibold))
+                            .appFont(.subheadline, weight: .semibold)
                             .foregroundStyle(.white)
                             .lineLimit(1)
                         Text(playback.current?.artist ?? "")
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(.white.opacity(0.7))
                             .lineLimit(1)
                     }
@@ -400,7 +400,7 @@ struct NowPlayingView: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.body.weight(.semibold))
+                .appFont(.body, weight: .semibold)
                 .foregroundStyle(.white.opacity(0.88))
                 .frame(width: Layout.control, height: Layout.control)
                 .background(.white.opacity(0.14), in: Circle())
@@ -428,13 +428,13 @@ struct NowPlayingView: View {
                     VStack(spacing: Layout.compact) {
                         Spacer()
                         Image(systemName: "quote.bubble")
-                            .font(.largeTitle)
+                            .appFont(.largeTitle)
                             .foregroundStyle(.white.opacity(0.5))
                         Text("ios-lyrics-unavailable")
-                            .font(.headline)
+                            .appFont(.headline)
                             .foregroundStyle(.white)
                         Text(error)
-                            .font(.subheadline)
+                            .appFont(.subheadline)
                             .foregroundStyle(.white.opacity(0.7))
                             .multilineTextAlignment(.center)
                         Button("ios-retry") { loadLyricsIfNeeded(force: true) }
@@ -446,10 +446,10 @@ struct NowPlayingView: View {
                     VStack(spacing: Layout.compact) {
                         Spacer()
                         Image(systemName: "music.quarternote.3")
-                            .font(.largeTitle)
+                            .appFont(.largeTitle)
                             .foregroundStyle(.white.opacity(0.6))
                         Text("ios-lyrics-instrumental")
-                            .font(.title3.weight(.semibold))
+                            .appFont(.title3, weight: .semibold)
                             .foregroundStyle(.white.opacity(0.85))
                         Spacer()
                     }
@@ -463,12 +463,12 @@ struct NowPlayingView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: Layout.spacing) {
                             Text(text)
-                                .font(.title3.weight(.semibold))
+                                .appFont(.title3, weight: .semibold)
                                 .foregroundStyle(.white.opacity(0.92))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             if let source = lyrics.sheet?.source, !source.isEmpty {
                                 Text(source)
-                                    .font(.caption)
+                                    .appFont(.caption)
                                     .foregroundStyle(.white.opacity(0.5))
                             }
                         }
@@ -478,13 +478,13 @@ struct NowPlayingView: View {
                     VStack(spacing: Layout.compact) {
                         Spacer()
                         Image(systemName: "quote.bubble")
-                            .font(.largeTitle)
+                            .appFont(.largeTitle)
                             .foregroundStyle(.white.opacity(0.5))
                         Text("ios-lyrics-unavailable")
-                            .font(.headline)
+                            .appFont(.headline)
                             .foregroundStyle(.white)
                         Text("ios-no-lyrics-description")
-                            .font(.subheadline)
+                            .appFont(.subheadline)
                             .foregroundStyle(.white.opacity(0.7))
                             .multilineTextAlignment(.center)
                         Spacer()
@@ -509,13 +509,13 @@ struct NowPlayingView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(line.text)
-                                    .font(isActive ? .title2.bold() : .title3.bold())
+                                    .appFont(isActive ? .title2 : .title3, weight: .bold)
                                     .foregroundStyle(.white.opacity(isActive ? 1.0 : 0.42))
                                     .blur(radius: (!isActive && settings.blurInactiveLyrics) ? 1.2 : 0)
                                     .multilineTextAlignment(.leading)
                                 if settings.romanizedLyrics, let romanized = line.romanized, !romanized.isEmpty {
                                     Text(romanized)
-                                        .font(.subheadline.weight(.medium))
+                                        .appFont(.subheadline, weight: .medium)
                                         .foregroundStyle(.white.opacity(isActive ? 0.78 : 0.34))
                                         .multilineTextAlignment(.leading)
                                 }
@@ -529,7 +529,7 @@ struct NowPlayingView: View {
                     }
                     if let source = lyrics.sheet?.source, !source.isEmpty {
                         Text(source)
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(.white.opacity(0.45))
                             .padding(.top, Layout.compact)
                     }
@@ -590,13 +590,13 @@ struct NowPlayingView: View {
                     Button("ios-clear") {
                         playback.clearUpcomingQueue()
                     }
-                    .font(.caption.weight(.semibold))
+                    .appFont(.caption, weight: .semibold)
                     .foregroundStyle(.white.opacity(0.8))
                 } else if queueMode == .history && !settings.history.isEmpty {
                     Button("ios-clear") {
                         settings.clearHistory()
                     }
-                    .font(.caption.weight(.semibold))
+                    .appFont(.caption, weight: .semibold)
                     .foregroundStyle(.white.opacity(0.8))
                 }
             }
@@ -617,18 +617,18 @@ struct NowPlayingView: View {
                                     ArtworkView(track: track, side: 42, cornerRadius: 8)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(track.title)
-                                            .font(.subheadline.weight(.medium))
+                                            .appFont(.subheadline, weight: .medium)
                                             .foregroundStyle(.white)
                                             .lineLimit(1)
                                         Text(track.artist)
-                                            .font(.caption)
+                                            .appFont(.caption)
                                             .foregroundStyle(.white.opacity(0.68))
                                             .lineLimit(1)
                                     }
                                     Spacer(minLength: 4)
                                     if playback.current?.id == track.id {
                                         Image(systemName: playback.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
-                                            .font(.caption)
+                                            .appFont(.caption)
                                             .foregroundStyle(.white)
                                     }
                                 }
@@ -666,7 +666,7 @@ struct NowPlayingView: View {
     private func queueModePill(symbol: String, label: LocalizedStringKey, isActive: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.subheadline.weight(.semibold))
+                .appFont(.subheadline, weight: .semibold)
                 .foregroundStyle(isActive ? Color.black : Color.white)
                 .frame(maxWidth: .infinity, minHeight: 36)
                 .background(
@@ -701,7 +701,7 @@ struct NowPlayingView: View {
                 Spacer()
                 if let badge = qualityBadgeText {
                     Text(badge)
-                        .font(.caption2.weight(.semibold))
+                        .appFont(.caption2, weight: .semibold)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(.white.opacity(0.14), in: Capsule())
@@ -709,7 +709,7 @@ struct NowPlayingView: View {
                 Spacer()
                 Text("-" + time(max(0, playback.duration - (isSeeking ? seekValue : playback.elapsed))))
             }
-            .font(.caption.monospacedDigit())
+            .appFont(.caption).monospacedDigit()
             .foregroundStyle(.white.opacity(0.68))
             .accessibilityHidden(true)
         }
@@ -733,7 +733,7 @@ struct NowPlayingView: View {
         HStack(spacing: Layout.spacing * 2.5) {
             Button(action: playback.previous) {
                 Image(systemName: "backward.fill")
-                    .font(.title.weight(.semibold))
+                    .appFont(.title, weight: .semibold)
                     .foregroundStyle(.white)
                     .frame(width: 56, height: 56)
             }
@@ -761,7 +761,7 @@ struct NowPlayingView: View {
                 playback.next()
             } label: {
                 Image(systemName: "forward.fill")
-                    .font(.title.weight(.semibold))
+                    .appFont(.title, weight: .semibold)
                     .foregroundStyle(.white)
                     .frame(width: 56, height: 56)
             }
@@ -773,12 +773,12 @@ struct NowPlayingView: View {
     private var volumeSection: some View {
         HStack(spacing: Layout.compact + 2) {
             Image(systemName: "speaker.fill")
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.white.opacity(0.62))
             SystemVolumeSlider()
                 .frame(height: 24)
             Image(systemName: "speaker.wave.3.fill")
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.white.opacity(0.62))
         }
     }
@@ -791,7 +791,7 @@ struct NowPlayingView: View {
                 }
             } label: {
                 Image(systemName: mode == .lyrics ? "quote.bubble.fill" : "quote.bubble")
-                    .font(.title3.weight(.semibold))
+                    .appFont(.title3, weight: .semibold)
                     .foregroundStyle(mode == .lyrics ? Color.black : Color.white.opacity(0.82))
                     .frame(width: Layout.control, height: Layout.control)
                     .background(mode == .lyrics ? Color.white : Color.clear, in: Capsule())
@@ -813,7 +813,7 @@ struct NowPlayingView: View {
             } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "list.bullet")
-                        .font(.title3.weight(.semibold))
+                        .appFont(.title3, weight: .semibold)
                         .foregroundStyle(mode == .queue ? Color.black : Color.white.opacity(0.82))
                         .frame(width: Layout.control, height: Layout.control)
                         .background(mode == .queue ? Color.white : Color.clear, in: Capsule())

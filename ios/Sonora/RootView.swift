@@ -13,6 +13,7 @@ struct RootView: View {
 
     @State private var selectedTab = Destination.library
     @State private var showImporter = false
+    @State private var showFonts = false
     @State private var showSettings = false
     @State private var showPlayer = false
     @State private var playerMode = "artwork"
@@ -49,9 +50,15 @@ struct RootView: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .modifier(PlayerAccessory(open: { showPlayer = true }))
-        .tint(.pink)
         .preferredColorScheme(settings.theme.colorScheme)
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showFonts) {
+            NavigationStack {
+                FontSettingsView().toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("ios-done") { showFonts = false } }
+                }
+            }
+        }
         .sheet(isPresented: $showPlayer) { NowPlayingView(initialMode: playerMode) }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
             switch result {
@@ -111,6 +118,15 @@ struct RootView: View {
         #endif
         let parameters = components.queryItems ?? []
         func value(_ name: String) -> String? { parameters.first { $0.name == name }?.value }
+        #if DEBUG
+        if url.host == "fonts" {
+            if let face = value("font"), ["system", "rounded", "Inter-Regular"].contains(face) {
+                settings.typefaceID = face
+            }
+            showFonts = true
+            return
+        }
+        #endif
         if url.host == "search", let query = value("q"), !query.isEmpty, query.utf8.count <= 512 {
             youtube.query = query
             selectedTab = .search
@@ -240,7 +256,7 @@ struct HomeView: View {
     private var pinnedSection: some View {
         VStack(alignment: .leading, spacing: Layout.compact) {
             Text("ios-pinned")
-                .font(.title3.bold())
+                .appFont(.title3, weight: .bold)
                 .padding(.horizontal, Layout.spacing)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: Layout.spacing) {
@@ -292,7 +308,7 @@ struct HomeView: View {
     private var historyShelfSection: some View {
         VStack(alignment: .leading, spacing: Layout.compact) {
             Text("ios-recently-played")
-                .font(.title3.bold())
+                .appFont(.title3, weight: .bold)
                 .padding(.horizontal, Layout.spacing)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: Layout.spacing) {
@@ -313,7 +329,7 @@ struct HomeView: View {
     private func shelfView(_ section: HomeShelfSection) -> some View {
         VStack(alignment: .leading, spacing: Layout.compact) {
             Text(section.title)
-                .font(.title3.bold())
+                .appFont(.title3, weight: .bold)
                 .padding(.horizontal, Layout.spacing)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: Layout.spacing) {
@@ -363,7 +379,7 @@ struct HomeView: View {
     private var genresSection: some View {
         VStack(alignment: .leading, spacing: Layout.compact) {
             Text("ios-genres-moods")
-                .font(.title3.bold())
+                .appFont(.title3, weight: .bold)
                 .padding(.horizontal, Layout.spacing)
             LazyVGrid(
                 columns: [GridItem(.flexible(), spacing: Layout.compact), GridItem(.flexible(), spacing: Layout.compact)],
@@ -397,7 +413,7 @@ private struct SquareCard: View {
                 image.resizable().scaledToFill()
             } placeholder: {
                 Image(systemName: circular ? "music.mic" : "music.note")
-                    .font(.title2)
+                    .appFont(.title2)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(.quaternary)
@@ -410,12 +426,12 @@ private struct SquareCard: View {
             )
 
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .appFont(.subheadline, weight: .semibold)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             if !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -450,7 +466,7 @@ private struct GenreTile: View {
                     )
                 )
             Text(genre.title)
-                .font(.subheadline.bold())
+                .appFont(.subheadline, weight: .bold)
                 .foregroundStyle(.white)
                 .lineLimit(2)
                 .padding(Layout.compact + 4)
@@ -545,12 +561,12 @@ struct LibraryView: View {
                         Section {
                             VStack(spacing: Layout.compact) {
                                 Image(systemName: "music.note")
-                                    .font(.largeTitle)
+                                    .appFont(.largeTitle)
                                     .foregroundStyle(.secondary)
                                 Text("ios-your-music")
-                                    .font(.headline)
+                                    .appFont(.headline)
                                 Text("ios-import-description")
-                                    .font(.subheadline)
+                                    .appFont(.subheadline)
                                     .foregroundStyle(.secondary)
                                     .multilineTextAlignment(.center)
                                 Button("ios-import", systemImage: "plus", action: importAction)
@@ -639,8 +655,8 @@ struct PlaylistsCollectionView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8))
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(playlist.title).font(.body.weight(.medium)).lineLimit(1)
-                                Text(playlist.author).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                                Text(playlist.title).appFont(.body, weight: .medium).lineLimit(1)
+                                Text(playlist.author).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                     }
@@ -729,7 +745,7 @@ struct ArtistsCollectionView: View {
                                         }
                                         .frame(width: 48, height: 48)
                                         .clipShape(Circle())
-                                        Text(artist.name).font(.body.weight(.medium))
+                                        Text(artist.name).appFont(.body, weight: .medium)
                                     }
                                 }
                             }
@@ -948,14 +964,14 @@ private struct CollectionPlayShuffleHeader: View {
         HStack(spacing: Layout.spacing) {
             Button(action: playAction) {
                 Label("ios-play", systemImage: "play.fill")
-                    .font(.subheadline.bold())
+                    .appFont(.subheadline, weight: .bold)
                     .frame(maxWidth: .infinity, minHeight: Layout.control)
             }
             .buttonStyle(.glassProminent)
 
             Button(action: shuffleAction) {
                 Label("ios-shuffle", systemImage: "shuffle")
-                    .font(.subheadline.bold())
+                    .appFont(.subheadline, weight: .bold)
                     .frame(maxWidth: .infinity, minHeight: Layout.control)
             }
             .buttonStyle(.glass)
@@ -991,7 +1007,7 @@ struct AlbumDetailView: View {
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Image(systemName: "square.stack")
-                            .font(.largeTitle)
+                            .appFont(.largeTitle)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(.quaternary)
@@ -1002,14 +1018,14 @@ struct AlbumDetailView: View {
 
                     VStack(spacing: 4) {
                         Text(detail?.title ?? fallbackTitle)
-                            .font(.title2.bold())
+                            .appFont(.title2, weight: .bold)
                             .multilineTextAlignment(.center)
                         Text(detail?.artist ?? fallbackArtist)
-                            .font(.headline)
+                            .appFont(.headline)
                             .foregroundStyle(.secondary)
                         if let year = detail?.year {
                             Text(String(year))
-                                .font(.caption.weight(.semibold))
+                                .appFont(.caption, weight: .semibold)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -1113,7 +1129,7 @@ struct PlaylistDetailView: View {
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Image(systemName: "music.note.list")
-                            .font(.largeTitle)
+                            .appFont(.largeTitle)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(.quaternary)
@@ -1124,14 +1140,14 @@ struct PlaylistDetailView: View {
 
                     VStack(spacing: 4) {
                         Text(detail?.title ?? fallbackTitle)
-                            .font(.title2.bold())
+                            .appFont(.title2, weight: .bold)
                             .multilineTextAlignment(.center)
                         Text(detail?.author ?? fallbackAuthor)
-                            .font(.headline)
+                            .appFont(.headline)
                             .foregroundStyle(.secondary)
                         if let desc = detail?.description, !desc.isEmpty {
                             Text(desc)
-                                .font(.caption)
+                                .appFont(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
                                 .multilineTextAlignment(.center)
@@ -1282,7 +1298,7 @@ struct ArtistDetailView: View {
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Image(systemName: "music.mic")
-                            .font(.largeTitle)
+                            .appFont(.largeTitle)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(.quaternary)
@@ -1292,11 +1308,11 @@ struct ArtistDetailView: View {
                     .shadow(color: .black.opacity(0.22), radius: 14, y: 8)
 
                     Text(detail?.name ?? fallbackName)
-                        .font(.title.bold())
+                        .appFont(.title, weight: .bold)
                         .multilineTextAlignment(.center)
                     if let subs = detail?.subscribers, !subs.isEmpty {
                         Text(subs)
-                            .font(.subheadline)
+                            .appFont(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     CollectionPlayShuffleHeader(
@@ -1318,7 +1334,7 @@ struct ArtistDetailView: View {
                     if !topSongs.isEmpty {
                         VStack(alignment: .leading, spacing: Layout.compact) {
                             Text("ios-top-songs")
-                                .font(.title3.bold())
+                                .appFont(.title3, weight: .bold)
                                 .padding(.horizontal, Layout.spacing)
                             ForEach(topSongs) { track in
                                 TrackRow(track: track) { playback.play(track, in: topSongs) }
@@ -1338,7 +1354,7 @@ struct ArtistDetailView: View {
                     if let related = detail?.related.map(\.artist), !related.isEmpty {
                         VStack(alignment: .leading, spacing: Layout.compact) {
                             Text("ios-similar-artists")
-                                .font(.title3.bold())
+                                .appFont(.title3, weight: .bold)
                                 .padding(.horizontal, Layout.spacing)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: Layout.spacing) {
@@ -1392,7 +1408,7 @@ struct ArtistDetailView: View {
     private func albumShelf(title: LocalizedStringKey, albums: [CatalogAlbum]) -> some View {
         VStack(alignment: .leading, spacing: Layout.compact) {
             Text(title)
-                .font(.title3.bold())
+                .appFont(.title3, weight: .bold)
                 .padding(.horizontal, Layout.spacing)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Layout.spacing) {
@@ -1440,7 +1456,7 @@ struct GenreDetailView: View {
                     ForEach(sections) { section in
                         VStack(alignment: .leading, spacing: Layout.compact) {
                             Text(section.title)
-                                .font(.title3.bold())
+                                .appFont(.title3, weight: .bold)
                                 .padding(.horizontal, Layout.spacing)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(alignment: .top, spacing: Layout.spacing) {
@@ -1577,7 +1593,7 @@ struct SearchView: View {
             filter = value
         } label: {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .appFont(.subheadline, weight: .semibold)
                 .foregroundStyle(filter == value ? Color.white : Color.primary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
@@ -1618,7 +1634,7 @@ struct SearchView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Layout.compact) {
                         Text("ios-browse-categories")
-                            .font(.title3.bold())
+                            .appFont(.title3, weight: .bold)
                             .padding(.horizontal, Layout.spacing)
                         LazyVGrid(
                             columns: [GridItem(.flexible(), spacing: Layout.compact), GridItem(.flexible(), spacing: Layout.compact)],
@@ -1677,8 +1693,8 @@ struct SearchView: View {
                                     .frame(width: 48, height: 48)
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(album.title).font(.body.weight(.medium)).lineLimit(1)
-                                        Text(album.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                                        Text(album.title).appFont(.body, weight: .medium).lineLimit(1)
+                                        Text(album.artist).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
                             }
@@ -1702,7 +1718,7 @@ struct SearchView: View {
                                     }
                                     .frame(width: 48, height: 48)
                                     .clipShape(Circle())
-                                    Text(artist.name).font(.body.weight(.medium)).lineLimit(1)
+                                    Text(artist.name).appFont(.body, weight: .medium).lineLimit(1)
                                 }
                             }
                         }
@@ -1731,8 +1747,8 @@ struct SearchView: View {
                                     .frame(width: 48, height: 48)
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(playlist.title).font(.body.weight(.medium)).lineLimit(1)
-                                        Text(playlist.author).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                                        Text(playlist.title).appFont(.body, weight: .medium).lineLimit(1)
+                                        Text(playlist.author).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
                             }
@@ -1787,7 +1803,7 @@ struct DownloadsView: View {
                                 ProgressView(value: entry.progress).accessibilityLabel(Text("ios-download-progress"))
                             }
                             HStack {
-                                Text(stateLabel(entry)).font(.caption).foregroundStyle(.secondary)
+                                Text(stateLabel(entry)).appFont(.caption).foregroundStyle(.secondary)
                                 Spacer()
                                 if entry.state == .failed {
                                     Button("ios-retry") { downloads.retry(entry.id) }.buttonStyle(.glass)
@@ -1894,7 +1910,7 @@ struct SettingsView: View {
                             Text("ios-equalizer-preamp")
                             Spacer()
                             Text(String(format: "%+.1f dB", settings.preampDB))
-                                .font(.caption.monospacedDigit())
+                                .appFont(.caption).monospacedDigit()
                                 .foregroundStyle(.secondary)
                         }
                         Slider(value: $settings.preampDB, in: -12...12, step: 0.5)
@@ -1905,7 +1921,7 @@ struct SettingsView: View {
                             Text("ios-equalizer-bass")
                             Spacer()
                             Text(String(format: "%+.1f dB", settings.bassDB))
-                                .font(.caption.monospacedDigit())
+                                .appFont(.caption).monospacedDigit()
                                 .foregroundStyle(.secondary)
                         }
                         Slider(value: $settings.bassDB, in: -12...12, step: 0.5)
@@ -1916,7 +1932,7 @@ struct SettingsView: View {
                             Text("ios-equalizer-treble")
                             Spacer()
                             Text(String(format: "%+.1f dB", settings.trebleDB))
-                                .font(.caption.monospacedDigit())
+                                .appFont(.caption).monospacedDigit()
                                 .foregroundStyle(.secondary)
                         }
                         Slider(value: $settings.trebleDB, in: -12...12, step: 0.5)
@@ -1936,6 +1952,10 @@ struct SettingsView: View {
                 }
 
                 Section("ios-appearance") {
+                    NavigationLink("ios-interface-font") { FontSettingsView() }
+                    Picker("ios-accent-color", selection: $settings.accent) {
+                        ForEach(AppAccent.allCases) { accent in Text(accent.labelKey).tag(accent) }
+                    }
                     Picker("ios-theme", selection: $settings.theme) {
                         ForEach(AppTheme.allCases) { theme in
                             Text(theme.labelKey).tag(theme)
@@ -2015,24 +2035,24 @@ struct TrackRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 4) {
                             Text(track.title)
-                                .font(.body.weight(.medium))
+                                .appFont(.body, weight: .medium)
                                 .foregroundStyle(playback.current?.id == track.id ? Color.accentColor : Color.primary)
                                 .lineLimit(1)
                             if track.explicit {
                                 Image(systemName: "e.square.fill")
-                                    .font(.caption2)
+                                    .appFont(.caption2)
                                     .foregroundStyle(.secondary)
                             }
                         }
                         Text(track.artist)
-                            .font(.subheadline)
+                            .appFont(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                     Spacer(minLength: Layout.compact)
                     if downloads.entry(for: track.id)?.state == .downloaded {
                         Image(systemName: "arrow.down.circle.fill")
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                     if playback.current?.id == track.id {
@@ -2050,7 +2070,7 @@ struct TrackRow: View {
                 trackMenuItems
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.body)
+                    .appFont(.body)
                     .foregroundStyle(.secondary)
                     .frame(minWidth: Layout.control, minHeight: Layout.control)
                     .contentShape(Rectangle())

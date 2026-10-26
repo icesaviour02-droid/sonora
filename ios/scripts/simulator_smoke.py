@@ -87,8 +87,27 @@ if __name__ == "__main__":
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-library-large-text.png"))
         sim("ui", udid, "content_size", "large")
         sim("ui", udid, "appearance", "light")
-        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://home")
         container = Path(sim("get_app_container", udid, BUNDLE, "data"))
+        for typeface in ("rounded", "Inter-Regular"):
+            review_file = container / "Library/Application Support/font-review.json"
+            review_file.unlink(missing_ok=True)
+            sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://fonts?font=" + typeface)
+            review = evidence(container, "font-review.json")
+            (OUTPUT / ("font-" + typeface + ".json")).write_text(json.dumps(review, indent=2))
+            if not review or review.get("selected") != typeface or review.get("persisted") != typeface or not review.get("selected_available") or not review.get("rounded_available"):
+                raise RuntimeError("The chosen font is not available or persisted")
+            sim("io", udid, "screenshot", str(OUTPUT / ("iphone13-font-" + typeface + ".png")))
+        review_file.unlink(missing_ok=True)
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://fonts")
+        restored_font = evidence(container, "font-review.json")
+        if not restored_font or restored_font.get("selected") != "Inter-Regular":
+            raise RuntimeError("The font choice did not survive relaunch")
+        review_file.unlink(missing_ok=True)
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://fonts?font=system")
+        reset_font = evidence(container, "font-review.json")
+        if not reset_font or reset_font.get("selected") != "system":
+            raise RuntimeError("The system font could not be restored")
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://home")
         home_evidence = evidence(container, "home-review.json")
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-home.png"))
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://search?q=Beethoven")

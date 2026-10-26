@@ -10,3 +10,5 @@ __pycache__/
 /flatpak/*.flatpak
 /flatpak/flatpak
 /.flatpak-builder
+# Generated iPhone copies of canonical font assets.
+ios/Sonora/Resources/Fonts/

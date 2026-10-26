@@ -97,6 +97,12 @@ final class SettingsStore {
     var theme: AppTheme {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: "sonora.settings.theme") }
     }
+    var typefaceID: String {
+        didSet { UserDefaults.standard.set(typefaceID, forKey: "sonora.settings.typefaceID") }
+    }
+    var accent: AppAccent {
+        didSet { UserDefaults.standard.set(accent.rawValue, forKey: "sonora.settings.accent") }
+    }
     var animatedArtwork: Bool {
         didSet { UserDefaults.standard.set(animatedArtwork, forKey: "sonora.settings.animatedArtwork") }
     }
@@ -161,6 +167,8 @@ final class SettingsStore {
         romanizedLyrics = defaults.bool(forKey: "sonora.settings.romanizedLyrics")
         localFileLyrics = defaults.bool(forKey: "sonora.settings.localFileLyrics")
         theme = AppTheme(rawValue: defaults.string(forKey: "sonora.settings.theme") ?? "") ?? .system
+        typefaceID = defaults.string(forKey: "sonora.settings.typefaceID") ?? "system"
+        accent = AppAccent(rawValue: defaults.string(forKey: "sonora.settings.accent") ?? "") ?? .music
         animatedArtwork = defaults.bool(forKey: "sonora.settings.animatedArtwork")
         scrobbleEnabled = defaults.bool(forKey: "sonora.settings.scrobbleEnabled")
         listenBrainzToken = ScrobbleKeychain.read(account: "listenbrainz")

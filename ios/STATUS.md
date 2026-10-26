@@ -74,3 +74,18 @@ stream playback, complete download and advancing downloaded playback. IPA upload
 checks; a missing repository variable cannot silently skip the audio check. A failing build must
 not be handed off as a working IPA. Authenticated playback, physical-device behavior and the
 remaining feature inventory are still release gates.
+
+## Font and appearance work (26 October 2026)
+
+The full desktop feature goal remains active. The previous goal work made progress: it changed
+source and produced simulator evidence, rather than only waiting. A two-hour heartbeat is active
+to resume this same goal when possible; no account limit reset time is guaranteed.
+
+The font system now supports native SF Pro Rounded, bundled Inter faces and user-imported
+TTF/OTF/TTC files, with persistence, Dynamic Type text styles and removal of imported collections.
+No separately supplied SF Pro Rounded file is currently in the project root. iOS supplies its
+rounded system design without redistributing Apple's desktop font files. Shared text styles
+across screens now resolve the user's font choice. Native system navigation keeps system styling.
+Appearance also supports artwork-derived contrast-adjusted accent colors and named system accents.
+Simulator checks for font registration, selection persistence and screenshots are added; their
+Apple compilation/runtime result is pending. This does not resolve Guest audio verification.

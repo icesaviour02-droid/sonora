@@ -79,6 +79,26 @@ def icon():
     raise ValueError("No 1024px upstream icon found")
 
 
+def fonts():
+    """Stage repository font assets; iOS also provides SF Pro Rounded natively."""
+    destination = IOS / "Sonora/Resources/Fonts"
+    sources = list((ROOT / "assets/fonts").glob("*"))
+    sources += [path for path in ROOT.iterdir() if path.is_file()]
+    staged = set()
+    for source in sources:
+        if source.suffix.lower() not in {".ttf", ".otf", ".ttc"}:
+            continue
+        name = source.name
+        if name in staged:
+            raise ValueError(f"Duplicate font resource: {name}")
+        staged.add(name)
+        write_if_changed(destination / name, source.read_bytes())
+    if destination.exists():
+        for old in destination.iterdir():
+            if old.name not in staged:
+                old.unlink()
+
+
 def project():
     objects = {}
 
@@ -98,9 +118,11 @@ def project():
     variant = add("strings", "PBXVariantGroup", children=[strings], name="Localizable.strings", sourceTree="<group>")
     assets = add("assets", "PBXFileReference", lastKnownFileType="folder.assetcatalog", path="Sonora/Assets.xcassets", sourceTree="SOURCE_ROOT")
     resources = [add("strings.build", "PBXBuildFile", fileRef=variant), add("assets.build", "PBXBuildFile", fileRef=assets)]
+    font_folder = add("fonts", "PBXFileReference", lastKnownFileType="folder", path="Sonora/Resources/Fonts", sourceTree="SOURCE_ROOT")
+    resources.append(add("fonts.build", "PBXBuildFile", fileRef=font_folder))
     info = add("info", "PBXFileReference", lastKnownFileType="text.plist.xml", path="Sonora/Info.plist", sourceTree="SOURCE_ROOT")
     app = add("app", "PBXFileReference", explicitFileType="wrapper.application", path="Sonora.app", sourceTree="BUILT_PRODUCTS_DIR", includeInIndex="0")
-    source_group = add("source.group", "PBXGroup", children=source_refs + [variant, assets, info], name="Sonora", sourceTree="<group>")
+    source_group = add("source.group", "PBXGroup", children=source_refs + [variant, assets, font_folder, info], name="Sonora", sourceTree="<group>")
     products = add("products", "PBXGroup", children=[app], name="Products", sourceTree="<group>")
     main_group = add("main.group", "PBXGroup", children=[source_group, products], sourceTree="<group>")
     sources = add("sources", "PBXSourcesBuildPhase", buildActionMask="2147483647", files=source_builds, runOnlyForDeploymentPostprocessing="0")
@@ -152,5 +174,6 @@ def project():
 if __name__ == "__main__":
     localization()
     icon()
+    fonts()
     project()
     print("Prepared Sonora iPhone project, English strings and upstream icon.")

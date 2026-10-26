@@ -12,6 +12,8 @@ struct SonoraApp: App {
     @State private var playback: PlaybackController
     @State private var youtube = YouTubeSearch()
     @State private var catalog = CatalogStore()
+    @State private var fonts = FontLibrary()
+    @State private var appearance = AppearanceStore()
     @State private var poTokenMinter = PoTokenMinter()
 
     init() {
@@ -32,6 +34,14 @@ struct SonoraApp: App {
                 .environment(youtube)
                 .environment(downloads)
                 .environment(catalog)
+                .environment(fonts)
+                .environment(\.appTypeface, settings.typefaceID)
+                .fontDesign(settings.typefaceID == "rounded" ? .rounded : .default)
+                .font(InterfaceTypography.font(.body, typeface: settings.typefaceID))
+                .tint(appearance.color(for: settings.accent))
+                .onChange(of: playback.current?.artworkURL, initial: true) { _, url in
+                    appearance.updateArtwork(url)
+                }
                 .task {
                     poTokenMinter.start()
                 }

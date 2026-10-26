@@ -268,14 +268,14 @@ struct AccountSignInView: View {
                                         .frame(width: 40, height: 40)
                                         .clipShape(Circle())
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(item.name).foregroundStyle(.primary).font(.body.weight(.medium))
+                                            Text(item.name).foregroundStyle(.primary).appFont(.body, weight: .medium)
                                             if let handle = item.handle, !handle.isEmpty {
-                                                Text(handle).font(.caption).foregroundStyle(.secondary)
+                                                Text(handle).appFont(.caption).foregroundStyle(.secondary)
                                             }
                                         }
                                         Spacer()
                                         Image(systemName: "chevron.right")
-                                            .font(.caption)
+                                            .appFont(.caption)
                                             .foregroundStyle(.tertiary)
                                     }
                                 }
@@ -291,7 +291,7 @@ struct AccountSignInView: View {
                         }
                         if account.isBusy { ProgressView("ios-account-verifying") }
                         Text("ios-account-data-description")
-                            .font(.footnote)
+                            .appFont(.footnote)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, Layout.spacing)
                         Button("ios-account-continue") {

@@ -9,6 +9,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iPhone Appearance settings now offer SF Pro Rounded, bundled Inter faces and imported TTF,
+  OTF or TTC fonts with Dynamic Type scaling. The selected font persists across relaunches.
+- iPhone accent colors can follow the current album artwork or a chosen system color.
 - An initial iPhone app source with native Liquid Glass navigation and local audio import and
   playback. YouTube Music integration is still in development; an unsigned IPA build workflow
   is included for testing the port.
