@@ -452,6 +452,29 @@ Runs 40350389659 (iPhone 13/iOS 27.0) and 40350397736 (iOS 26) compiled both tar
 real touch tests after removing the clock override. Both passed Downloads navigation, playlist
 rename and the native queue reorder assertion. The iOS 27 test also removed the selected queue
 occurrence, then failed by targeting the first app-wide cell behind the Add Songs sheet. The
-iOS 26 assertion sampled row count before removal animation settled. Tests now wait for actual
+iOS 26 assertion sampled row count immediately after the removal tap; animation timing remained
+a possible cause of that failure. Tests now wait for actual
 post-edit counts and target a hittable, explicitly identified picker song. No interaction check
 has been removed or downgraded. New source retains the same native playback and queue logic.
+
+
+## Current delivery policy (user update, 26 October 2026)
+
+The user requested that visual review happen on their own iPhone, stopped iOS 26 testing and
+asked not to spend time/tokens generating or inspecting more screenshots. Both active simulator
+runs were canceled. The latest iOS 27 retry had failed on simulator installation before app
+launch; that is infrastructure evidence, not an app feature result.
+
+The default workflow now builds and packages the device app with Xcode 27, with no simulator
+build, screenshots or touch review. Existing regression routes remain available through an
+explicit manual full/changed_ui workflow. Those optional checks require an iOS 27 runtime and
+cannot fall back to iOS 26. Deployment compatibility remains iOS 26+; it does not schedule tests.
+
+Build 12 contains the duration/end correction, collapsed accessory controls, native UIKit queue,
+Downloads categories and shared collection layouts. Prior iOS 27 evidence at df069025 passed
+23 playback checks, four download checks, 13 local-library checks and four relaunch checks.
+Downloads and playlist-rename touch tests passed; native queue drag and swipe removal reached
+their assertions successfully. Complete Add Songs/Clear touch acceptance remains pending; the
+last code change explicitly targets visible picker rows and awaits asynchronous count updates.
+A build-only pass must not be called full feature acceptance. Account/Guest and desktop-parity
+limitations in PARITY.md remain. The user's real-phone review is the next UI validation step.
