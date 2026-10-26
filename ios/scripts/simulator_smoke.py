@@ -167,7 +167,6 @@ if __name__ == "__main__":
     try:
         sim("boot", udid)
         sim("bootstatus", udid, "-b")
-        sim("status_bar", udid, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100")
         sim("install", udid, str(IOS / "build/simulator/Build/Products/Debug-iphonesimulator/Sonora.app"))
         try:
             launch = sim("launch", udid, BUNDLE)

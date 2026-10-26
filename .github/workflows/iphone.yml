@@ -15,7 +15,7 @@ on:
       runner:
         description: 'Standard free public-repository Apple runner'
         type: choice
-        options: [macos-26, xcode-27]
+        options: [macos-26, xcode-27, macos-15]
         default: macos-26
   push:
     paths:
@@ -71,7 +71,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: iphone-${{ github.ref }}
+  group: iphone-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.runner || 'macos-26' }}
   cancel-in-progress: true
 
 jobs:
@@ -85,6 +85,9 @@ jobs:
       SONORA_REVIEW_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_development && inputs.review_scope == 'changed_ui' && 'changed_ui' || 'full' }}
     steps:
       - uses: actions/checkout@v5
+      - name: Select iOS 26 tools on the stable alternate runner
+        if: github.event_name == 'workflow_dispatch' && inputs.runner == 'macos-15'
+        run: echo 'DEVELOPER_DIR=/Applications/Xcode_26.3.app/Contents/Developer' >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim

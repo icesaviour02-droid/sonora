@@ -440,3 +440,10 @@ a queue runtime failure. The next build allows 240 seconds for cold initial laun
 existing bounded warm-route and test timeouts. Native labels now receive the selected appTypeface
 environment and reconfigure on font changes. Bottom scroll inset keeps Queue initially at the
 top even when only a couple of songs follow it; history stays above and is revealed by scrolling.
+
+Run 40338448631 at 08f85276 again compiled both targets, but failed before app launch on the
+cosmetic simctl status_bar override, which stalled for 120 seconds. That clock-normalization step
+is removed entirely; it is unrelated to app functionality. Standard macos-15 is also selectable
+with the officially installed Xcode 26.3 explicitly selected. Runner-specific concurrency groups
+allow the same source to be checked in both free pools without canceling the other. iOS 27 remains
+the preferred review target; the stable runner provides an independent iOS 26 compatibility check.
