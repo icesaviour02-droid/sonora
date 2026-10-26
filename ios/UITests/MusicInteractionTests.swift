@@ -65,16 +65,29 @@ final class MusicInteractionTests: XCTestCase {
         let remove = app.buttons["Remove from Queue"]
         XCTAssertTrue(remove.waitForExistence(timeout: 5))
         remove.tap()
-        XCTAssertEqual(rows.count, 1)
+        waitForQueueCount(1, rows: rows)
         app.buttons["queue-add-songs"].tap()
         XCTAssertTrue(app.buttons["queue-picker-confirm"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 5))
-        app.cells.firstMatch.tap()
+        let choices = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "queue-picker-song-"))
+        let visibleChoice = NSPredicate { _, _ in choices.allElementsBoundByIndex.contains { $0.isHittable } }
+        expectation(for: visibleChoice, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+        guard let choice = choices.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
+            XCTFail("The Add Songs sheet has no hittable song row")
+            return
+        }
+        choice.tap()
         XCTAssertTrue(app.buttons["queue-picker-confirm"].isEnabled)
         app.buttons["queue-picker-confirm"].tap()
         XCTAssertTrue(app.buttons["queue-clear"].waitForExistence(timeout: 5))
-        XCTAssertEqual(rows.count, 2)
+        waitForQueueCount(2, rows: rows)
         app.buttons["queue-clear"].tap()
-        XCTAssertEqual(rows.count, 0)
+        waitForQueueCount(0, rows: rows)
+    }
+
+    /// Native list removal/insertion completes asynchronously; assert the resulting row count.
+    private func waitForQueueCount(_ count: Int, rows: XCUIElementQuery) {
+        expectation(for: NSPredicate { _, _ in rows.count == count }, evaluatedWith: rows)
+        waitForExpectations(timeout: 8)
     }
 }

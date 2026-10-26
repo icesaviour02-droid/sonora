@@ -78,8 +78,8 @@ remaining feature inventory are still release gates.
 ## Font and appearance work (26 October 2026)
 
 The full desktop feature goal remains active. The previous goal work made progress: it changed
-source and produced simulator evidence, rather than only waiting. A two-hour heartbeat is active
-to resume this same goal when possible; no account limit reset time is guaranteed.
+source and produced simulator evidence, rather than only waiting. A two-hour heartbeat was previously active and has since been deleted at the user’s request.
+Work continues in the active conversation; no account limit reset time is guaranteed.
 
 The font system now supports native SF Pro Rounded, bundled Inter faces and user-imported
 TTF/OTF/TTC files, with persistence, Dynamic Type text styles and removal of imported collections.
@@ -447,3 +447,11 @@ is removed entirely; it is unrelated to app functionality. Standard macos-15 is 
 with the officially installed Xcode 26.3 explicitly selected. Runner-specific concurrency groups
 allow the same source to be checked in both free pools without canceling the other. iOS 27 remains
 the preferred review target; the stable runner provides an independent iOS 26 compatibility check.
+
+Runs 40350389659 (iPhone 13/iOS 27.0) and 40350397736 (iOS 26) compiled both targets and reached
+real touch tests after removing the clock override. Both passed Downloads navigation, playlist
+rename and the native queue reorder assertion. The iOS 27 test also removed the selected queue
+occurrence, then failed by targeting the first app-wide cell behind the Add Songs sheet. The
+iOS 26 assertion sampled row count before removal animation settled. Tests now wait for actual
+post-edit counts and target a hittable, explicitly identified picker song. No interaction check
+has been removed or downgraded. New source retains the same native playback and queue logic.

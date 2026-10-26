@@ -20,6 +20,7 @@ struct QueueSongsPicker: View {
         List(selection: $selected) {
             ForEach(songs.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || $0.artist.localizedCaseInsensitiveContains(query) }) { track in
                 TrackRow(track: track) {}.selecting().tag(track.id)
+                    .accessibilityIdentifier("queue-picker-song-" + track.id)
             }
         }
         .listStyle(.plain)
