@@ -568,3 +568,11 @@ The added GUI activation failed before installation or launch. That optional act
 removed entirely; headless simctl remains the path used by earlier successful native checks.
 This was a runner setup error, not an app feature result. DER signature and launch diagnostics
 remain. No GUI or screenshot work is requested.
+
+Run 40383655659 at a2035d5d compiled both targets, then the captured launch diagnostics identified
+CODESIGNING / Taskgated Invalid Signature, SIGKILL. The simulator-only ad-hoc signature no longer
+claims a team identifier or debugger permission: it contains only the app identifier and its
+own Keychain group, with DER encoding retained. This follows the ordinary self-contained
+simulator app identity; real device signing remains entirely with iLoader. The prior run does
+not establish any new native feature acceptance. Simulator signing troubleshooting has not
+changed the release app code since the explicit picker fix.
