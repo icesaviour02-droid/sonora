@@ -120,6 +120,10 @@ struct RootView: View {
             guestProbe.start(playback: playback) { playerMode = "artwork"; showPlayer = true }
             return
         }
+        if url.host == "lyricsstorereview" {
+            localLyricsProbe.review(settings: settings)
+            return
+        }
         if url.host == "localreview" {
             library.reviewLocalPlayback(playback)
             return
@@ -1931,7 +1935,12 @@ struct SettingsView: View {
                 }
 
                 Section("ios-lyrics") {
+                    NavigationLink("ios-lyrics-sources") { LyricsSourcesSettingsView() }
                     Toggle("ios-synced-lyrics", isOn: $settings.syncedLyrics)
+                    Toggle("ios-karaoke-lyrics", isOn: $settings.karaokeLyrics)
+                    Toggle("ios-backing-vocals", isOn: $settings.backingVocals)
+                    LabeledContent("ios-lyrics-text-size", value: settings.lyricsScale.formatted(.percent.precision(.fractionLength(0))))
+                    Slider(value: $settings.lyricsScale, in: 0.5...2, step: 0.05).accessibilityLabel(Text("ios-lyrics-text-size"))
                     Toggle("ios-blur-inactive-lyrics", isOn: $settings.blurInactiveLyrics)
                     Toggle("ios-romanized-lyrics", isOn: $settings.romanizedLyrics)
                     Toggle("ios-local-lyrics", isOn: $settings.localFileLyrics)

@@ -31,7 +31,7 @@ whose behavior can be used as a separate reference.
 | Background audio, lock-screen commands, AirPlay | Implemented; unverified on hardware | Screen lock, long background session, headphones/Bluetooth, calls/interruption, route loss |
 | Gapless playback | Missing | Consecutive tracks with measured gap behavior |
 | Audio normalization, quality selection | Implemented; runtime unverified | Provider loudness handling, level consistency, supported quality fallback |
-| Equalizer/output options | Exact desktop DSP reused; six filter tests and generated-PCM C boundary pass on Linux and Apple host; iPhone app compiles, native tap playback pending | Native tap processing, presets/tone/manual and auto headroom, full parametric UI, profiles, APO files and device rules |
+| Equalizer/output options | Exact desktop DSP reused; six filter tests and generated-PCM C boundary pass on Linux and Apple host; native tap processes actual simulator audio; seven profile edit/import/export/restore checks pass | Native tap processing, presets/tone/manual and auto headroom, touch-driven parametric editing, physical audio routes and device rules |
 | Sleep timer | Implemented; runtime unverified | Timed stop and end-of-track behavior across backgrounding |
 | YouTube account sign-in/session/sign-out | Cookie sessions, renewal/page selection/proof-of-origin implemented but unaccepted; system Safari/OAuth missing | Real account login, Keychain storage, expiration/restore, sign-out cache isolation |
 | Home feed, recommendations, genres | Populated Home verified on iOS 26.5 simulator; account personalization and genre navigation unverified | Loaded/empty/error/continuation and navigation behavior |
@@ -42,7 +42,7 @@ whose behavior can be used as a separate reference.
 | Listening history/play counts, provider reporting | Local history implemented; provider reporting incomplete/unverified | Start/pause/seek/stop reporting and completed-listen rules |
 | Pins/favorites and sharing/deep links | Implemented subset; runtime acceptance missing | Pin persistence, share destinations, malformed links and account changes |
 | Plain YouTube lyrics | Implemented; Swift supports nullable timing fields | Correct track, loading/empty/retry, cancellation and provider attribution |
-| Synced/karaoke lyrics, background vocals, romanization | Synced lines/UI decode verified in simulator; local metadata lookup repaired and verified on Linux; word timing/backing vocals incomplete | Playback timing/seek synchronization, alternate sources/languages and fallback |
+| Synced/karaoke lyrics, background vocals, romanization | Desktop parsers/ranking/sources reused; 53 shared tests and enhanced LRC/TTML C boundary pass on Linux; native source/cache/word/backing UI implemented, Apple acceptance pending | Playback timing/seek synchronization, alternate sources/languages and fallback |
 | LastFM/ListenBrainz/LibreFM/Maloja scrobbling | Basic ListenBrainz/Maloja calls implemented; 15-second trigger does not establish full parity | Auth, now-playing, completed listens, offline retry and duplicate prevention |
 | Apple Music/Spotify/Deezer/Tidal/Subsonic/Navidrome | Missing | Each provider's supported sign-in, catalog, playback, library and download capabilities |
 | Local albums/artists/playlists, folders/tag editing | Missing / platform review | Files security scope, metadata editing, indexes and rescan behavior |

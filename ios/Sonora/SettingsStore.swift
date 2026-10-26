@@ -84,6 +84,21 @@ final class SettingsStore {
     var syncedLyrics: Bool {
         didSet { UserDefaults.standard.set(syncedLyrics, forKey: "sonora.settings.syncedLyrics") }
     }
+    var karaokeLyrics: Bool {
+        didSet { UserDefaults.standard.set(karaokeLyrics, forKey: "sonora.settings.karaokeLyrics") }
+    }
+    var backingVocals: Bool {
+        didSet { UserDefaults.standard.set(backingVocals, forKey: "sonora.settings.backingVocals") }
+    }
+    var lyricsScale: Double {
+        didSet { UserDefaults.standard.set(lyricsScale, forKey: "sonora.settings.lyricsScale") }
+    }
+    var lyricsSources: [LyricsSourcePreference] {
+        didSet {
+            if let data = try? JSONEncoder().encode(lyricsSources) { UserDefaults.standard.set(data, forKey: "sonora.settings.lyricsSources") }
+        }
+    }
+    var enabledLyricsSources: [String] { lyricsSources.filter(\.enabled).map { $0.source.rawValue } }
     var blurInactiveLyrics: Bool {
         didSet { UserDefaults.standard.set(blurInactiveLyrics, forKey: "sonora.settings.blurInactiveLyrics") }
     }
@@ -121,6 +136,7 @@ final class SettingsStore {
     private(set) var pins: [PinnedItem] = []
     private(set) var history: [MusicTrack] = []
     private(set) var cacheBytes: UInt64 = 0
+    @ObservationIgnored private var lyricsCleanupTask: Task<Void, Never>?
 
     private static var stateRoot: URL {
         URL.applicationSupportDirectory.appendingPathComponent("State", isDirectory: true)
@@ -145,6 +161,9 @@ final class SettingsStore {
             "sonora.settings.bassDB": 0.0,
             "sonora.settings.trebleDB": 0.0,
             "sonora.settings.syncedLyrics": true,
+            "sonora.settings.karaokeLyrics": true,
+            "sonora.settings.backingVocals": true,
+            "sonora.settings.lyricsScale": 1.0,
             "sonora.settings.blurInactiveLyrics": true,
             "sonora.settings.romanizedLyrics": true,
             "sonora.settings.localFileLyrics": true,
@@ -164,6 +183,18 @@ final class SettingsStore {
         bassDB = defaults.double(forKey: "sonora.settings.bassDB")
         trebleDB = defaults.double(forKey: "sonora.settings.trebleDB")
         syncedLyrics = defaults.bool(forKey: "sonora.settings.syncedLyrics")
+        karaokeLyrics = defaults.bool(forKey: "sonora.settings.karaokeLyrics")
+        backingVocals = defaults.bool(forKey: "sonora.settings.backingVocals")
+        let scale = defaults.double(forKey: "sonora.settings.lyricsScale")
+        lyricsScale = scale.isFinite ? min(max(scale, 0.5), 2) : 1
+        let savedSources = defaults.data(forKey: "sonora.settings.lyricsSources")
+            .flatMap { try? JSONDecoder().decode([LyricsSourcePreference].self, from: $0) } ?? []
+        var seenSources: Set<String> = []
+        var mergedSources = savedSources.filter { seenSources.insert($0.id).inserted }
+        mergedSources += LyricsSourceID.allCases.filter { !seenSources.contains($0.rawValue) }.map {
+            LyricsSourcePreference(source: $0, enabled: $0 != .kugou && $0 != .netease)
+        }
+        lyricsSources = mergedSources
         blurInactiveLyrics = defaults.bool(forKey: "sonora.settings.blurInactiveLyrics")
         romanizedLyrics = defaults.bool(forKey: "sonora.settings.romanizedLyrics")
         localFileLyrics = defaults.bool(forKey: "sonora.settings.localFileLyrics")
@@ -261,6 +292,7 @@ final class SettingsStore {
         pins.removeAll { $0.kind != .track || $0.track?.youtubeID != nil }
         saveHistory()
         savePins()
+        clearLyricsCache()
     }
 
     func measureCache() {
@@ -280,6 +312,15 @@ final class SettingsStore {
         let resolved = Self.coreCacheRoot.appendingPathComponent("resolved.json")
         try? FileManager.default.removeItem(at: resolved)
         measureCache()
+        clearLyricsCache()
+    }
+
+    private func clearLyricsCache() {
+        lyricsCleanupTask?.cancel()
+        lyricsCleanupTask = Task { [weak self] in
+            await LyricsStore.clearCachedSheets()
+            self?.measureCache()
+        }
     }
 
     func submitScrobble(_ track: MusicTrack) {

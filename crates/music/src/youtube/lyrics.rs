@@ -20,7 +20,8 @@ impl YouTubeLyrics {
         }
     }
 
-    async fn sheet(&self, id: &str) -> Result<Option<Lyrics>> {
+    /// Fetches a known video's public sheet; catalogue searches additionally match the recording.
+    pub async fn sheet(&self, id: &str) -> Result<Option<Lyrics>> {
         let next = self
             .api
             .execute(

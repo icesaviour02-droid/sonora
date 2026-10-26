@@ -18,6 +18,11 @@ final class PlaybackController {
     private(set) var isPlaying = false
     private(set) var isLoading = false
     private(set) var elapsed: Double = 0
+    /// The native clock is sampled for word timing without guessing from coarse UI updates.
+    var presentationElapsed: Double {
+        let seconds = player.currentTime().seconds
+        return seconds.isFinite ? max(0, seconds) : elapsed
+    }
     private(set) var duration: Double = 0
     private(set) var isShuffled = false
     private(set) var repeatMode: RepeatMode = .off

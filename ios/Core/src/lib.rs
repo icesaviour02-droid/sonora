@@ -3,8 +3,28 @@
 
 // Reuse the desktop's allocation-free DSP and preset curves, without its rodio output plumbing.
 mod audio_effects;
+mod lyric_bridge;
+#[path = "../../../crates/music/src/models.rs"]
+pub mod models;
+pub use models::*;
+#[path = "../../../crates/music/src/lyrics/mod.rs"]
+pub mod lyrics;
+pub use lyrics::provider::LyricsProvider;
+#[path = "../../../crates/music/src/binimum/mod.rs"]
+pub mod binimum;
+pub mod desktop_youtube;
 #[path = "../../../crates/music/src/equalizer/mod.rs"]
 pub mod equalizer;
+#[path = "../../../crates/music/src/escape.rs"]
+pub mod escape;
+#[path = "../../../crates/music/src/kugou/mod.rs"]
+pub mod kugou;
+#[path = "../../../crates/music/src/lrclib/mod.rs"]
+pub mod lrclib;
+#[path = "../../../crates/music/src/musixmatch/mod.rs"]
+pub mod musixmatch;
+#[path = "../../../crates/music/src/netease/mod.rs"]
+pub mod netease;
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString, c_char, c_void};
@@ -34,8 +54,6 @@ const GENRES_BROWSE_ID: &str = "FEmusic_moods_and_genres";
 const GENRE_CATEGORY_ID: &str = "FEmusic_moods_and_genres_category";
 const SUBSCRIPTIONS_BROWSE_ID: &str = "FEmusic_library_corpus_artists";
 const ARTISTS_SEARCH_PARAMS: &str = "EgWKAQIgAQ%3D%3D";
-const LRCLIB_ENDPOINT: &str = "https://lrclib.net/api/search";
-const LRCLIB_AGENT: &str = "sonora/0.2.0 (https://github.com/sonorahq/sonora)";
 
 type Callback = extern "C" fn(*mut c_void, *mut c_char);
 
@@ -223,6 +241,14 @@ enum Request {
         video_id: Option<String>,
         title: Option<String>,
         artist: Option<String>,
+        album: Option<String>,
+        duration_seconds: Option<f64>,
+        sources: Option<Vec<String>>,
+        local_text: Option<String>,
+    },
+    ParseLyrics {
+        text: String,
+        format: Option<String>,
     },
     Home {},
     Genre {
@@ -535,23 +561,34 @@ async fn execute(request: Request) -> Result<Value> {
             video_id,
             title,
             artist,
+            album,
+            duration_seconds,
+            sources,
+            local_text,
         } => {
             if let Some(id) = video_id.as_deref() {
                 validate_video_id(id)?;
             }
-            for value in [title.as_deref(), artist.as_deref()].into_iter().flatten() {
+            for value in [title.as_deref(), artist.as_deref(), album.as_deref()]
+                .into_iter()
+                .flatten()
+            {
                 if value.len() > MAX_QUERY {
                     bail!("lyrics metadata is too long");
                 }
             }
-            resolve_lyrics(
-                &api,
-                video_id.as_deref(),
-                title.as_deref(),
-                artist.as_deref(),
-            )
+            lyric_bridge::resolve(lyric_bridge::Lookup {
+                video_id,
+                title,
+                artist,
+                album,
+                duration_seconds,
+                sources,
+                local_text,
+            })
             .await
         }
+        Request::ParseLyrics { text, format } => lyric_bridge::parse(&text, format.as_deref()),
         Request::Home {} => fetch_home(&api).await,
         Request::Genre { params } => fetch_genre(&api, &params).await,
         Request::Album { browse_id } => fetch_album(&api, &browse_id).await,
@@ -1257,319 +1294,4 @@ fn two_row_track(item: &Value) -> Option<ytmusic::Track> {
         liked: None,
         views: None,
     })
-}
-
-/// Resolves synced LRC lyrics via LRCLIB when metadata is present, falling back to YouTube Music.
-async fn resolve_lyrics(
-    api: &YtMusic,
-    id: Option<&str>,
-    title: Option<&str>,
-    artist: Option<&str>,
-) -> Result<Value> {
-    if let (Some(title), Some(artist)) = (title, artist)
-        && !title.trim().is_empty()
-        && let Ok(Some(lrc)) = lrclib_lyrics(api, title.trim(), artist.trim()).await
-    {
-        return Ok(lrc);
-    }
-    match id {
-        Some(id) => youtube_lyrics(api, id).await,
-        None => Ok(json!({
-            "text": null, "lines": [], "synced": false, "instrumental": false, "source": "LRCLIB",
-        })),
-    }
-}
-
-#[derive(Deserialize)]
-struct LrcLibHit {
-    #[serde(rename = "plainLyrics")]
-    plain: Option<String>,
-    #[serde(rename = "syncedLyrics")]
-    synced: Option<String>,
-    #[serde(default)]
-    instrumental: bool,
-}
-
-async fn lrclib_lyrics(api: &YtMusic, title: &str, artist: &str) -> Result<Option<Value>> {
-    let response = api
-        .client()
-        .get(LRCLIB_ENDPOINT)
-        .query(&[("track_name", title), ("artist_name", artist)])
-        .header("User-Agent", LRCLIB_AGENT)
-        .send()
-        .await?;
-    if !response.status().is_success() {
-        return Ok(None);
-    }
-    let body = response.bytes().await?;
-    let hits: Vec<LrcLibHit> = serde_json::from_slice(&body)?;
-    for hit in &hits {
-        if let Some(synced) = hit.synced.as_deref() {
-            let lines = parse_lrc(synced);
-            if !lines.is_empty() {
-                let text = lines
-                    .iter()
-                    .filter_map(|line| line.get("text").and_then(Value::as_str))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                return Ok(Some(json!({
-                    "text": text,
-                    "lines": lines,
-                    "synced": true,
-                    "instrumental": false,
-                    "source": "LRCLIB",
-                })));
-            }
-        }
-    }
-    for hit in hits {
-        if hit.instrumental {
-            return Ok(Some(json!({
-                "text": null,
-                "lines": [],
-                "synced": false,
-                "instrumental": true,
-                "source": "LRCLIB",
-            })));
-        }
-        if let Some(plain) = hit.plain.filter(|text| !text.trim().is_empty()) {
-            let lines = plain_lines(&plain);
-            return Ok(Some(json!({
-                "text": plain,
-                "lines": lines,
-                "synced": false,
-                "instrumental": false,
-                "source": "LRCLIB",
-            })));
-        }
-    }
-    Ok(None)
-}
-
-fn parse_lrc(input: &str) -> Vec<Value> {
-    let mut parsed: Vec<(f64, String)> = Vec::new();
-    for raw in input.lines() {
-        let line = raw.trim();
-        let Some(rest) = line.strip_prefix('[') else {
-            continue;
-        };
-        let Some((stamp, text)) = rest.split_once(']') else {
-            continue;
-        };
-        let Some((mins, secs)) = stamp.split_once(':') else {
-            continue;
-        };
-        let Ok(m) = mins.trim().parse::<f64>() else {
-            continue;
-        };
-        let Ok(s) = secs.trim().replace(':', ".").parse::<f64>() else {
-            continue;
-        };
-        let start = m * 60.0 + s;
-        let clean = text.trim().to_string();
-        if !clean.is_empty() && start.is_finite() && start >= 0.0 {
-            parsed.push((start, clean));
-        }
-    }
-    parsed.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let mut out = Vec::with_capacity(parsed.len());
-    for index in 0..parsed.len() {
-        let (start, ref text) = parsed[index];
-        let end = parsed.get(index + 1).map(|(next, _)| *next);
-        out.push(json!({
-            "id": index,
-            "start_seconds": start,
-            "end_seconds": end,
-            "text": text,
-            "romanized": romanize_line(text),
-        }));
-    }
-    out
-}
-
-fn plain_lines(text: &str) -> Vec<Value> {
-    text.lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .enumerate()
-        .map(|(index, line)| {
-            json!({
-                "id": index,
-                "start_seconds": null,
-                "end_seconds": null,
-                "text": line,
-                "romanized": romanize_line(line),
-            })
-        })
-        .collect()
-}
-
-/// Lightweight transliteration for non-Latin scripts (Kana, Hangul, Cyrillic) when Romanized Lyrics is on.
-fn romanize_line(line: &str) -> Option<String> {
-    if line.is_ascii() {
-        return None;
-    }
-    let mut out = String::new();
-    let mut changed = false;
-    for ch in line.chars() {
-        let code = ch as u32;
-        // Hangul syllables: U+AC00..=U+D7A3
-        if (0xAC00..=0xD7A3).contains(&code) {
-            const L: [&str; 19] = [
-                "g", "kk", "n", "d", "tt", "r", "m", "b", "pp", "s", "ss", "", "j", "jj", "ch",
-                "k", "t", "p", "h",
-            ];
-            const V: [&str; 21] = [
-                "a", "ae", "ya", "yae", "eo", "e", "yeo", "ye", "o", "wa", "wae", "oe", "yo", "u",
-                "wo", "we", "wi", "yu", "eu", "ui", "i",
-            ];
-            const T: [&str; 28] = [
-                "", "k", "k", "ks", "n", "nj", "nh", "t", "l", "lg", "lm", "lb", "ls", "lt", "lp",
-                "lh", "m", "p", "ps", "t", "t", "ng", "t", "t", "k", "t", "p", "t",
-            ];
-            let idx = (code - 0xAC00) as usize;
-            let l = idx / 588;
-            let v = (idx % 588) / 28;
-            let t = idx % 28;
-            out.push_str(L[l]);
-            out.push_str(V[v]);
-            out.push_str(T[t]);
-            changed = true;
-        } else if let Some(rom) = cyrillic_or_kana(ch) {
-            out.push_str(rom);
-            changed = true;
-        } else {
-            out.push(ch);
-        }
-    }
-    changed.then_some(out)
-}
-
-fn cyrillic_or_kana(ch: char) -> Option<&'static str> {
-    match ch {
-        'а' | 'А' => Some("a"),
-        'б' | 'Б' => Some("b"),
-        'в' | 'В' => Some("v"),
-        'г' | 'Г' => Some("g"),
-        'д' | 'Д' => Some("d"),
-        'е' | 'Е' => Some("e"),
-        'ё' | 'Ё' => Some("yo"),
-        'ж' | 'Ж' => Some("zh"),
-        'з' | 'З' => Some("z"),
-        'и' | 'И' => Some("i"),
-        'й' | 'Й' => Some("y"),
-        'к' | 'К' => Some("k"),
-        'л' | 'Л' => Some("l"),
-        'м' | 'М' => Some("m"),
-        'н' | 'Н' => Some("n"),
-        'о' | 'О' => Some("o"),
-        'п' | 'П' => Some("p"),
-        'р' | 'Р' => Some("r"),
-        'с' | 'С' => Some("s"),
-        'т' | 'Т' => Some("t"),
-        'у' | 'У' => Some("u"),
-        'ф' | 'Ф' => Some("f"),
-        'х' | 'Х' => Some("kh"),
-        'ц' | 'Ц' => Some("ts"),
-        'ч' | 'Ч' => Some("ch"),
-        'ш' | 'Ш' => Some("sh"),
-        'щ' | 'Щ' => Some("shch"),
-        'ы' | 'Ы' => Some("y"),
-        'э' | 'Э' => Some("e"),
-        'ю' | 'Ю' => Some("yu"),
-        'я' | 'Я' => Some("ya"),
-        'あ' | 'ア' => Some("a"),
-        'い' | 'イ' => Some("i"),
-        'う' | 'ウ' => Some("u"),
-        'え' | 'エ' => Some("e"),
-        'お' | 'オ' => Some("o"),
-        'か' | 'カ' => Some("ka"),
-        'き' | 'キ' => Some("ki"),
-        'く' | 'ク' => Some("ku"),
-        'け' | 'ケ' => Some("ke"),
-        'こ' | 'コ' => Some("ko"),
-        'さ' | 'サ' => Some("sa"),
-        'し' | 'シ' => Some("shi"),
-        'す' | 'ス' => Some("su"),
-        'せ' | 'セ' => Some("se"),
-        'そ' | 'ソ' => Some("so"),
-        'た' | 'タ' => Some("ta"),
-        'ち' | 'チ' => Some("chi"),
-        'つ' | 'ツ' => Some("tsu"),
-        'て' | 'テ' => Some("te"),
-        'と' | 'ト' => Some("to"),
-        'な' | 'ナ' => Some("na"),
-        'に' | 'ニ' => Some("ni"),
-        'ぬ' | 'ヌ' => Some("nu"),
-        'ね' | 'ネ' => Some("ne"),
-        'の' | 'ノ' => Some("no"),
-        'は' | 'ハ' => Some("ha"),
-        'ひ' | 'ヒ' => Some("hi"),
-        'ふ' | 'フ' => Some("fu"),
-        'へ' | 'ヘ' => Some("he"),
-        'ほ' | 'ホ' => Some("ho"),
-        'ま' | 'マ' => Some("ma"),
-        'み' | 'ミ' => Some("mi"),
-        'む' | 'ム' => Some("mu"),
-        'め' | 'メ' => Some("me"),
-        'も' | 'モ' => Some("mo"),
-        'や' | 'ヤ' => Some("ya"),
-        'ゆ' | 'ユ' => Some("yu"),
-        'よ' | 'ヨ' => Some("yo"),
-        'ら' | 'ラ' => Some("ra"),
-        'り' | '理' | 'リ' => Some("ri"),
-        'る' | 'ル' => Some("ru"),
-        'れ' | 'レ' => Some("re"),
-        'ろ' | 'ロ' => Some("ro"),
-        'わ' | 'ワ' => Some("wa"),
-        'を' | 'ヲ' => Some("o"),
-        'ん' | 'ン' => Some("n"),
-        _ => None,
-    }
-}
-
-/// The same guest lyrics endpoint and shared response parser used by desktop YouTubeLyrics.
-async fn youtube_lyrics(api: &YtMusic, id: &str) -> Result<Value> {
-    let next = api
-        .execute(
-            "next",
-            Client::Music,
-            json!({
-                "videoId": id,
-                "playlistId": format!("RDAMVM{id}"),
-                "enablePersistentPlaylistPanel": true,
-            }),
-        )
-        .await?;
-    let browse = find_renderers(&next, "browseEndpoint")
-        .into_iter()
-        .find_map(|endpoint| {
-            let kind = endpoint.str_at(&[
-                "browseEndpointContextSupportedConfigs",
-                "browseEndpointContextMusicConfig",
-                "pageType",
-            ]);
-            let id = endpoint.str_at(&["browseId"])?;
-            (kind == Some("MUSIC_PAGE_TYPE_TRACK_LYRICS") || id.starts_with("MPLYt")).then_some(id)
-        });
-    let text = match browse {
-        Some(browse) => {
-            let response = api
-                .execute("browse", Client::Music, json!({ "browseId": browse }))
-                .await?;
-            find_renderers(&response, "musicDescriptionShelfRenderer")
-                .into_iter()
-                .filter_map(|shelf| shelf.run_text(&["description"]))
-                .find(|text| !text.trim().is_empty())
-        }
-        None => None,
-    };
-    let lines = text.as_deref().map(plain_lines).unwrap_or_default();
-    Ok(json!({
-        "text": text,
-        "lines": lines,
-        "synced": false,
-        "instrumental": false,
-        "source": "YouTube Music",
-    }))
 }

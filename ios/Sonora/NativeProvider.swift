@@ -261,12 +261,18 @@ enum NativeProvider {
         let content_length: UInt64?
     }
 
-    struct Lyrics: Decodable {
+    struct Lyrics: Codable {
         let text: String?
         let lines: [LyricsLineItem]?
         let synced: Bool?
         let instrumental: Bool?
-        let source: String
+        let source: String?
+        let worded: Bool?
+        let romanized: String?
+        let romanization_script: String?
+        let writers: [String]?
+        let choices: [Lyrics]?
+        var hasContent: Bool { instrumental == true || !(text ?? "").isEmpty || !(lines ?? []).isEmpty }
     }
 
     struct Account: Decodable, Identifiable, Hashable {
@@ -337,11 +343,23 @@ enum NativeProvider {
         try await request(["operation": "resolve", "video_id": id, "quality": quality.rawValue])
     }
 
-    static func lyrics(_ id: String?, title: String? = nil, artist: String? = nil) async throws -> Lyrics {
+    static func lyrics(_ id: String?, title: String? = nil, artist: String? = nil,
+                       album: String? = nil, duration: Double? = nil, sources: [String]? = nil,
+                       localText: String? = nil) async throws -> Lyrics {
         var payload: [String: Any] = ["operation": "lyrics"]
         if let id { payload["video_id"] = id }
         if let title, !title.isEmpty { payload["title"] = title }
         if let artist, !artist.isEmpty { payload["artist"] = artist }
+        if let album, !album.isEmpty { payload["album"] = album }
+        if let duration, duration.isFinite, duration > 0 { payload["duration_seconds"] = duration }
+        if let sources { payload["sources"] = sources }
+        if let localText { payload["local_text"] = localText }
+        return try await request(payload)
+    }
+
+    static func parseLyrics(_ text: String, format: String? = nil) async throws -> Lyrics {
+        var payload: [String: Any] = ["operation": "parse_lyrics", "text": text]
+        if let format { payload["format"] = format }
         return try await request(payload)
     }
 
@@ -448,54 +466,6 @@ enum NativeProvider {
             }
         }
         return value
-    }
-}
-
-/// Owns a cancellable lyrics request and discards results after a track changes or the sheet closes.
-@MainActor @Observable
-final class LyricsStore {
-    private(set) var sheet: NativeProvider.Lyrics?
-    private(set) var isLoading = false
-    var error: String?
-    @ObservationIgnored private var task: Task<Void, Never>?
-    @ObservationIgnored private var generation = UUID()
-
-    func load(_ id: String?, title: String? = nil, artist: String? = nil) {
-        cancel()
-        let generation = UUID()
-        self.generation = generation
-        isLoading = true
-        error = nil
-        sheet = nil
-        task = Task { [weak self] in
-            do {
-                let lyrics = try await NativeProvider.lyrics(id, title: title, artist: artist)
-                guard let self, self.generation == generation else { return }
-                self.sheet = lyrics
-                self.isLoading = false
-                #if DEBUG
-                writeReviewEvidence(id == nil ? "local-lyrics-review.json" : "lyrics-review.json", ["line_count": lyrics.lines?.count ?? 0, "synced": lyrics.synced ?? false, "has_text": !(lyrics.text ?? "").isEmpty, "has_video_id": id != nil])
-                #endif
-            } catch is CancellationError {
-            } catch {
-                guard let self, self.generation == generation else { return }
-                self.error = (error as? ProviderError)?.errorDescription ?? String(localized: "ios-provider-error")
-                self.isLoading = false
-            }
-        }
-    }
-
-    func cancel() {
-        task?.cancel()
-        generation = UUID()
-        isLoading = false
-    }
-
-    /// Clears a prior song when local lookups are disabled or the queue becomes empty.
-    func clear() {
-        cancel()
-        sheet = nil
-        error = nil
     }
 }
 

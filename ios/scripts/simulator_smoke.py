@@ -116,6 +116,10 @@ if __name__ == "__main__":
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://search?q=Beethoven")
         search_evidence = evidence(container, "search-review.json")
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-youtube-search.png"))
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://lyricsstorereview")
+        lyrics_store = evidence(container, "lyrics-store-review.json", timeout=90)
+        if not lyrics_store or not lyrics_store.get("passed"):
+            raise RuntimeError("Lyrics import/timing/source/cache/restoration checks failed")
         fixture = json.loads((IOS / "scripts/review-track.json").read_text())
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://soundprofilesreview")
         sound_profiles = evidence(container, "sound-profiles-review.json", timeout=90)

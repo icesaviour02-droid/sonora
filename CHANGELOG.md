@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iPhone lyrics can use the desktop lyrics sources, import timed lyric files, save sheets for offline reading, and display word timing and backing vocals. Sources and text size can be adjusted in Settings.
+
 - iPhone sound profiles can be created from presets, renamed, edited, reordered and shared as
   Equalizer APO files. Profiles support all eight desktop filter types and preserve imported-file warnings.
 - iPhone Appearance settings now offer SF Pro Rounded, bundled Inter faces and imported TTF,

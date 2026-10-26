@@ -23,6 +23,13 @@ enum InterfaceTypography {
         if typeface == "system" || typeface == "rounded" {
             return .system(style, design: typeface == "rounded" ? .rounded : .default, weight: weight)
         }
+        let size = baselineSize(style)
+        guard UIFont(name: typeface, size: size) != nil else { return .system(style, weight: weight) }
+        return Font.custom(typeface, size: size, relativeTo: style)
+            .weight(weight ?? (style == .headline ? .semibold : .regular))
+    }
+
+    static func baselineSize(_ style: Font.TextStyle) -> CGFloat {
         let uiStyle: UIFont.TextStyle
         switch style {
         case .largeTitle: uiStyle = .largeTitle
@@ -37,11 +44,29 @@ enum InterfaceTypography {
         case .caption2: uiStyle = .caption2
         default: uiStyle = .body
         }
-        let size = UIFont.preferredFont(forTextStyle: uiStyle,
+        return UIFont.preferredFont(forTextStyle: uiStyle,
             compatibleWith: UITraitCollection(preferredContentSizeCategory: .large)).pointSize
-        guard UIFont(name: typeface, size: size) != nil else { return .system(style, weight: weight) }
-        return Font.custom(typeface, size: size, relativeTo: style)
-            .weight(weight ?? (style == .headline ? .semibold : .regular))
+    }
+}
+
+private struct ScaledInterfaceFont: ViewModifier {
+    @Environment(\.appTypeface) private var typeface
+    @ScaledMetric private var pointSize: CGFloat
+    let weight: Font.Weight
+    let scale: Double
+
+    init(style: Font.TextStyle, weight: Font.Weight?, scale: Double) {
+        _pointSize = ScaledMetric(wrappedValue: InterfaceTypography.baselineSize(style), relativeTo: style)
+        self.weight = weight ?? (style == .headline ? .semibold : .regular)
+        self.scale = scale
+    }
+
+    func body(content: Content) -> some View {
+        if typeface == "system" || typeface == "rounded" {
+            content.font(.system(size: pointSize * scale, weight: weight, design: typeface == "rounded" ? .rounded : .default))
+        } else {
+            content.font(.custom(typeface, fixedSize: pointSize * scale).weight(weight))
+        }
     }
 }
 
@@ -57,8 +82,10 @@ private struct InterfaceFont: ViewModifier {
 
 extension View {
     /// Uses the selected interface font, retaining the semantic style's accessibility scaling.
-    func appFont(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> some View {
-        modifier(InterfaceFont(style: style, weight: weight))
+    @ViewBuilder
+    func appFont(_ style: Font.TextStyle, weight: Font.Weight? = nil, scale: Double = 1) -> some View {
+        if scale == 1 { modifier(InterfaceFont(style: style, weight: weight)) }
+        else { modifier(ScaledInterfaceFont(style: style, weight: weight, scale: scale)) }
     }
 }
 

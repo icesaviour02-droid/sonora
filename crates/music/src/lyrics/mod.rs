@@ -1,6 +1,7 @@
 pub(crate) mod catalog;
 mod japanese;
 pub mod lrc;
+pub mod provider;
 pub(crate) mod romanize;
 mod shape;
 pub(crate) mod sheet;

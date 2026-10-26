@@ -164,3 +164,23 @@ acceptance sequence (create, validate/edit/save, export, import/warnings, reload
 
 The user explicitly cancelled two-hour scheduling. Automation `continue-sonora-iphone-feature-parity`
 has been deleted; the full goal remains active for continuous work in this chat. Do not recreate it.
+
+## Profile acceptance and shared lyrics (26 October 2026)
+
+Apple run 40262750069 at 1c371e24 compiled device and simulator targets. All seven native profile
+checks passed (create, validate/edit/save, export, import, unsupported-line reporting, restoration,
+delete). Both settings screenshots were inspected. Guest verification still failed; no final IPA
+was published.
+
+Lyrics now reuse the desktop's models, six remote sources, matching/ranking, LRC/TTML readers and
+romanization, with an optional Local sidecar source. All 53 shared Rust tests pass on Linux, as do
+Clippy and native boundary checks for enhanced LRC words, repeated stamps and TTML backing vocals.
+A live LRCLIB lookup returned 37 synced lines. The native screen adds source enable/reordering,
+alternate sheets, word highlighting against AVPlayer's clock, backing lanes, lyric text sizing,
+import/copy/refresh, manual-scroll interruption and a follow-current-line action. Saved sheets and
+imported sidecars are serialized off the UI thread and remain readable without network lookups.
+
+Swift syntax passes. Apple compilation and the new eight-check native import/cache/source sequence
+are pending; word-highlight motion and touch-driven interactions still require runtime review.
+Per-script romanization controls, exact Apple Music highlight effects and actual phone acceptance
+are not complete. No two-hour automation remains; the user requested continuous active work.

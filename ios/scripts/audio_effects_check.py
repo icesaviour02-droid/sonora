@@ -39,7 +39,7 @@ class NativeDSP:
         assert result["ok"], result.get("error")
         return result["data"]
 
-    def request(self, payload):
+    def request(self, payload, timeout=10):
         done = threading.Event()
         result = []
 
@@ -53,7 +53,7 @@ class NativeDSP:
 
         CALLBACKS.append(callback)
         assert self.lib.sonora_mobile_request(json.dumps(payload).encode(), None, callback) == 0
-        assert done.wait(10), "audio configuration did not complete"
+        assert done.wait(timeout), "native operation did not complete"
         return result[0]
 
     def process(self, signals, interleaved=False):

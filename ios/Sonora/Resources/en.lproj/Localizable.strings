@@ -35,6 +35,7 @@
 "ios-audio-effects-error" = "Audio processing is unavailable for this track.";
 "ios-audio-session-error" = "Audio playback could not start. Check your audio connection and try again.";
 "ios-autoplay-radio" = "Autoplay Similar Songs";
+"ios-backing-vocals" = "Background Vocals";
 "ios-blur-inactive-lyrics" = "Blur Inactive Lines";
 "ios-browse-categories" = "Browse Categories";
 "ios-cache-space" = "Stream Cache";
@@ -43,6 +44,7 @@
 "ios-cellular-downloads-description" = "New downloads use Wi-Fi by default. Enable this to also allow cellular data; your carrier’s data charges may apply.";
 "ios-clear" = "Clear";
 "ios-clear-cache" = "Clear Stream Cache";
+"ios-copy-lyrics" = "Copy Lyrics";
 "ios-create" = "Create";
 "ios-create-playlist" = "New Playlist";
 "ios-current-track" = "Current track";
@@ -109,6 +111,7 @@
 "ios-filter-q" = "Q";
 "ios-filter-type" = "Filter Type";
 "ios-filter-width-unit" = "Width Unit";
+"ios-follow-lyrics" = "Current Line";
 "ios-font-dynamic-type" = "Text follows your iPhone’s text size and accessibility settings.";
 "ios-font-import-description" = "Add TTF, OTF or TTC font files from Files. Swipe an imported font to remove it. SF Pro Rounded is included with iOS.";
 "ios-font-import-error" = "This font could not be imported. Choose a valid font file smaller than 32 MB.";
@@ -126,10 +129,12 @@
 "ios-import-description" = "Import audio from Files to start listening. Your imported music stays available offline.";
 "ios-import-error" = "Some files could not be imported. Check that they are downloaded in Files and use a supported audio format.";
 "ios-import-fonts" = "Import Fonts";
+"ios-import-lyrics" = "Import Lyrics File";
 "ios-imported-songs" = "Imported Audio";
 "ios-importing" = "Importing music…";
 "ios-in-development" = "In development";
 "ios-interface-font" = "Interface Font";
+"ios-karaoke-lyrics" = "Word-by-Word Highlighting";
 "ios-library" = "Library";
 "ios-library-load-error" = "Your saved library could not be opened. Try again before importing more music.";
 "ios-license" = "Sonora contributors. GPL-3.0-or-later. This is an unofficial iPhone port.";
@@ -141,8 +146,22 @@
 "ios-local-audio" = "Local Audio";
 "ios-local-lyrics" = "Look Up Lyrics for Local Files";
 "ios-lyrics" = "Lyrics";
+"ios-lyrics-import-error" = "These lyrics could not be imported. Choose an LRC, TTML or text file smaller than 1 MB.";
 "ios-lyrics-instrumental" = "Instrumental";
+"ios-lyrics-options" = "Lyrics Options";
+"ios-lyrics-plain-format" = "Plain Text";
+"ios-lyrics-priority-description" = "Turn sources on or off and use Edit to change their priority. Word timing takes priority over line timing, and synced lyrics over plain text. Priority settles ties between equally detailed lyrics.";
+"ios-lyrics-source-apple" = "Apple Music Lyrics";
+"ios-lyrics-source-kugou" = "Kugou";
+"ios-lyrics-source-local" = "File Lyrics";
+"ios-lyrics-source-lrclib" = "LRCLIB";
+"ios-lyrics-source-musixmatch" = "Musixmatch";
+"ios-lyrics-source-netease" = "NetEase";
+"ios-lyrics-sources" = "Lyrics Sources";
+"ios-lyrics-synced-format" = "Synced Lines";
+"ios-lyrics-text-size" = "Lyrics Text Size";
 "ios-lyrics-unavailable" = "No lyrics available";
+"ios-lyrics-word-timing" = "Word Timing";
 "ios-maloja-key" = "Maloja API Key";
 "ios-maloja-url" = "Maloja Server URL";
 "ios-missing-file" = "This audio file is missing. Import it again from Files.";
@@ -184,6 +203,7 @@
 "ios-queue-empty" = "No upcoming songs. Add music with Play Next or Add to Queue.";
 "ios-recently-added" = "Recently Added";
 "ios-recently-played" = "Recently Played";
+"ios-refresh-lyrics" = "Refresh Lyrics";
 "ios-remove-all-downloads" = "Remove All Downloads";
 "ios-remove-download" = "Remove download";
 "ios-remove-favorite" = "Undo Favorite";
@@ -197,6 +217,7 @@
 "ios-romanized-lyrics" = "Romanized Pronunciation";
 "ios-save" = "Save";
 "ios-save-to-library" = "Add to Library";
+"ios-saved-lyrics" = "Saved Lyrics";
 "ios-scrobble-enable" = "Enable Scrobbling";
 "ios-scrobbling" = "Scrobbling";
 "ios-search" = "Search";

@@ -131,6 +131,8 @@ struct NowPlayingView: View {
         .onAppear { loadLyricsIfNeeded() }
         .onChange(of: playback.current?.id) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: settings.localFileLyrics) { _, _ in loadLyricsIfNeeded() }
+        .onChange(of: settings.lyricsSources) { _, _ in loadLyricsIfNeeded() }
+        .onChange(of: mode) { _, _ in loadLyricsIfNeeded() }
         .onDisappear { lyrics.cancel() }
     }
 
@@ -414,144 +416,8 @@ struct NowPlayingView: View {
     private var lyricsStage: some View {
         VStack(alignment: .leading, spacing: Layout.compact) {
             compactTrackHeader
-
-            Group {
-                if lyrics.isLoading {
-                    VStack {
-                        Spacer()
-                        ProgressView("ios-loading-lyrics")
-                            .tint(.white)
-                            .foregroundStyle(.white.opacity(0.8))
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                } else if let error = lyrics.error {
-                    VStack(spacing: Layout.compact) {
-                        Spacer()
-                        Image(systemName: "quote.bubble")
-                            .appFont(.largeTitle)
-                            .foregroundStyle(.white.opacity(0.5))
-                        Text("ios-lyrics-unavailable")
-                            .appFont(.headline)
-                            .foregroundStyle(.white)
-                        Text(error)
-                            .appFont(.subheadline)
-                            .foregroundStyle(.white.opacity(0.7))
-                            .multilineTextAlignment(.center)
-                        Button("ios-retry") { loadLyricsIfNeeded() }
-                            .buttonStyle(.glass)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                } else if lyrics.sheet?.instrumental == true {
-                    VStack(spacing: Layout.compact) {
-                        Spacer()
-                        Image(systemName: "music.quarternote.3")
-                            .appFont(.largeTitle)
-                            .foregroundStyle(.white.opacity(0.6))
-                        Text("ios-lyrics-instrumental")
-                            .appFont(.title3, weight: .semibold)
-                            .foregroundStyle(.white.opacity(0.85))
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                } else if settings.syncedLyrics,
-                          let lines = lyrics.sheet?.lines,
-                          !lines.isEmpty,
-                          lyrics.sheet?.synced == true {
-                    syncedLyricsList(lines)
-                } else if let text = lyrics.sheet?.text, !text.isEmpty {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: Layout.spacing) {
-                            Text(text)
-                                .appFont(.title3, weight: .semibold)
-                                .foregroundStyle(.white.opacity(0.92))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            if let source = lyrics.sheet?.source, !source.isEmpty {
-                                Text(source)
-                                    .appFont(.caption)
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                        }
-                        .padding(.vertical, Layout.compact)
-                    }
-                } else {
-                    VStack(spacing: Layout.compact) {
-                        Spacer()
-                        Image(systemName: "quote.bubble")
-                            .appFont(.largeTitle)
-                            .foregroundStyle(.white.opacity(0.5))
-                        Text("ios-lyrics-unavailable")
-                            .appFont(.headline)
-                            .foregroundStyle(.white)
-                        Text("ios-no-lyrics-description")
-                            .appFont(.subheadline)
-                            .foregroundStyle(.white.opacity(0.7))
-                            .multilineTextAlignment(.center)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
+            LyricsContentView(store: lyrics, retry: loadLyricsIfNeeded)
         }
-    }
-
-    private func syncedLyricsList(_ lines: [LyricsLineItem]) -> some View {
-        let activeID = activeLyricsLineID(in: lines)
-        return ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    ForEach(lines) { line in
-                        let isActive = line.id == activeID
-                        Button {
-                            guard let start = line.start_seconds else { return }
-                            playback.seek(to: start)
-                            if !playback.isPlaying { playback.resume() }
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(line.text)
-                                    .appFont(isActive ? .title2 : .title3, weight: .bold)
-                                    .foregroundStyle(.white.opacity(isActive ? 1.0 : 0.42))
-                                    .blur(radius: (!isActive && settings.blurInactiveLyrics) ? 1.2 : 0)
-                                    .multilineTextAlignment(.leading)
-                                if settings.romanizedLyrics, let romanized = line.romanized, !romanized.isEmpty {
-                                    Text(romanized)
-                                        .appFont(.subheadline, weight: .medium)
-                                        .foregroundStyle(.white.opacity(isActive ? 0.78 : 0.34))
-                                        .multilineTextAlignment(.leading)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .scaleEffect(isActive ? 1.01 : 0.98, anchor: .leading)
-                            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: isActive)
-                        }
-                        .buttonStyle(.plain)
-                        .id(line.id)
-                    }
-                    if let source = lyrics.sheet?.source, !source.isEmpty {
-                        Text(source)
-                            .appFont(.caption)
-                            .foregroundStyle(.white.opacity(0.45))
-                            .padding(.top, Layout.compact)
-                    }
-                }
-                .padding(.vertical, Layout.spacing)
-            }
-            .onChange(of: activeID) { _, id in
-                guard let id else { return }
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
-                    proxy.scrollTo(id, anchor: .center)
-                }
-            }
-        }
-    }
-
-    private func activeLyricsLineID(in lines: [LyricsLineItem]) -> Int? {
-        let time = playback.elapsed
-        if let match = lines.last(where: { $0.start_seconds.map { time >= $0 } ?? false }) {
-            return match.id
-        }
-        return lines.first?.id
     }
 
     private var queueStage: some View {
@@ -834,13 +700,11 @@ struct NowPlayingView: View {
 
     private func loadLyricsIfNeeded() {
         guard let current = playback.current else { lyrics.clear(); return }
-        if let id = current.youtubeID {
-            lyrics.load(id, title: current.title, artist: current.artist)
-        } else if settings.localFileLyrics {
-            lyrics.load(nil, title: current.title, artist: current.artist)
-        } else {
-            lyrics.clear()
-        }
+        guard mode == .lyrics else { return }
+        guard current.youtubeID != nil || settings.localFileLyrics else { lyrics.clear(); return }
+        lyrics.load(current.youtubeID, title: current.title, artist: current.artist,
+            album: current.albumTitle, duration: current.durationSeconds,
+            sources: settings.enabledLyricsSources, cacheID: current.id)
     }
 
     private func time(_ seconds: Double) -> String {

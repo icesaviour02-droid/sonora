@@ -102,6 +102,51 @@ struct LyricsLineItem: Codable, Identifiable, Hashable {
     let romanized: String?
     let start_seconds: Double?
     let end_seconds: Double?
+    let romanization_script: String?
+    let voice: String?
+    let words: [LyricsWordItem]?
+    let secondary: [LyricsLaneItem]?
+}
+
+struct LyricsWordItem: Codable, Identifiable, Hashable {
+    let id: Int
+    let text: String
+    let start_seconds: Double
+    let end_seconds: Double
+}
+
+struct LyricsLaneItem: Codable, Identifiable, Hashable {
+    let id: Int
+    let text: String
+    let start_seconds: Double
+    let end_seconds: Double?
+    let romanized: String?
+    let romanization_script: String?
+    let words: [LyricsWordItem]?
+}
+
+/// Source names match the shared desktop providers; these are lyrics services, not streaming accounts.
+enum LyricsSourceID: String, Codable, CaseIterable, Identifiable {
+    case local = "Local", youtube = "YouTube Music", apple = "Apple Music", musixmatch = "Musixmatch"
+    case lrclib = "LrcLib", kugou = "Kugou", netease = "NetEase"
+    var id: String { rawValue }
+    var label: LocalizedStringKey {
+        switch self {
+        case .local: "ios-lyrics-source-local"
+        case .youtube: "ios-youtube-music"
+        case .apple: "ios-lyrics-source-apple"
+        case .musixmatch: "ios-lyrics-source-musixmatch"
+        case .lrclib: "ios-lyrics-source-lrclib"
+        case .kugou: "ios-lyrics-source-kugou"
+        case .netease: "ios-lyrics-source-netease"
+        }
+    }
+}
+
+struct LyricsSourcePreference: Codable, Identifiable, Equatable {
+    let source: LyricsSourceID
+    var enabled: Bool
+    var id: String { source.rawValue }
 }
 
 /// Playback repeat behavior, stored with the queue rather than with a screen.

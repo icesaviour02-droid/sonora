@@ -50,6 +50,7 @@ use time::{Month, OffsetDateTime};
 
 pub use audio::Meter;
 pub use equalizer::Equalizer;
+pub use lyrics::provider::LyricsProvider;
 pub use models::{
     Album, AlbumCatalogue, AlbumDetail, Artist, ArtistCatalogue, ArtistProfile, ArtistRef,
     Contributor, Credit, Genre, GenreDetail, GenreItem, GenreSection, HomeFeed, Lyrics, LyricsHit,
@@ -350,12 +351,6 @@ pub trait MusicApi: Send + Sync {
     async fn genre(&self, _genre_id: &str) -> Result<GenreDetail> {
         Ok(GenreDetail::default())
     }
-}
-
-#[async_trait]
-pub trait LyricsProvider: Send + Sync {
-    fn name(&self) -> &'static str;
-    async fn search(&self, query: &LyricsQuery) -> Result<Vec<LyricsHit>>;
 }
 
 /// What an engine is started with. `equalizer` is shared rather than copied: the engine keeps
