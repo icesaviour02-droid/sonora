@@ -169,7 +169,19 @@ if __name__ == "__main__":
         sim("bootstatus", udid, "-b")
         sim("status_bar", udid, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100")
         sim("install", udid, str(IOS / "build/simulator/Build/Products/Debug-iphonesimulator/Sonora.app"))
-        launch = sim("launch", udid, BUNDLE)
+        try:
+            launch = sim("launch", udid, BUNDLE)
+        except subprocess.TimeoutExpired:
+            state = {"step": "initial_launch", "timeout_seconds": 240}
+            try:
+                processes = subprocess.run(["xcrun", "simctl", "spawn", udid, "launchctl", "list"],
+                    capture_output=True, text=True, timeout=15)
+                state["simulator_responding"] = processes.returncode == 0
+                state["app_process_present"] = BUNDLE in processes.stdout
+            except subprocess.SubprocessError:
+                state["simulator_responding"] = False
+            (OUTPUT / "simulator-launch-failure.json").write_text(json.dumps(state, indent=2))
+            raise
         time.sleep(3)
         # Fail if launch succeeded momentarily but the app immediately crashed.
         processes = sim("spawn", udid, "launchctl", "list")
