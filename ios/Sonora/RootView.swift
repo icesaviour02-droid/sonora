@@ -35,7 +35,7 @@ struct RootView: View {
                     HomeView(openSettings: { showSettings = true })
                 }
             }
-            Tab("ios-library", systemImage: "music.note.house.fill", value: Destination.library) {
+            Tab("ios-library", systemImage: "square.stack.fill", value: Destination.library) {
                 NavigationStack {
                     LibraryView(
                         importAction: { showImporter = true },
@@ -564,6 +564,7 @@ struct LibraryView: View {
     @State private var showCreatePlaylist = false
     @State private var newPlaylistTitle = ""
     @State private var newPlaylistDescription = ""
+    @State private var selectedRecentAlbum: String?
 
     var body: some View {
         Group {
@@ -626,7 +627,7 @@ struct LibraryView: View {
                                 ForEach(LocalAlbum.collect(library.tracks).sorted {
                                     ($0.tracks.map(\.addedAt).max() ?? .distantPast) > ($1.tracks.map(\.addedAt).max() ?? .distantPast)
                                 }.prefix(8)) { album in
-                                    NavigationLink { LocalAlbumView(albumID: album.id) } label: {
+                                    Button { selectedRecentAlbum = album.id } label: {
                                         SquareCard(title: album.title, subtitle: album.artist,
                                             artworkURL: album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL)
                                     }.buttonStyle(.plain)
@@ -677,6 +678,7 @@ struct LibraryView: View {
             }
         }
         .navigationTitle("ios-library")
+        .navigationDestination(item: $selectedRecentAlbum) { LocalAlbumView(albumID: $0) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("ios-import", systemImage: "plus", action: importAction)

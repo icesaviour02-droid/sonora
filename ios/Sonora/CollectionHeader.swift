@@ -12,12 +12,11 @@ struct MusicCollectionHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.spacing) {
-            ViewThatFits(in: .horizontal) {
-                cover(side: Layout.collectionArtwork)
-                cover(side: Layout.detailArtwork)
-                cover(side: Layout.accessibleArtwork)
+            GeometryReader { geometry in
+                cover(side: min(geometry.size.width, Layout.collectionArtwork))
+                    .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
+            .frame(height: Layout.collectionArtwork)
             VStack(alignment: .leading, spacing: Layout.compact / 2) {
                 Text(title).appFont(.title2, weight: .bold).fixedSize(horizontal: false, vertical: true)
                 if !subtitle.isEmpty { Text(subtitle).appFont(.body).foregroundStyle(.secondary) }

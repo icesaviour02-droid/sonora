@@ -9,8 +9,8 @@ final class MusicInteractionTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["playlist-more"].waitForExistence(timeout: 30))
         app.buttons["playlist-more"].tap()
-        XCTAssertTrue(app.buttons["playlist-rename"].waitForExistence(timeout: 5))
-        app.buttons["playlist-rename"].tap()
+        XCTAssertTrue(app.buttons["Rename Playlist"].waitForExistence(timeout: 5))
+        app.buttons["Rename Playlist"].tap()
         let field = app.alerts.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
@@ -18,7 +18,7 @@ final class MusicInteractionTests: XCTestCase {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
         }
         field.typeText("Sonora Touch Playlist")
-        app.buttons["playlist-save-name"].tap()
+        app.alerts.buttons["Save"].tap()
         XCTAssertTrue(app.staticTexts["Sonora Touch Playlist"].firstMatch.waitForExistence(timeout: 10))
     }
 
@@ -59,7 +59,7 @@ final class MusicInteractionTests: XCTestCase {
         expectation(for: moved, evaluatedWith: app)
         waitForExpectations(timeout: 8)
         app.buttons[firstID].swipeLeft()
-        let remove = app.buttons[firstID.replacingOccurrences(of: "queue-row-", with: "queue-remove-")]
+        let remove = app.buttons["Remove from Queue"]
         XCTAssertTrue(remove.waitForExistence(timeout: 5))
         remove.tap()
         XCTAssertEqual(rows.count, 1)

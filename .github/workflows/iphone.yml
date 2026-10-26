@@ -7,6 +7,11 @@ on:
         description: 'Save a development snapshot before feature acceptance finishes'
         type: boolean
         default: false
+      review_scope:
+        description: 'Full acceptance or focused playback/interface regression for a development snapshot'
+        type: choice
+        options: [full, changed_ui]
+        default: full
   push:
     paths:
       - 'ios/Sonora/**'
@@ -72,6 +77,7 @@ jobs:
       RUSTUP_TOOLCHAIN: stable
       IPHONEOS_DEPLOYMENT_TARGET: '26.0'
       SONORA_SMOKE_VIDEO_ID: ${{ vars.SONORA_SMOKE_VIDEO_ID }}
+      SONORA_REVIEW_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_development && inputs.review_scope == 'changed_ui' && 'changed_ui' || 'full' }}
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -113,6 +119,7 @@ jobs:
       - name: Launch on iPhone 13 simulator and capture accessibility appearances
         run: python3 ios/scripts/simulator_smoke.py
       - name: Upload unsigned IPA after simulator acceptance
+        if: env.SONORA_REVIEW_SCOPE == 'full'
         uses: actions/upload-artifact@v4
         with:
           name: Sonora-iPhone-unsigned

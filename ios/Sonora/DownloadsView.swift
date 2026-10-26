@@ -3,6 +3,7 @@ import SwiftUI
 /// Downloaded music mirrors Library categories; active transfers have separate, actionable rows.
 struct DownloadsView: View {
     @Environment(DownloadsStore.self) private var downloads
+    @State private var selectedRecent: MusicTrack?
     private var tracks: [MusicTrack] { downloads.completedTracks }
     private var pending: [DownloadEntry] { downloads.entries.filter { $0.state != .downloaded } }
     private var recentCollections: [MusicTrack] {
@@ -37,10 +38,7 @@ struct DownloadsView: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardArtwork), spacing: Layout.spacing)],
                               alignment: .leading, spacing: Layout.spacing) {
                         ForEach(recentCollections) { track in
-                            NavigationLink {
-                                DownloadedCollectionView(title: track.albumTitle ?? track.title, subtitle: track.artist,
-                                    artwork: track.displayArtworkURL, trackIDs: albumTracks(for: track).map(\.id))
-                            } label: {
+                            Button { selectedRecent = track } label: {
                                 SquareCard(title: track.albumTitle ?? track.title, subtitle: track.artist,
                                     artworkURL: track.displayArtworkURL)
                             }.buttonStyle(.plain)
@@ -53,6 +51,10 @@ struct DownloadsView: View {
         }
         .listStyle(.plain)
         .navigationTitle("ios-downloads")
+        .navigationDestination(item: $selectedRecent) { track in
+            DownloadedCollectionView(title: track.albumTitle ?? track.title, subtitle: track.artist,
+                artwork: track.displayArtworkURL, trackIDs: albumTracks(for: track).map(\.id))
+        }
         .overlay {
             if downloads.isRestoring { ProgressView("ios-restoring-downloads") }
             else if downloads.entries.isEmpty {

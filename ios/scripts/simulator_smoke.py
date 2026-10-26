@@ -62,6 +62,72 @@ def evidence(container, filename, timeout=45):
     return None
 
 
+def generate_review_media(container):
+    """Create original audio and artwork for repeatable local playback and interface checks."""
+    # This synthetic file checks native import and audio independently from provider authorization.
+    tone = container / "Library/Caches/sonora-review-tone.wav"
+    tone.parent.mkdir(parents=True, exist_ok=True)
+    rate = 22_050
+    with wave.open(str(tone), "wb") as output:
+        output.setparams((1, 2, rate, 0, "NONE", "not compressed"))
+        output.writeframes(b"".join(struct.pack("<h", int(2_000 * math.sin(2 * math.pi * 220 * i / rate))) for i in range(rate * 16)))
+    # A self-generated gradient cover exercises actual artwork metadata, never third-party media.
+    def png_chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+    rows = b"".join(b"\x00" + bytes(channel for x in range(64) for channel in (x * 4, y * 4, 128)) for y in range(64))
+    cover = b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)) + png_chunk(b"IDAT", zlib.compress(rows)) + png_chunk(b"IEND", b"")
+    (tone.parent / "sonora-review-cover.png").write_bytes(cover)
+
+
+def run_interactions(udid):
+    """Run real touch tests on the same populated simulator; failure preserves the result bundle."""
+    test_run = next((IOS / "build/simulator/Build/Products").glob("*.xctestrun"))
+    subprocess.run(["xcodebuild", "test-without-building", "-xctestrun", str(test_run),
+        "-destination", "id=" + udid, "-parallel-testing-enabled", "NO",
+        "-resultBundlePath", str(OUTPUT / "MusicInteractions.xcresult")], check=True, timeout=360)
+
+
+def review_changed_screens(udid, container):
+    """Validate the playback/UI patch without claiming full provider acceptance."""
+    generate_review_media(container)
+    routes = [
+        ("localreview", "local-playback-review.json", None),
+        ("downloadsreview", "downloads-layout-review.json", "iphone13-downloads-populated.png"),
+        ("localplaylistreview", "local-library-review.json", "iphone13-local-playlist.png"),
+        ("localplaylistrestore", "local-library-relaunch-review.json", "iphone13-local-playlist-restored.png"),
+    ]
+    for route, filename, screenshot in routes:
+        (container / "Library/Application Support" / filename).unlink(missing_ok=True)
+        sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://" + route)
+        result = evidence(container, filename, timeout=90)
+        if not result or not result.get("passed"):
+            raise RuntimeError("Changed-screen regression failed: " + filename)
+        if screenshot:
+            time.sleep(2)
+            sim("io", udid, "screenshot", str(OUTPUT / screenshot))
+    run_interactions(udid)
+    fixture = json.loads((IOS / "scripts/review-track.json").read_text())
+    metadata = {"id": fixture["id"], "title": fixture["title"], "artist": fixture["artist"], "artwork": fixture["artwork_url"]}
+    sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://queuereview?" + urllib.parse.urlencode(metadata))
+    queue = evidence(container, "queue-review.json")
+    if not queue or not queue.get("passed"):
+        raise RuntimeError("Queue storage checks failed")
+    time.sleep(2)
+    sim("io", udid, "screenshot", str(OUTPUT / "iphone13-queue-duplicates.png"))
+    sim("launch", "--terminate-running-process", udid, BUNDLE)
+    time.sleep(2)
+    sim("io", udid, "screenshot", str(OUTPUT / "iphone13-library-populated.png"))
+    sim("ui", udid, "content_size", "accessibility-extra-extra-extra-large")
+    time.sleep(2)
+    sim("io", udid, "screenshot", str(OUTPUT / "iphone13-library-large-text.png"))
+    (OUTPUT / "review-scope.json").write_text(json.dumps({
+        "scope": "changed_ui", "passed": True,
+        "checks": ["native_playback_end", "download_migration", "local_playlist_restore", "queue_storage", "touch_interactions"],
+        "full_provider_acceptance": False,
+        "guest_streaming": "not repeated; previous full run failed Google verification"
+    }, indent=2))
+
+
 if __name__ == "__main__":
     OUTPUT.mkdir(parents=True, exist_ok=True)
     runtimes = json.loads(sim("list", "runtimes", "--json"))["runtimes"]
@@ -82,6 +148,10 @@ if __name__ == "__main__":
         processes = sim("spawn", udid, "launchctl", "list")
         if BUNDLE not in processes:
             raise RuntimeError("Sonora did not remain running after launch")
+        container = Path(sim("get_app_container", udid, BUNDLE, "data"))
+        if os.environ.get("SONORA_REVIEW_SCOPE") == "changed_ui":
+            review_changed_screens(udid, container)
+            raise SystemExit(0)
         for appearance in ("light", "dark"):
             sim("ui", udid, "appearance", appearance)
             time.sleep(1)
@@ -167,19 +237,7 @@ if __name__ == "__main__":
             raise RuntimeError("Catalog Search did not return decoded songs; inspect the captured screen")
         if not lyrics_evidence or lyrics_evidence.get("line_count", 0) == 0:
             raise RuntimeError("Lyrics did not return decoded lines; inspect the captured screen")
-        # This synthetic file checks native import and audio independently from provider authorization.
-        tone = container / "Library/Caches/sonora-review-tone.wav"
-        tone.parent.mkdir(parents=True, exist_ok=True)
-        rate = 22_050
-        with wave.open(str(tone), "wb") as output:
-            output.setparams((1, 2, rate, 0, "NONE", "not compressed"))
-            output.writeframes(b"".join(struct.pack("<h", int(2_000 * math.sin(2 * math.pi * 220 * i / rate))) for i in range(rate * 16)))
-        # A self-generated gradient cover exercises actual artwork metadata, never third-party media.
-        def png_chunk(kind, data):
-            return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
-        rows = b"".join(b"\x00" + bytes(channel for x in range(64) for channel in (x * 4, y * 4, 128)) for y in range(64))
-        cover = b"\x89PNG\r\n\x1a\n" + png_chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)) + png_chunk(b"IDAT", zlib.compress(rows)) + png_chunk(b"IEND", b"")
-        (tone.parent / "sonora-review-cover.png").write_bytes(cover)
+        generate_review_media(container)
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://localreview")
         local_review = evidence(container, "local-playback-review.json", timeout=60)
         if not local_review or not local_review.get("passed"):
@@ -201,10 +259,7 @@ if __name__ == "__main__":
             raise RuntimeError("Local playlist/media/favorites did not survive actual app relaunch")
         time.sleep(2)
         sim("io", udid, "screenshot", str(OUTPUT / "iphone13-local-playlist-restored.png"))
-        test_run = next((IOS / "build/simulator/Build/Products").glob("*.xctestrun"))
-        subprocess.run(["xcodebuild", "test-without-building", "-xctestrun", str(test_run),
-            "-destination", "id=" + udid, "-parallel-testing-enabled", "NO",
-            "-resultBundlePath", str(OUTPUT / "MusicInteractions.xcresult")], check=True, timeout=360)
+        run_interactions(udid)
         sim("launch", "--terminate-running-process", udid, BUNDLE, "--sonora-review-url", "sonora://locallyrics?" + urllib.parse.urlencode({"title": fixture["title"], "artist": fixture["artist"]}))
         local_lyrics = evidence(container, "local-lyrics-review.json")
         if not local_lyrics or local_lyrics.get("has_video_id") or local_lyrics.get("line_count", 0) == 0:

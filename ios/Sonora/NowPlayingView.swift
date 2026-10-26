@@ -300,9 +300,9 @@ struct NowPlayingView: View {
             } label: {
                 Image(systemName: favorite ? "star.fill" : "star")
                     .appFont(.body, weight: .semibold)
-                    .foregroundStyle(favorite ? .yellow : .white.opacity(0.88))
+                    .foregroundStyle(.white.opacity(0.88))
                     .frame(width: Layout.control, height: Layout.control)
-                    .background(.white.opacity(0.14), in: Circle())
+                    .background(mode == .artwork ? .white.opacity(0.14) : .clear, in: Circle())
             }
             .buttonStyle(.plain)
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -424,7 +424,7 @@ struct NowPlayingView: View {
                 .appFont(.body, weight: .semibold)
                 .foregroundStyle(.white.opacity(0.88))
                 .frame(width: Layout.control, height: Layout.control)
-                .background(.white.opacity(0.14), in: Circle())
+                .background(mode == .artwork ? .white.opacity(0.14) : .clear, in: Circle())
         }
         .buttonStyle(.plain)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -486,6 +486,9 @@ struct NowPlayingView: View {
                                 Text("ios-add-songs-to-queue").appFont(.body)
                             }.foregroundStyle(.white)
                         }.buttonStyle(.plain).accessibilityIdentifier("queue-add-songs")
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: Layout.compact / 2, leading: 0, bottom: Layout.compact / 2, trailing: 0))
                     } header: {
                         HStack {
                             Text("ios-queue").appFont(.headline)
@@ -496,6 +499,7 @@ struct NowPlayingView: View {
                         }
                         .foregroundStyle(.white).textCase(nil)
                         .padding(.vertical, Layout.compact)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                         .id("queue-start")
                     }
                     if settings.autoplayRadio {
@@ -504,6 +508,10 @@ struct NowPlayingView: View {
                                 Label("ios-autoplay-radio", systemImage: "infinity").appFont(.headline)
                                 Text("ios-autoplay-description").appFont(.subheadline).foregroundStyle(.white.opacity(0.65))
                             }
+                            .foregroundStyle(.white)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: Layout.spacing, leading: 0, bottom: Layout.compact, trailing: 0))
                         }
                     }
                 }

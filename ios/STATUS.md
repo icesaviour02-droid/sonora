@@ -358,3 +358,19 @@ onMove, with an SF Symbol grip matching the reference. Actual touch acceptance r
 The Library Recently Added section groups imported albums into covers; per-song deletion remains
 available from the shared song menu. Local playlist titles collapse into the navigation bar on
 scroll; Edit lives in its More menu. Online albums share the same collection header as playlists.
+
+Run 40303761472 at 7132980a compiled both Apple targets and directly downloaded artifacts confirm
+all 23 local/native playback checks, including precise source duration, legacy doubled-duration
+handling and the real forward-playback end event. All four download duration/legacy-data/playlist
+restore checks also pass. The run failed only at the pre-existing Guest Google verification gate.
+The screenshots exposed opaque backgrounds on non-song queue rows and automatic List disclosure
+chevrons inside recent cover tiles. Those are corrected by clearing individual row backgrounds
+and using state-driven navigation from cover buttons. The collection cover uses one measured
+artwork view rather than multiple asynchronously loaded ViewThatFits candidates.
+
+A manual changed_ui review scope is available only with publish_development=true. It runs the
+real playback/end, download migration, local playlist/relaunch, queue and XCUITest checks, plus
+populated screenshots, and records review-scope.json with full_provider_acceptance=false. The
+normal unsigned acceptance artifact is not uploaded by this scope. Default push and full manual
+runs keep the complete existing acceptance gate. This avoids rerunning unchanged network lyrics,
+fonts and Guest checks for visual repairs; it does not establish successful Guest playback.
