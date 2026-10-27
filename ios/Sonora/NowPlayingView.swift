@@ -270,7 +270,10 @@ struct NowPlayingView: View {
     /// The cover and text can never cross playback controls, including while changing modes.
     @ViewBuilder private var playerOverlayMask: some View {
         if !contentViewport.isEmpty {
-            let height = contentViewport.height + Layout.queueProgressOverlap
+            // Expanded art and its soft shadow may extend above the flexible content slot.
+            // Keep the lower edge fixed at progress while allowing that upper breathing room.
+            let topAllowance = mode == .artwork ? Layout.playerMargin : 0
+            let height = contentViewport.height + Layout.queueProgressOverlap + topAllowance
             VStack(spacing: 0) {
                 Rectangle()
                 LinearGradient(colors: [.black, .black.opacity(mode == .queue ? 0 : 1)],
@@ -278,7 +281,7 @@ struct NowPlayingView: View {
                     .frame(height: Layout.queueFade)
             }
             .frame(width: contentViewport.width + (mode == .artwork ? Layout.playerMargin * 2 : 0), height: height)
-            .position(x: contentViewport.midX, y: contentViewport.minY + height / 2)
+            .position(x: contentViewport.midX, y: contentViewport.minY - topAllowance + height / 2)
         } else { Rectangle() }
     }
 
