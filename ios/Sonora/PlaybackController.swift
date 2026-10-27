@@ -510,7 +510,7 @@ final class PlaybackController {
         }
     }
 
-    func toggle() { (isPlaying || isLoading) ? pause() : resume() }
+    func toggle() { (wantsToPlay || isPlaying || isLoading) ? pause() : resume() }
 
     func resume() {
         guard let current else { return }
@@ -537,6 +537,7 @@ final class PlaybackController {
     private func startAudio() {
         wantsToPlay = true
         guard !audioEffects.isPreparing else { isLoading = true; return }
+        isLoading = true
         audioActivationTask?.cancel()
         audioActivationID = UUID()
         let token = audioActivationID
@@ -552,12 +553,14 @@ final class PlaybackController {
                     self.seek(to: 0)
                 }
                 self.applyAudioGain()
-                self.player.play()
                 self.audioActivationTask = nil
+                self.player.play()
+                self.isLoading = self.player.timeControlStatus == .waitingToPlayAtSpecifiedRate
             } catch is CancellationError {
             } catch {
                 guard let self, self.audioActivationID == token, !Task.isCancelled else { return }
                 self.audioActivationTask = nil
+                self.isLoading = false
                 self.error = String(localized: "ios-audio-session-error")
                 self.publishNowPlaying()
             }
