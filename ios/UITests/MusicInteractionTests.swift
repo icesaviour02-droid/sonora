@@ -79,10 +79,16 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 8))
         let cancel = app.buttons.matching(identifier: "Cancel").allElementsBoundByIndex.first { $0.isHittable }
         cancel?.tap()
-        app.navigationBars.buttons["BackButton"].firstMatch.tap()
+        // The system may move navigation controls outside the bar while search is active.
+        // Exercise the native edge-back gesture rather than relying on private button identifiers.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.45))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.45)))
+        XCTAssertTrue(app.buttons["download-albums"].waitForExistence(timeout: 10))
         app.buttons["download-albums"].tap()
         XCTAssertTrue(app.staticTexts["Sonora Review Album"].firstMatch.waitForExistence(timeout: 10))
-        app.navigationBars.buttons["BackButton"].firstMatch.tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.45))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.45)))
+        XCTAssertTrue(app.buttons["download-playlists"].waitForExistence(timeout: 10))
         app.buttons["download-playlists"].tap()
         XCTAssertTrue(app.staticTexts["Sonora Saved Playlist"].firstMatch.waitForExistence(timeout: 10))
         app.staticTexts["Sonora Saved Playlist"].firstMatch.tap()
