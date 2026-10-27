@@ -505,7 +505,7 @@ struct SquareCard: View {
     var fillsColumn = false
 
     var body: some View {
-        VStack(alignment: circular ? .center : .leading, spacing: 6) {
+        VStack(alignment: circular ? .center : .leading, spacing: Layout.compact / 2) {
             ArtworkImage(url: ArtworkRendition.url(artworkURL, side: fillsColumn ? Layout.collectionArtwork : side)) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
@@ -525,12 +525,12 @@ struct SquareCard: View {
             )
 
             Text(title)
-                .appFont(.subheadline, weight: .semibold)
+                .appFont(.callout)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             if !subtitle.isEmpty {
                 Text(subtitle)
-                    .appFont(.caption)
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -580,14 +580,16 @@ struct LibraryView: View {
     @Environment(PlaybackController.self) private var playback
     @Environment(CatalogStore.self) private var catalog
     @Environment(SettingsStore.self) private var settings
+    @Environment(LocalLibraryStore.self) private var local
     @Environment(AccountStore.self) private var account
     let importAction: () -> Void
     let openSettings: () -> Void
 
     @State private var showCreatePlaylist = false
-    @State private var newPlaylistTitle = ""
-    @State private var newPlaylistDescription = ""
-    @State private var selectedRecentAlbum: String?
+    @State private var editCategories = false
+    private enum LocalTarget: Hashable { case album(String), playlist(String) }
+    @State private var selectedLocal: LocalTarget?
+    @AppStorage("sonora.library.categories") private var visibleCategories = LibraryCategory.defaults
 
     var body: some View {
         Group {
@@ -603,61 +605,58 @@ struct LibraryView: View {
             } else {
                 List {
                     Section {
-                        NavigationLink {
-                            PlaylistsCollectionView()
-                        } label: {
-                            Label("ios-playlists", systemImage: "music.note.list")
+                        ForEach(LibraryCategory.allCases.filter { visibleCategories.split(separator: ",").contains(Substring($0.rawValue)) }) { category in
+                            NavigationLink { categoryDestination(category) } label: {
+                                Label(category.label, systemImage: category.symbol)
+                            }.libraryCategoryRow()
                         }
-                        NavigationLink {
-                            ArtistsCollectionView()
-                        } label: {
-                            Label("ios-artists", systemImage: "music.mic")
-                        }
-                        NavigationLink {
-                            AlbumsCollectionView()
-                        } label: {
-                            Label("ios-albums", systemImage: "square.stack")
-                        }
-                        NavigationLink {
-                            SongsCollectionView(importAction: importAction)
-                        } label: {
-                            Label("ios-songs", systemImage: "music.note")
-                        }
-                        NavigationLink { DownloadsView() } label: {
-                            Label("ios-downloaded", systemImage: "arrow.down.circle")
-                        }
-                        NavigationLink {
-                            HistoryCollectionView()
-                        } label: {
-                            Label("ios-history", systemImage: "clock.arrow.circlepath")
-                        }
-                        if !settings.pins.isEmpty {
-                            NavigationLink {
-                                PinsCollectionView()
-                            } label: {
-                                Label("ios-pinned", systemImage: "pin")
-                            }
-                        }
-                    }.labelStyle(LibraryCategoryLabelStyle())
-
-                    Section {
-                        NavigationLink { LocalFavoritesView() } label: { Label("ios-local-favorites", systemImage: "star.fill") }
                     }
-                    if !library.tracks.isEmpty {
-                        Section("ios-recently-added") {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardArtwork), spacing: Layout.spacing)],
+                    .listSectionSeparator(.hidden, edges: .top)
+                    if !library.tracks.isEmpty || !catalog.savedPlaylists.isEmpty || !catalog.savedAlbums.isEmpty || !local.playlists.isEmpty || !catalog.likedSongs.isEmpty {
+                        Section {
+                            LazyVGrid(columns: [GridItem(.flexible(), spacing: Layout.spacing), GridItem(.flexible(), spacing: Layout.spacing)],
                                       alignment: .leading, spacing: Layout.spacing) {
+                                ForEach(catalog.savedPlaylists.prefix(4)) { playlist in
+                                    NavigationLink {
+                                        PlaylistDetailView(playlistID: playlist.id, fallbackTitle: playlist.title,
+                                            fallbackAuthor: playlist.author, fallbackArtwork: playlist.artworkURL)
+                                    } label: {
+                                        SquareCard(title: playlist.title, subtitle: String(localized: "ios-playlist-kind"),
+                                            artworkURL: playlist.artworkURL, fillsColumn: true)
+                                    }.buttonStyle(.plain)
+                                }
+                                ForEach(local.playlists.prefix(4)) { playlist in
+                                    NavigationLink { LocalPlaylistView(playlistID: playlist.id) } label: {
+                                        SquareCard(title: playlist.title, subtitle: String(localized: "ios-playlist-kind"),
+                                            artworkURL: playlist.tracks(in: library.tracks).first { $0.displayArtworkURL != nil }?.displayArtworkURL,
+                                            fillsColumn: true)
+                                    }.buttonStyle(.plain)
+                                }
+                                ForEach(catalog.savedAlbums.prefix(4)) { album in
+                                    NavigationLink {
+                                        AlbumDetailView(browseID: album.id, fallbackTitle: album.title,
+                                            fallbackArtist: album.artist, fallbackArtwork: album.artworkURL)
+                                    } label: {
+                                        SquareCard(title: album.title, subtitle: album.artist, artworkURL: album.artworkURL, fillsColumn: true)
+                                    }.buttonStyle(.plain)
+                                }
+                                ForEach(catalog.likedSongs.prefix(8)) { track in
+                                    Button { playback.play(track, in: catalog.likedSongs) } label: {
+                                        SquareCard(title: track.albumTitle ?? track.title, subtitle: track.artist,
+                                            artworkURL: track.displayArtworkURL, fillsColumn: true)
+                                    }.buttonStyle(.plain)
+                                }
                                 ForEach(LocalAlbum.collect(library.tracks).sorted {
                                     ($0.tracks.map(\.addedAt).max() ?? .distantPast) > ($1.tracks.map(\.addedAt).max() ?? .distantPast)
                                 }.prefix(8)) { album in
-                                    Button { selectedRecentAlbum = album.id } label: {
+                                    Button { selectedLocal = .album(album.id) } label: {
                                         SquareCard(title: album.title, subtitle: album.artist,
-                                            artworkURL: album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL)
+                                            artworkURL: album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL, fillsColumn: true)
                                     }.buttonStyle(.plain)
                                 }
                                 ForEach(library.tracks.filter { ($0.albumTitle ?? "").isEmpty }.prefix(8)) { track in
                                     Button { playback.play(track, in: library.tracks) } label: {
-                                        SquareCard(title: track.title, subtitle: track.artist, artworkURL: track.displayArtworkURL)
+                                        SquareCard(title: track.title, subtitle: track.artist, artworkURL: track.displayArtworkURL, fillsColumn: true)
                                     }.buttonStyle(.plain)
                                     .contextMenu {
                                         Button("ios-delete", role: .destructive) { Task { await library.remove(track) } }
@@ -666,6 +665,10 @@ struct LibraryView: View {
                             }
                             .padding(.vertical, Layout.compact)
                             .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: Layout.compact, leading: Layout.pageMargin, bottom: Layout.spacing, trailing: Layout.pageMargin))
+                        } header: {
+                            Text("ios-recently-added").appFont(.title2, weight: .bold)
+                                .foregroundStyle(.primary).textCase(nil).padding(.top, Layout.spacing)
                         }
                     } else if !catalog.likedSongs.isEmpty {
                         Section("ios-liked-songs") {
@@ -695,23 +698,50 @@ struct LibraryView: View {
                     }
                 }
                 .listStyle(.plain)
+                .environment(\.defaultMinListRowHeight, Layout.libraryRowHeight)
+                .contentMargins(.top, 0, for: .scrollContent)
                 .refreshable {
                     catalog.loadLibrary(isSignedIn: account.name != nil)
                 }
             }
         }
-        .appNavigationTitle("ios-library")
-        .navigationDestination(item: $selectedRecentAlbum) { LocalAlbumView(albumID: $0) }
+        .appNavigationTitle("ios-library", inlineLarge: true)
+        .toolbarTitleDisplayMode(.inlineLarge)
+        .navigationDestination(item: $selectedLocal) { target in
+            switch target {
+            case .album(let id): LocalAlbumView(albumID: id)
+            case .playlist(let id): LocalPlaylistView(playlistID: id)
+            }
+        }
+        .sheet(isPresented: $showCreatePlaylist) {
+            NavigationStack { CreateLocalPlaylistView(trackIDs: []) { selectedLocal = .playlist($0) } }
+        }
+        .sheet(isPresented: $editCategories) { LibrarySectionsEditor(visible: $visibleCategories) }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("ios-import", systemImage: "plus", action: importAction)
-                    .disabled(library.isImporting || !library.isLoaded)
-                    .frame(minWidth: Layout.control, minHeight: Layout.control)
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Menu {
+                    Button("ios-create-playlist", systemImage: "music.note.list") { showCreatePlaylist = true }
+                        .disabled(local.isBusy || !local.isLoaded)
+                    Button("ios-import", systemImage: "square.and.arrow.down", action: importAction)
+                        .disabled(library.isImporting || !library.isLoaded)
+                } label: { Image(systemName: "text.badge.plus") }
+                    .accessibilityLabel(Text("ios-add"))
+                Button { editCategories = true } label: { Image(systemName: "checklist") }
+                    .accessibilityLabel(Text("ios-edit-library"))
             }
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
-                Button("ios-settings", systemImage: "gearshape", action: openSettings)
-                    .frame(minWidth: Layout.control, minHeight: Layout.control)
-            }
+                Button(action: openSettings) {
+                    Group {
+                        if let name = account.name, !name.isEmpty {
+                            Text(name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined())
+                                .appFont(.body, weight: .semibold)
+                        } else { Image(systemName: "person.crop.circle").appFont(.title2) }
+                    }
+                    .frame(width: Layout.control, height: Layout.control)
+                    .background(.quaternary, in: Circle())
+                }.buttonStyle(.plain).accessibilityLabel(Text("ios-settings"))
+            }.sharedBackgroundVisibility(.hidden)
         }
         .overlay(alignment: .bottom) {
             if library.isImporting {
@@ -722,6 +752,19 @@ struct LibraryView: View {
             }
         }
     }
+    @ViewBuilder private func categoryDestination(_ category: LibraryCategory) -> some View {
+        switch category {
+        case .playlists: PlaylistsCollectionView()
+        case .artists: ArtistsCollectionView()
+        case .albums: AlbumsCollectionView()
+        case .songs: SongsCollectionView(importAction: importAction)
+        case .downloads: DownloadsView()
+        case .history: HistoryCollectionView()
+        case .pinned: PinsCollectionView()
+        case .favorites: LocalFavoritesView()
+        }
+    }
+
 }
 
 /// Library > Playlists sub-screen with playlist creation and navigation.
@@ -889,6 +932,7 @@ struct ArtistsCollectionView: View {
                                         Text(artist.name).appFont(.body)
                                     }
                                 }
+                                .musicListRow()
                                 .contextMenu {
                                     if artist.remote == nil {
                                         Button(local.isFavorite(artist.name.lowercased(), category: .artists) ? "ios-remove-favorite" : "ios-favorite",
@@ -2113,6 +2157,7 @@ struct TrackRow: View {
             if selectionMode { trackContent }
             else { playbackRow }
         }
+        .musicListRow()
         .sheet(isPresented: $chooseLocalPlaylist) {
             NavigationStack { AddToLocalPlaylistView(trackIDs: [track.id]) }
         }
@@ -2144,12 +2189,12 @@ HStack(spacing: Layout.compact) {
 
     private var trackContent: some View {
 HStack(spacing: Layout.spacing) {
-                    ArtworkView(track: track, side: Layout.rowArtwork, cornerRadius: 8)
+                    ArtworkView(track: track, side: Layout.rowArtwork, cornerRadius: Layout.rowArtworkRadius)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 4) {
                             Text(track.title)
-                                .appFont(.body, weight: .medium)
+                                .appFont(.body)
                                 .foregroundStyle(playback.current?.id == track.id ? Color.accentColor : Color.primary)
                                 .lineLimit(1)
                             if track.explicit {

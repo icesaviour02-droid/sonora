@@ -38,6 +38,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- iPhone Library uses compact category rows, an inline large title and a real Recently Added cover grid. Optional Sonora collections can be shown through Edit Library.
+- Player artwork moves between full and compact modes as one persistent cover instead of disappearing between image views. Revealed queue history has a separate gap before the current song.
+
 - The iPhone lyrics-source menu stays in a fixed footer above playback controls, so advancing lyrics and long source names cannot shift its button.
 
 - iPhone album and playlist pages use cover-derived backgrounds and cover-origin navigation. Downloaded collections offer matching grids and alphabetical navigation.

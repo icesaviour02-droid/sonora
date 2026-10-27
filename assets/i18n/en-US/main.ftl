@@ -1684,3 +1684,9 @@ ios-grid = Grid
 ios-list = List
 
 ios-unknown-year = Unknown Year
+
+ios-edit-library = Edit Library
+
+ios-downloaded-library = Downloaded
+
+ios-playlist-kind = Playlist

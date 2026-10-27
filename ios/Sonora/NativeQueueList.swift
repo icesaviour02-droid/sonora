@@ -30,7 +30,7 @@ struct NativeQueueList: UIViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, UICollectionViewDelegate {
         enum Entry: Hashable, Sendable {
-            case historyHeader, past(Int), playerHeader, queueHeader, song(UUID), add, autoplay
+            case historyHeader, past(Int), historyGap, playerHeader, queueHeader, song(UUID), add, autoplay
         }
         var parent: NativeQueueList
         private weak var collection: UICollectionView?
@@ -101,6 +101,7 @@ struct NativeQueueList: UIViewRepresentable {
                 entries.append(.historyHeader)
                 for (index, track) in history.enumerated() { entries.append(.past(index)); updated[.past(index)] = track }
             }
+            if !history.isEmpty { entries.append(.historyGap) }
             entries.append(.playerHeader)
             entries.append(.queueHeader)
             for item in upcoming { entries.append(.song(item.id)); updated[.song(item.id)] = item.track }
@@ -210,6 +211,8 @@ struct NativeQueueList: UIViewRepresentable {
                         self.parent.playback.play(track, in: self.parent.settings.history)
                     } label: { QueueSongLabel(track: track) }.buttonStyle(.plain)
                 }
+            case .historyGap:
+                Color.clear.frame(height: Layout.historySectionGap).accessibilityHidden(true)
             case .playerHeader:
                 Color.clear.frame(height: parent.headerHeight).accessibilityHidden(true)
             case .queueHeader:
@@ -261,7 +264,7 @@ private struct QueueSongLabel: View {
     let track: MusicTrack
     var body: some View {
         HStack(spacing: Layout.compact) {
-            ArtworkView(track: track, side: Layout.rowArtwork).accessibilityHidden(true)
+            ArtworkView(track: track, side: Layout.rowArtwork, cornerRadius: Layout.rowArtworkRadius).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Layout.compact / 2) {
                 Text(track.title).appFont(.body).foregroundStyle(.white).lineLimit(1)
                 Text(track.artist).appFont(.subheadline).foregroundStyle(.white.opacity(0.68)).lineLimit(1)

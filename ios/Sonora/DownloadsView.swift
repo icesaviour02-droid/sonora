@@ -23,7 +23,7 @@ struct DownloadsView: View {
                     NavigationLink { DownloadedArtistsView() } label: { Label("ios-artists", systemImage: "music.mic") }.accessibilityIdentifier("download-artists")
                     NavigationLink { DownloadedAlbumsView() } label: { Label("ios-albums", systemImage: "square.stack") }.accessibilityIdentifier("download-albums")
                     NavigationLink { DownloadedSongsView() } label: { Label("ios-songs", systemImage: "music.note") }.accessibilityIdentifier("download-songs")
-                }.labelStyle(LibraryCategoryLabelStyle())
+                }.libraryCategoryRow().listSectionSeparator(.hidden, edges: .top)
             }
             if !pending.isEmpty {
                 Section("ios-downloading") {
@@ -219,7 +219,7 @@ struct DownloadedArtistsView: View {
                                     .placeholderSymbol("music.mic").clipShape(Circle())
                                 Text(name).appFont(.body)
                             }
-                        }
+                        }.musicListRow()
                     }
                 } header: { Text(group.id).appFont(.headline) }
                 .sectionIndexLabel(Text(group.id))
@@ -297,6 +297,6 @@ struct DownloadedCollectionLabel: View {
                 Text(title).appFont(.body).lineLimit(2)
                 if !subtitle.isEmpty { Text(subtitle).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1) }
             }
-        }
+        }.musicListRow()
     }
 }

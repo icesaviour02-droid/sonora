@@ -92,12 +92,13 @@ extension View {
 /// Keeps native large and inline navigation titles in sync with the saved interface face.
 /// The system still owns collapse, back navigation, localization and accessibility sizing.
 private struct NavigationTitleTypography: ViewModifier {
+    let inlineLarge: Bool
     @Environment(\.appTypeface) private var typeface
     @Environment(\.dynamicTypeSize) private var textSize
 
     func body(content: Content) -> some View {
         content.background {
-            NavigationTypefaceBridge(typeface: typeface, textSize: textSize)
+            NavigationTypefaceBridge(typeface: typeface, textSize: textSize, inlineLarge: inlineLarge)
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
                 .allowsHitTesting(false)
@@ -110,16 +111,19 @@ private struct NavigationTitleTypography: ViewModifier {
 private struct NavigationTypefaceBridge: UIViewControllerRepresentable {
     let typeface: String
     let textSize: DynamicTypeSize
+    let inlineLarge: Bool
 
     func makeUIViewController(context: Context) -> Controller { Controller() }
 
     func updateUIViewController(_ controller: Controller, context: Context) {
+        controller.inlineLarge = inlineLarge
         controller.typeface = typeface
         controller.applyTypeface()
     }
 
     final class Controller: UIViewController {
         var typeface = "system"
+        var inlineLarge = false
 
         override func loadView() {
             view = UIView(frame: .zero)
@@ -146,7 +150,7 @@ private struct NavigationTypefaceBridge: UIViewControllerRepresentable {
             guard let navigationController, let owner = owningDestination(),
                   navigationController.topViewController === owner else { return }
             let bar = navigationController.navigationBar
-            let inline = navigationFont(style: .headline, weight: .semibold)
+            let inline = navigationFont(style: inlineLarge ? .largeTitle : .headline, weight: inlineLarge ? .bold : .semibold)
             let large = navigationFont(style: .largeTitle, weight: .bold)
             if bar.titleTextAttributes?[.font] as? UIFont == inline,
                bar.largeTitleTextAttributes?[.font] as? UIFont == large { return }
@@ -203,14 +207,14 @@ private struct NavigationTypefaceBridge: UIViewControllerRepresentable {
 
 extension View {
     /// Uses the saved typeface for both native title sizes without replacing navigation chrome.
-    func appNavigationTitle(_ title: LocalizedStringKey) -> some View {
-        navigationTitle(title).modifier(NavigationTitleTypography())
+    func appNavigationTitle(_ title: LocalizedStringKey, inlineLarge: Bool = false) -> some View {
+        navigationTitle(title).modifier(NavigationTitleTypography(inlineLarge: inlineLarge))
     }
 
     /// Dynamic provider and playlist names remain verbatim rather than localization keys.
     @_disfavoredOverload
-    func appNavigationTitle<S: StringProtocol>(_ title: S) -> some View {
-        navigationTitle(title).modifier(NavigationTitleTypography())
+    func appNavigationTitle<S: StringProtocol>(_ title: S, inlineLarge: Bool = false) -> some View {
+        navigationTitle(title).modifier(NavigationTitleTypography(inlineLarge: inlineLarge))
     }
 }
 

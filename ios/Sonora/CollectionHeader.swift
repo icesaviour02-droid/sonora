@@ -50,7 +50,8 @@ struct LibraryCategoryLabelStyle: LabelStyle {
                 .appFont(.title3).frame(width: Layout.categoryIcon)
             configuration.title.foregroundStyle(.primary).appFont(.body)
         }
-        .frame(minHeight: Layout.control)
+        .frame(minHeight: Layout.libraryRowHeight)
+        .alignmentGuide(.listRowSeparatorLeading) { _ in Layout.categoryIcon + Layout.spacing }
     }
 }
 

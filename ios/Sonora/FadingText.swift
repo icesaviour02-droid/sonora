@@ -68,7 +68,7 @@ final class TailFadingLabel: UILabel {
 
 /// Player changes retarget a non-bouncy spring instead of waiting for a prescribed sequence.
 enum PlayerMotion {
-    static let mode = Animation.spring(response: 0.3, dampingFraction: 1)
+    static let mode = Animation.spring(response: 0.4, dampingFraction: 1)
     static let press = Animation.spring(response: 0.2, dampingFraction: 1)
 }
 

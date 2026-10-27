@@ -71,12 +71,14 @@
 "ios-download-save-error" = "Download information could not be saved. Check your available storage.";
 "ios-download-storage-failed" = "The audio file could not be saved. Check your available storage.";
 "ios-downloaded" = "Available offline";
+"ios-downloaded-library" = "Downloaded";
 "ios-downloaded-playlists-description" = "Download a playlist from its menu to keep its songs together here.";
 "ios-downloading" = "Downloading";
 "ios-downloads" = "Downloads";
 "ios-downloads-description" = "Choose Download from a song’s menu to keep it here for offline listening. Downloads use Wi-Fi unless you enable cellular data in Settings.";
 "ios-downloads-empty" = "No downloads yet";
 "ios-downloads-space" = "Downloaded Audio";
+"ios-edit-library" = "Edit Library";
 "ios-edit-playlist" = "Edit Playlist";
 "ios-eq-acoustic" = "Acoustic";
 "ios-eq-bass-boost" = "Bass Boost";
@@ -205,6 +207,7 @@
 "ios-playback-position" = "Playback position";
 "ios-playing-next" = "Playing Next";
 "ios-playlist-description" = "Description (optional)";
+"ios-playlist-kind" = "Playlist";
 "ios-playlist-privacy" = "Privacy";
 "ios-playlist-title" = "Playlist title";
 "ios-playlists" = "Playlists";
