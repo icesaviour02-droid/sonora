@@ -120,6 +120,7 @@ struct LocalPlaylistView: View {
     @State private var confirmDelete = false
     @State private var name = ""
     private var playlist: LocalPlaylist? { local.playlist(playlistID) }
+    @State private var query = ""
     @State private var showNavigationTitle = false
     @State private var editMode = EditMode.inactive
     private var tracks: [MusicTrack] { playlist?.tracks(in: library.tracks) ?? [] }
@@ -127,6 +128,7 @@ struct LocalPlaylistView: View {
 
     var body: some View {
         let byID = indexed
+        let visibleIDs = (playlist?.track_ids ?? []).filter { byID[$0]?.matchesSearch(query) ?? query.isEmpty }
         Group {
             if let playlist {
                 List {
@@ -135,15 +137,16 @@ struct LocalPlaylistView: View {
                         ContentUnavailableView("ios-songs", systemImage: "music.note", description: Text("ios-local-empty-playlist"))
                             .listRowSeparator(.hidden)
                     }
-                    ForEach(playlist.track_ids, id: \.self) { id in
+                    ForEach(visibleIDs, id: \.self) { id in
                         Group {
                             if let track = byID[id] { TrackRow(track: track) { playback.play(track, in: tracks, source: playlist.title) } }
                             else { Label("ios-track-unavailable", systemImage: "exclamationmark.circle").foregroundStyle(.secondary) }
                         }
-                        .deleteDisabled(local.isBusy).moveDisabled(local.isBusy)
+                        .deleteDisabled(local.isBusy).moveDisabled(local.isBusy || !query.isEmpty)
                     }
-                    .onDelete { offsets in local.remove(offsets.map { playlist.track_ids[$0] }, from: playlistID) }
+                    .onDelete { offsets in local.remove(offsets.map { visibleIDs[$0] }, from: playlistID) }
                     .onMove { offsets, destination in
+                        guard query.isEmpty else { return }
                         var order = playlist.track_ids
                         order.move(fromOffsets: offsets, toOffset: destination)
                         local.reorder(order, in: playlistID)
@@ -159,6 +162,7 @@ struct LocalPlaylistView: View {
             } else { ContentUnavailableView("ios-playlists", systemImage: "music.note.list", description: Text("ios-local-playlist-missing")) }
         }
         .appNavigationTitle(showNavigationTitle ? (playlist?.title ?? "") : "")
+        .collectionSearch(text: $query)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if editMode.isEditing {
@@ -264,13 +268,15 @@ struct LocalFavoritesView: View {
         return local.favoriteArtistOrder.compactMap { indexed[$0] }
     }
 
+    @State private var query = ""
+
     var body: some View {
         List {
             Section("ios-songs") {
-                ForEach(songs) { track in TrackRow(track: track) { playback.play(track, in: songs) } }
+                ForEach(songs.filter { $0.matchesSearch(query) }) { track in TrackRow(track: track) { playback.play(track, in: songs) } }
             }
             Section("ios-albums") {
-                ForEach(albums) { album in
+                ForEach(albums.filter { MusicSearch.matches(query, $0.title, $0.artist) }) { album in
                     NavigationLink { LocalAlbumView(albumID: album.id) } label: {
                         HStack(spacing: Layout.spacing) {
                             ArtworkView(track: album.tracks.first, side: Layout.rowArtwork)
@@ -280,7 +286,7 @@ struct LocalFavoritesView: View {
                 }
             }
             Section("ios-artists") {
-                ForEach(artists, id: \.self) { artist in
+                ForEach(artists.filter { MusicSearch.matches(query, $0) }, id: \.self) { artist in
                     NavigationLink(artist) { LocalArtistView(name: artist) }
                 }
             }
@@ -291,6 +297,6 @@ struct LocalFavoritesView: View {
                 ContentUnavailableView("ios-local-favorites", systemImage: "star")
             }
         }
-        .appNavigationTitle("ios-local-favorites")
+        .appNavigationTitle("ios-local-favorites").collectionSearch(text: $query)
     }
 }

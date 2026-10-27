@@ -30,7 +30,7 @@ struct NativeQueueList: UIViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, UICollectionViewDelegate {
         enum Entry: Hashable, Sendable {
-            case historyHeader, past(Int), historyGap, playerHeader, queueHeader, song(UUID), add, autoplay
+            case historyHeader, past(Int), playerHeader, queueHeader, song(UUID), add, autoplay
         }
         var parent: NativeQueueList
         private weak var collection: UICollectionView?
@@ -47,12 +47,21 @@ struct NativeQueueList: UIViewRepresentable {
         init(parent: NativeQueueList) { self.parent = parent }
 
         func makeCollection() -> UICollectionView {
-            var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
-            configuration.backgroundColor = .clear
-            configuration.showsSeparators = false
-            configuration.trailingSwipeActionsConfigurationProvider = { [weak self] index in self?.swipeActions(at: index) }
-            let view = QueueCollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
+            let layout = UICollectionViewCompositionalLayout { [weak self] index, environment in
+                guard let self else { return nil }
+                var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
+                configuration.backgroundColor = .clear
+                configuration.showsSeparators = false
+                configuration.headerMode = index == 0 && self.hasHistory ? .supplementary : .none
+                configuration.trailingSwipeActionsConfigurationProvider = { [weak self] index in self?.swipeActions(at: index) }
+                let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
+                section.contentInsets.bottom = index == 0 && self.hasHistory ? Layout.historySectionGap : 0
+                for header in section.boundarySupplementaryItems { header.pinToVisibleBounds = true }
+                return section
+            }
+            let view = QueueCollectionView(frame: .zero, collectionViewLayout: layout)
             view.backgroundColor = .clear
+            view.accessibilityIdentifier = "player-queue-list"
             view.overrideUserInterfaceStyle = .dark
             view.contentInsetAdjustmentBehavior = .never
             view.delegate = self
@@ -71,6 +80,13 @@ struct NativeQueueList: UIViewRepresentable {
             }
             dataSource = UICollectionViewDiffableDataSource<Int, Entry>(collectionView: view) { collection, index, entry in
                 collection.dequeueConfiguredReusableCell(using: registration, for: index, item: entry)
+            }
+            let historyHeader = UICollectionView.SupplementaryRegistration<QueueHistoryHeader>(
+                elementKind: UICollectionView.elementKindSectionHeader) { [weak self] cell, _, _ in
+                    self?.configureHistoryHeader(cell)
+                }
+            dataSource.supplementaryViewProvider = { collection, _, index in
+                collection.dequeueConfiguredReusableSupplementary(using: historyHeader, for: index)
             }
             dataSource.reorderingHandlers.canReorderItem = { entry in
                 if case .song = entry { return true }
@@ -94,21 +110,23 @@ struct NativeQueueList: UIViewRepresentable {
             guard let collection, dataSource != nil, !collection.hasActiveDrag, !collection.hasActiveDrop else { return }
             let upcoming = parent.playback.upcomingItems
             let history = Array(parent.history.filter { $0.id != parent.playback.current?.id }.reversed())
+            let historyChanged = hasHistory != !history.isEmpty
             hasHistory = !history.isEmpty
+            if historyChanged { didPositionQueue = false }
+            var historyEntries: [Entry] = []
             var entries: [Entry] = []
             var updated: [Entry: MusicTrack] = [:]
             if !history.isEmpty {
-                entries.append(.historyHeader)
-                for (index, track) in history.enumerated() { entries.append(.past(index)); updated[.past(index)] = track }
+                for (index, track) in history.enumerated() { historyEntries.append(.past(index)); updated[.past(index)] = track }
             }
-            if !history.isEmpty { entries.append(.historyGap) }
             entries.append(.playerHeader)
             entries.append(.queueHeader)
             for item in upcoming { entries.append(.song(item.id)); updated[.song(item.id)] = item.track }
             entries.append(.add)
             if parent.settings.autoplayRadio { entries.append(.autoplay) }
             let old = dataSource.snapshot()
-            let changes = entries.filter { updated[$0] != tracks[$0] }
+            let allEntries = historyEntries + entries
+            let changes = allEntries.filter { updated[$0] != tracks[$0] }
             let fontChanged = lastTypeface != parent.typeface
             let sourceChanged = lastSource != parent.playback.queueSource
             let headerChanged = lastHeaderHeight != parent.headerHeight
@@ -116,16 +134,34 @@ struct NativeQueueList: UIViewRepresentable {
             lastSource = parent.playback.queueSource
             lastTypeface = parent.typeface
             tracks = updated
-            if old.itemIdentifiers == entries && changes.isEmpty && !fontChanged && !sourceChanged && !headerChanged { return }
+            if old.itemIdentifiers == allEntries && changes.isEmpty && !fontChanged && !sourceChanged && !headerChanged && !historyChanged {
+                return
+            }
             var snapshot = NSDiffableDataSourceSnapshot<Int, Entry>()
-            snapshot.appendSections([0])
-            snapshot.appendItems(entries)
+            snapshot.appendSections([0, 1])
+            snapshot.appendItems(historyEntries, toSection: 0)
+            snapshot.appendItems(entries, toSection: 1)
             // Headers have changing disabled states, independent of the song metadata.
-            let reconfigure = Set(fontChanged ? entries : changes).union([.queueHeader, .historyHeader, .playerHeader])
-            snapshot.reconfigureItems(entries.filter { reconfigure.contains($0) && old.indexOfItem($0) != nil })
+            let reconfigure = Set(fontChanged ? allEntries : changes).union([.queueHeader, .historyHeader, .playerHeader])
+            snapshot.reconfigureItems(allEntries.filter { reconfigure.contains($0) && old.indexOfItem($0) != nil })
+            if historyChanged || fontChanged || headerChanged { collection.collectionViewLayout.invalidateLayout() }
             dataSource.apply(snapshot, animatingDifferences: didPositionQueue && !UIAccessibility.isReduceMotionEnabled) { [weak self] in
                 self?.positionQueue()
+                self?.refreshVisibleHistoryHeader()
             }
+        }
+
+        private func configureHistoryHeader(_ cell: QueueHistoryHeader) {
+            cell.apply(UIHostingConfiguration { [weak self] in
+                if let self {
+                    self.row(.historyHeader).environment(self.parent.settings).environment(\.appTypeface, self.parent.typeface)
+                }
+            }.margins(.all, 0).background { Rectangle().fill(.ultraThinMaterial) })
+        }
+
+        private func refreshVisibleHistoryHeader() {
+            collection?.visibleSupplementaryViews(ofKind: UICollectionView.elementKindSectionHeader)
+                .compactMap { $0 as? QueueHistoryHeader }.forEach(configureHistoryHeader)
         }
 
         private func positionQueue() {
@@ -133,7 +169,7 @@ struct NativeQueueList: UIViewRepresentable {
                   let index = dataSource?.indexPath(for: .playerHeader),
                   let attributes = collection.layoutAttributesForItem(at: index) else { return }
             let tail = collection.contentSize.height - attributes.frame.minY
-            let padding = max(0, collection.bounds.height - tail)
+            let padding = max(Layout.queueProgressOverlap, collection.bounds.height - tail)
             if collection.contentInset.bottom != padding { collection.contentInset.bottom = padding }
             if !didPositionQueue {
                 didPositionQueue = true
@@ -170,10 +206,10 @@ struct NativeQueueList: UIViewRepresentable {
         func collectionView(_ collectionView: UICollectionView,
                             targetIndexPathForMoveOfItemFromOriginalIndexPath original: IndexPath,
                             atCurrentIndexPath current: IndexPath, toProposedIndexPath proposed: IndexPath) -> IndexPath {
-            let items = dataSource.snapshot().itemIdentifiers
+            let items = dataSource.snapshot().itemIdentifiers(inSection: 1)
             let positions = items.indices.filter { if case .song = items[$0] { return true }; return false }
             guard let first = positions.first, let last = positions.last else { return current }
-            return IndexPath(item: min(max(proposed.item, first), last), section: 0)
+            return IndexPath(item: min(max(proposed.section == 1 ? proposed.item : first, first), last), section: 1)
         }
 
         private func swipeActions(at index: IndexPath) -> UISwipeActionsConfiguration? {
@@ -211,8 +247,6 @@ struct NativeQueueList: UIViewRepresentable {
                         self.parent.playback.play(track, in: self.parent.settings.history)
                     } label: { QueueSongLabel(track: track) }.buttonStyle(.plain)
                 }
-            case .historyGap:
-                Color.clear.frame(height: Layout.historySectionGap).accessibilityHidden(true)
             case .playerHeader:
                 Color.clear.frame(height: parent.headerHeight).accessibilityHidden(true)
             case .queueHeader:
@@ -273,5 +307,32 @@ private struct QueueSongLabel: View {
         }
         .padding(.vertical, Layout.compact / 2)
         .frame(maxWidth: .infinity, minHeight: Layout.control, alignment: .leading).contentShape(Rectangle())
+    }
+}
+
+/// A genuine supplementary view hosts the pinned History controls with native self-sizing.
+private final class QueueHistoryHeader: UICollectionReusableView {
+    private var hosted: (UIView & UIContentView)?
+
+    func apply(_ configuration: any UIContentConfiguration) {
+        if let hosted { hosted.configuration = configuration; return }
+        let content = configuration.makeContentView()
+        content.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: trailingAnchor),
+            content.topAnchor.constraint(equalTo: topAnchor),
+            content.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+        hosted = content
+    }
+
+    override func preferredLayoutAttributesFitting(_ layoutAttributes: UICollectionViewLayoutAttributes) -> UICollectionViewLayoutAttributes {
+        let attributes = super.preferredLayoutAttributesFitting(layoutAttributes)
+        let size = systemLayoutSizeFitting(CGSize(width: attributes.size.width, height: UIView.layoutFittingCompressedSize.height),
+            withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        attributes.size.height = max(Layout.control, size.height)
+        return attributes
     }
 }

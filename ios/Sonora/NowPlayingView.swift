@@ -20,14 +20,14 @@ struct MiniPlayer: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(spacing: 4) {
-                            FadingText(playback.current?.title ?? "", style: .callout, weight: .semibold)
+                            FadingText(playback.current?.title ?? "", style: .headline, weight: .semibold)
                             if playback.current?.explicit == true {
                                 Image(systemName: "e.square.fill")
                                     .appFont(.caption2)
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        FadingText(playback.current?.artist ?? "", style: .subheadline, color: .label)
+                        FadingText(playback.current?.artist ?? "", style: .subheadline, color: UIColor.label.withAlphaComponent(0.88))
                     }
                     Spacer(minLength: 0)
                 }
@@ -94,6 +94,7 @@ struct NowPlayingView: View {
     @State private var mode: Mode = .artwork
     @State private var seekValue: Double = 0
     @State private var isSeeking = false
+    @State private var volumeTracking = false
     @State private var lyrics = LyricsStore()
     @State private var chooseLocalPlaylist = false
     @State private var addQueueSongs = false
@@ -103,7 +104,12 @@ struct NowPlayingView: View {
     @State private var artworkFrame: CGRect = .zero
     @State private var artworkMode: Mode = .artwork
     @State private var artworkWasPlaying = false
-    @Namespace private var playerElements
+    @State private var metadataFrame: CGRect = .zero
+    @State private var metadataMode: Mode = .artwork
+    @State private var queueViewport: CGRect = .zero
+    @ScaledMetric(relativeTo: .title2) private var expandedTitleSize: CGFloat = InterfaceTypography.baselineSize(.title2)
+    @ScaledMetric(relativeTo: .body) private var compactTitleSize: CGFloat = InterfaceTypography.baselineSize(.body)
+    @ScaledMetric(relativeTo: .body) private var playerArtistSize: CGFloat = InterfaceTypography.baselineSize(.body)
 
     init(initialMode: String = "artwork") {
         _mode = State(initialValue: initialMode == "lyrics" ? .lyrics : (initialMode == "queue" ? .queue : .artwork))
@@ -177,6 +183,7 @@ struct NowPlayingView: View {
         .padding(.bottom, Layout.spacing)
         .coordinateSpace(name: "player-artwork-space")
         .overlay(alignment: .topLeading) {
+            ZStack(alignment: .topLeading) {
             if !artworkFrame.isEmpty {
                 // Keep the rendition and view identity unchanged throughout mode changes.
                 let renderSide = max(Layout.artwork, artworkSide)
@@ -188,6 +195,33 @@ struct NowPlayingView: View {
                     .shadow(color: .black.opacity(mode == .artwork ? 0.3 : 0), radius: Layout.spacing, y: Layout.compact)
                     .position(x: artworkFrame.midX, y: artworkFrame.midY)
                     .allowsHitTesting(false).accessibilityHidden(true)
+            }
+
+                if !metadataFrame.isEmpty {
+                    AnimatedPlayerMetadata(title: playback.current?.title ?? "", artist: playback.current?.artist ?? "",
+                        titleSize: mode == .artwork ? expandedTitleSize : compactTitleSize,
+                        artistSize: playerArtistSize, spacing: mode == .artwork ? Layout.compact : 2,
+                        expandedAccessibility: mode == .artwork && textSize.isAccessibilitySize)
+                        .frame(width: metadataFrame.width, height: metadataFrame.height, alignment: .leading)
+                        .position(x: metadataFrame.midX, y: metadataFrame.midY)
+                        .allowsHitTesting(false)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text(playback.current?.title ?? "") + Text(", ") + Text(playback.current?.artist ?? ""))
+                        .accessibilityHidden(mode != .artwork)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .mask(alignment: .topLeading) { queueOverlayMask }
+        }
+        .onPreferenceChange(PlayerMetadataFrame.self) { target in
+            guard !target.isEmpty else { return }
+            let animate = !metadataFrame.isEmpty && metadataMode != mode
+            metadataMode = mode
+            if animate && !reduceMotion {
+                withAnimation(PlayerMotion.mode) { metadataFrame = target }
+            } else {
+                var transaction = Transaction(); transaction.disablesAnimations = true
+                withTransaction(transaction) { metadataFrame = target }
             }
         }
         .onPreferenceChange(PlayerArtworkFrame.self) { target in
@@ -202,6 +236,26 @@ struct NowPlayingView: View {
                 transaction.disablesAnimations = true
                 withTransaction(transaction) { artworkFrame = target }
             }
+        }
+    }
+
+    /// The same fade clips both the queue and its moving cover/metadata at the progress track.
+    @ViewBuilder private var queueOverlayMask: some View {
+        if mode == .queue && !queueViewport.isEmpty {
+            VStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Layout.queueFade)
+            }
+            .frame(width: queueViewport.width, height: queueViewport.height)
+            .position(x: queueViewport.midX, y: queueViewport.midY)
+        } else { Rectangle() }
+    }
+
+    private func metadataTarget(presentation: Mode) -> some View {
+        GeometryReader { geometry in
+            Color.clear.preference(key: PlayerMetadataFrame.self,
+                value: mode == presentation ? geometry.frame(in: .named("player-artwork-space")) : .zero)
         }
     }
 
@@ -330,13 +384,14 @@ struct NowPlayingView: View {
     private var trackTitles: some View {
         VStack(alignment: .leading, spacing: Layout.compact) {
             Text(playback.current?.title ?? "")
-                .appFont(.title2, weight: .bold).foregroundStyle(.white)
+                .appFont(.title2, weight: .semibold).foregroundStyle(.white)
                 .lineLimit(textSize.isAccessibilitySize ? 3 : 1)
             Text(playback.current?.artist ?? "")
-                .appFont(.subheadline).foregroundStyle(.white.opacity(0.75))
+                .appFont(.body).foregroundStyle(.white.opacity(0.75))
                 .lineLimit(textSize.isAccessibilitySize ? 2 : 1)
         }
-        .matchedGeometryEffect(id: "metadata", in: playerElements, isSource: mode == .artwork)
+        .opacity(0).accessibilityHidden(true)
+        .background { metadataTarget(presentation: .artwork) }
     }
 
     @ViewBuilder
@@ -371,7 +426,8 @@ struct NowPlayingView: View {
                         FadingText(playback.current?.title ?? "", style: .body, weight: .semibold)
                         FadingText(playback.current?.artist ?? "", style: .body, color: .secondaryLabel)
                     }
-                    .matchedGeometryEffect(id: "metadata", in: playerElements, isSource: mode != .artwork)
+                    .opacity(0).accessibilityHidden(true)
+                    .background { metadataTarget(presentation: presentation) }
                 }.contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -494,7 +550,10 @@ struct NowPlayingView: View {
                             transaction.disablesAnimations = true
                             withTransaction(transaction) {
                                 queueHeaderOffset = offset
-                                if mode == .queue && !artworkFrame.isEmpty { artworkFrame.origin.y += delta }
+                                if mode == .queue {
+                                    if !artworkFrame.isEmpty { artworkFrame.origin.y += delta }
+                                    if !metadataFrame.isEmpty { metadataFrame.origin.y += delta }
+                                }
                             }
                         }
                     }
@@ -514,6 +573,7 @@ struct NowPlayingView: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { queueHeaderHeight = $0 }
             .offset(y: queueHeaderOffset)
         }
+        .contentShape(Rectangle())
         .clipped()
         .mask(alignment: .bottom) {
             VStack(spacing: 0) {
@@ -522,6 +582,8 @@ struct NowPlayingView: View {
                     .frame(height: Layout.queueFade)
             }
         }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("player-artwork-space")) } action: { queueViewport = $0 }
+        .padding(.bottom, -Layout.queueProgressOverlap)
     }
 
     private func queueModePill(symbol: String, label: LocalizedStringKey, isActive: Bool, action: @escaping () -> Void) -> some View {
@@ -601,6 +663,7 @@ struct NowPlayingView: View {
             }
             .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text("ios-previous"))
+            .accessibilityIdentifier("player-previous")
 
             Spacer(minLength: Layout.compact)
 
@@ -643,12 +706,18 @@ struct NowPlayingView: View {
         HStack(spacing: Layout.compact + 2) {
             Image(systemName: "speaker.fill")
                 .appFont(.caption)
-                .foregroundStyle(.white.opacity(0.62))
-            SystemVolumeSlider()
-                .frame(height: 24)
+                .foregroundStyle(.white.opacity(volumeTracking ? 1 : 0.62))
+                .offset(x: volumeTracking ? -Layout.compact : 0)
+            SystemVolumeSlider { active in
+                withAnimation(reduceMotion ? nil : PlayerMotion.press) { volumeTracking = active }
+            }
+                .frame(height: Layout.control)
+                .padding(.vertical, -(Layout.control - Layout.volumeControlHeight) / 2)
+                .scaleEffect(x: volumeTracking ? 1.05 : 1, y: 1)
             Image(systemName: "speaker.wave.3.fill")
                 .appFont(.caption)
-                .foregroundStyle(.white.opacity(0.62))
+                .foregroundStyle(.white.opacity(volumeTracking ? 1 : 0.62))
+                .offset(x: volumeTracking ? Layout.compact : 0)
         }
     }
 
@@ -711,7 +780,7 @@ struct NowPlayingView: View {
     /// Each opening begins at the current song; a previous history scroll cannot move the cover target.
     private func changeMode(_ next: Mode) {
         withAnimation(reduceMotion ? nil : PlayerMotion.mode) {
-            if next == .queue && mode != .queue { queueHeaderOffset = 0 }
+            if next == .queue && mode != .queue { queueHeaderOffset = 0; queueViewport = .zero }
             mode = next
         }
     }
@@ -733,17 +802,64 @@ struct NowPlayingView: View {
 
 /// Native hardware volume slider hosted inside the expanded Apple Music Now Playing screen.
 private struct SystemVolumeSlider: UIViewRepresentable {
+    let editingChanged: (Bool) -> Void
+    func makeCoordinator() -> Coordinator { Coordinator(editingChanged: editingChanged) }
+
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
         view.tintColor = .white
-        view.setVolumeThumbImage(PlayerSliderImages.idleThumb, for: .normal)
-        view.setVolumeThumbImage(PlayerSliderImages.trackingThumb, for: .highlighted)
-        view.setMinimumVolumeSliderImage(PlayerSliderImages.track(alpha: 0.6), for: .normal)
-        view.setMaximumVolumeSliderImage(PlayerSliderImages.track(alpha: 0.2), for: .normal)
+        view.showsRouteButton = false
+        context.coordinator.view = view
+        context.coordinator.apply(active: false)
+        let touch = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.touchChanged(_:)))
+        touch.minimumPressDuration = 0
+        touch.cancelsTouchesInView = false
+        touch.delaysTouchesBegan = false
+        touch.delaysTouchesEnded = false
+        touch.delegate = context.coordinator
+        view.addGestureRecognizer(touch)
         return view
     }
 
-    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
+    func updateUIView(_ view: MPVolumeView, context: Context) { context.coordinator.editingChanged = editingChanged }
+
+    @MainActor final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        weak var view: MPVolumeView?
+        var editingChanged: (Bool) -> Void
+        private var active = false
+        init(editingChanged: @escaping (Bool) -> Void) { self.editingChanged = editingChanged }
+
+        @objc func touchChanged(_ gesture: UILongPressGestureRecognizer) {
+            let next = gesture.state == .began || gesture.state == .changed
+            guard active != next else { return }
+            active = next
+            apply(active: next)
+            editingChanged(next)
+        }
+
+        /// Observing a touch never cancels the actual system volume slider's tracking.
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
+
+        func apply(active: Bool) {
+            guard let view else { return }
+            let height = active ? Layout.volumeActiveTrack : Layout.volumeIdleTrack
+            view.layoutIfNeeded()
+            let states: [UIControl.State] = [.normal, .highlighted]
+            for state in states {
+                view.setVolumeThumbImage(PlayerSliderImages.idleThumb, for: state)
+                view.setMinimumVolumeSliderImage(PlayerSliderImages.track(alpha: active ? 1 : 0.6, height: height), for: state)
+                view.setMaximumVolumeSliderImage(PlayerSliderImages.track(alpha: 0.22, height: height), for: state)
+            }
+            view.setNeedsLayout()
+            if UIAccessibility.isReduceMotionEnabled { view.layoutIfNeeded() }
+            else {
+                UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+                    view.layoutIfNeeded()
+                }
+            }
+        }
+    }
 }
 
 /// Native route picker hands AirPlay selection and connection state to iOS.
@@ -761,6 +877,15 @@ private struct AirPlayButton: UIViewRepresentable {
 
 /// The active presentation contributes its cover bounds; empty transition passes keep the old image.
 private struct PlayerArtworkFrame: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if !next.isEmpty { value = next }
+    }
+}
+
+/// Empty outgoing placeholders cannot replace the active presentation's visible text bounds.
+private struct PlayerMetadataFrame: PreferenceKey {
     static let defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         let next = nextValue()

@@ -230,6 +230,13 @@ struct RootView: View {
             #if DEBUG
             if url.host == "queuereview" {
                 playback.reviewQueue(track)
+                if ProcessInfo.processInfo.arguments.contains("--sonora-review-history") {
+                    settings.clearHistory()
+                    for index in 1...8 {
+                        settings.recordHistory(MusicTrack(id: "review-history-\(index)", title: "History \(index)",
+                            artist: "Sonora Review", filename: "", addedAt: .now))
+                    }
+                }
                 playerMode = "queue"
                 showPlayer = true
                 return
@@ -300,6 +307,8 @@ struct HomeView: View {
     @Environment(PlaybackController.self) private var playback
     let openSettings: () -> Void
 
+    @State private var query = ""
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Layout.spacing * 1.5) {
@@ -328,7 +337,7 @@ struct HomeView: View {
                     }
                     .padding(.vertical, Layout.spacing * 2)
                 } else {
-                    ForEach(catalog.homeSections) { section in
+                    ForEach(catalog.homeSections.compactMap { $0.matchingSearch(query) }) { section in
                         shelfView(section)
                     }
                 }
@@ -339,7 +348,7 @@ struct HomeView: View {
             }
             .padding(.vertical, Layout.spacing)
         }
-        .appNavigationTitle("ios-home")
+        .appNavigationTitle("ios-home").collectionSearch(text: $query)
         .refreshable { catalog.loadHome(force: true) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -356,7 +365,7 @@ struct HomeView: View {
                 .padding(.horizontal, Layout.spacing)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: Layout.spacing) {
-                    ForEach(settings.pins) { pin in
+                    ForEach(settings.pins.filter { MusicSearch.matches(query, $0.title, $0.subtitle) }) { pin in
                         pinnedCard(pin)
                     }
                 }
@@ -408,7 +417,7 @@ struct HomeView: View {
                 .padding(.horizontal, Layout.spacing)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: Layout.spacing) {
-                    ForEach(settings.history.prefix(12)) { track in
+                    ForEach(settings.history.filter { $0.matchesSearch(query) }.prefix(12)) { track in
                         Button {
                             playback.play(track, in: settings.history)
                         } label: {
@@ -481,7 +490,7 @@ struct HomeView: View {
                 columns: [GridItem(.flexible(), spacing: Layout.compact), GridItem(.flexible(), spacing: Layout.compact)],
                 spacing: Layout.compact
             ) {
-                ForEach(catalog.genres) { genre in
+                ForEach(catalog.genres.filter { MusicSearch.matches(query, $0.title) }) { genre in
                     NavigationLink {
                         GenreDetailView(genre: genre)
                     } label: {
@@ -591,9 +600,13 @@ struct LibraryView: View {
     @State private var selectedLocal: LocalTarget?
     @AppStorage("sonora.library.categories") private var visibleCategories = LibraryCategory.defaults
 
+    @State private var query = ""
+
     var body: some View {
         Group {
-            if !library.isLoaded {
+            if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                MusicPageSearchResults(query: query)
+            } else if !library.isLoaded {
                 ContentUnavailableView {
                     Label("ios-library", systemImage: "music.note")
                 } description: {
@@ -707,6 +720,7 @@ struct LibraryView: View {
         }
         .appNavigationTitle("ios-library", inlineLarge: true)
         .toolbarTitleDisplayMode(.inlineLarge)
+        .collectionSearch(text: $query)
         .navigationDestination(item: $selectedLocal) { target in
             switch target {
             case .album(let id): LocalAlbumView(albumID: id)
@@ -779,13 +793,15 @@ struct PlaylistsCollectionView: View {
     @State private var createdID: String?
     @AppStorage("sonora.playlists.grid") private var grid = true
 
+    @State private var query = ""
+
     var body: some View {
         Group {
             if grid {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: Layout.gridSpacing), GridItem(.flexible(), spacing: Layout.gridSpacing)],
                         alignment: .leading, spacing: Layout.spacing) {
-                        ForEach(local.playlists) { playlist in
+                        ForEach(local.playlists.filter { MusicSearch.matches(query, $0.title) }) { playlist in
                             NavigationLink { LocalPlaylistView(playlistID: playlist.id)
                                 .collectionCoverTransition(id: "local:" + playlist.id, in: coverTransition) } label: {
                                 SquareCard(title: playlist.title, subtitle: String(localized: "ios-on-my-iphone"),
@@ -794,7 +810,7 @@ struct PlaylistsCollectionView: View {
                                     .matchedTransitionSource(id: "local:" + playlist.id, in: coverTransition)
                             }.buttonStyle(.plain)
                         }
-                        ForEach(catalog.savedPlaylists) { playlist in
+                        ForEach(catalog.savedPlaylists.filter { MusicSearch.matches(query, $0.title, $0.author) }) { playlist in
                             NavigationLink {
                                 PlaylistDetailView(playlistID: playlist.id, fallbackTitle: playlist.title,
                                     fallbackAuthor: playlist.author, fallbackArtwork: playlist.artworkURL)
@@ -819,6 +835,7 @@ struct PlaylistsCollectionView: View {
             }
         }
         .appNavigationTitle("ios-playlists")
+        .collectionSearch(text: $query)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Menu {
@@ -848,7 +865,7 @@ struct PlaylistsCollectionView: View {
             Section {
                 Button("ios-create-playlist", systemImage: "plus") { createLocal = true }
                     .disabled(local.isBusy || !local.isLoaded)
-                ForEach(local.playlists) { playlist in
+                ForEach(local.playlists.filter { MusicSearch.matches(query, $0.title) }) { playlist in
                     NavigationLink { LocalPlaylistView(playlistID: playlist.id)
                                 .collectionCoverTransition(id: "local:" + playlist.id, in: coverTransition) } label: {
                         LocalPlaylistLabel(playlist: playlist, tracks: playlist.tracks(in: library.tracks))
@@ -860,7 +877,7 @@ struct PlaylistsCollectionView: View {
                 Section("ios-youtube-music") {
                     Button("ios-create-playlist", systemImage: "plus") { createYouTube = true }
                     if catalog.isLoadingLibrary { ProgressView("ios-loading-library") }
-                    ForEach(catalog.savedPlaylists) { playlist in
+                    ForEach(catalog.savedPlaylists.filter { MusicSearch.matches(query, $0.title, $0.author) }) { playlist in
                         NavigationLink {
                             PlaylistDetailView(playlistID: playlist.id, fallbackTitle: playlist.title,
                                 fallbackAuthor: playlist.author, fallbackArtwork: playlist.artworkURL)
@@ -910,6 +927,8 @@ struct ArtistsCollectionView: View {
         }
     }
 
+    @State private var query = ""
+
     var body: some View {
         Group {
             if artists.isEmpty {
@@ -918,7 +937,7 @@ struct ArtistsCollectionView: View {
                     .modifier(ScrollableEmptyState())
             } else {
                 List {
-                    ForEach(LibraryAlphabet.groups(artists, title: { $0.name })) { group in
+                    ForEach(LibraryAlphabet.groups(artists.filter { MusicSearch.matches(query, $0.name) }, title: { $0.name })) { group in
                         Section {
                             ForEach(group.items) { artist in
                                 NavigationLink {
@@ -951,6 +970,7 @@ struct ArtistsCollectionView: View {
             }
         }
         .appNavigationTitle("ios-artists")
+        .collectionSearch(text: $query)
     }
 }
 
@@ -998,13 +1018,15 @@ struct AlbumsCollectionView: View {
 
     private var groups: [AlphabeticGroup<AlbumEntry>] {
         if sort == .year {
-            let grouped = Dictionary(grouping: albums) { $0.year.map(String.init) ?? String(localized: "ios-unknown-year") }
+            let grouped = Dictionary(grouping: albums.filter { MusicSearch.matches(query, $0.title, $0.artist, $0.year.map(String.init)) }) { $0.year.map(String.init) ?? String(localized: "ios-unknown-year") }
             return grouped.keys.sorted().map { key in
                 AlphabeticGroup(id: key, items: (grouped[key] ?? []).sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending })
             }
         }
-        return LibraryAlphabet.groups(albums) { sort == .title ? $0.title : $0.artist }
+        return LibraryAlphabet.groups(albums.filter { MusicSearch.matches(query, $0.title, $0.artist) }) { sort == .title ? $0.title : $0.artist }
     }
+
+    @State private var query = ""
 
     var body: some View {
         Group {
@@ -1044,6 +1066,7 @@ struct AlbumsCollectionView: View {
             }
         }
         .appNavigationTitle("ios-albums")
+        .collectionSearch(text: $query)
         .toolbar { ToolbarItem(placement: .primaryAction) {
             Menu {
                 Picker("ios-view-as", selection: $grid) {
@@ -1121,6 +1144,10 @@ struct SongsCollectionView: View {
             .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
+    @State private var query = ""
+
+    private var visibleSongs: [MusicTrack] { allSongs.filter { $0.matchesSearch(query) } }
+
     var body: some View {
         Group {
             if allSongs.isEmpty {
@@ -1143,7 +1170,8 @@ struct SongsCollectionView: View {
                             shuffleAction: { playback.playShuffled(allSongs) }
                         )
                     }
-                    ForEach(LibraryAlphabet.groups(allSongs, title: { $0.title })) { group in
+                    if visibleSongs.isEmpty && !query.isEmpty { ContentUnavailableView.search(text: query) }
+                    ForEach(LibraryAlphabet.groups(visibleSongs, title: { $0.title })) { group in
                         Section {
                             ForEach(group.items) { track in
                                 TrackRow(track: track) { playback.play(track, in: allSongs) }
@@ -1157,6 +1185,7 @@ struct SongsCollectionView: View {
             }
         }
         .appNavigationTitle("ios-songs")
+        .collectionSearch(text: $query)
     }
 }
 
@@ -1164,6 +1193,8 @@ struct SongsCollectionView: View {
 struct HistoryCollectionView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(PlaybackController.self) private var playback
+
+    @State private var query = ""
 
     var body: some View {
         Group {
@@ -1176,7 +1207,7 @@ struct HistoryCollectionView: View {
                 .modifier(ScrollableEmptyState())
             } else {
                 List {
-                    ForEach(settings.history) { track in
+                    ForEach(settings.history.filter { $0.matchesSearch(query) }) { track in
                         TrackRow(track: track) { playback.play(track, in: settings.history) }
                             .swipeActions {
                                 Button("ios-delete", role: .destructive) {
@@ -1189,6 +1220,7 @@ struct HistoryCollectionView: View {
             }
         }
         .appNavigationTitle("ios-history")
+        .collectionSearch(text: $query)
         .toolbar {
             if !settings.history.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1204,9 +1236,11 @@ struct PinsCollectionView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(PlaybackController.self) private var playback
 
+    @State private var query = ""
+
     var body: some View {
         List {
-            ForEach(settings.pins) { pin in
+            ForEach(settings.pins.filter { MusicSearch.matches(query, $0.title, $0.subtitle) }) { pin in
                 Group {
                     switch pin.kind {
                     case .track:
@@ -1242,6 +1276,7 @@ struct PinsCollectionView: View {
         }
         .listStyle(.plain)
         .appNavigationTitle("ios-pinned")
+        .collectionSearch(text: $query)
     }
 }
 
@@ -1290,6 +1325,8 @@ struct AlbumDetailView: View {
         detail?.tracks.map(\.track) ?? []
     }
 
+    @State private var query = ""
+
     var body: some View {
         List {
             Section {
@@ -1304,7 +1341,7 @@ struct AlbumDetailView: View {
             } else if let error {
                 Text(error).foregroundStyle(.secondary)
             } else {
-                ForEach(tracks) { track in
+                ForEach(tracks.filter { $0.matchesSearch(query) }) { track in
                     TrackRow(track: track) { playback.play(track, in: tracks, source: detail?.title ?? fallbackTitle) }
                 }
             }
@@ -1312,6 +1349,7 @@ struct AlbumDetailView: View {
         .listStyle(.plain)
         .collectionArtworkTheme(detail?.artwork_url ?? fallbackArtwork)
         .appNavigationTitle("")
+        .collectionSearch(text: $query)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -1380,6 +1418,8 @@ struct PlaylistDetailView: View {
         detail?.tracks.map(\.track) ?? []
     }
 
+    @State private var query = ""
+
     var body: some View {
         List {
             Section {
@@ -1394,7 +1434,7 @@ struct PlaylistDetailView: View {
             } else if let error {
                 Text(error).foregroundStyle(.secondary)
             } else {
-                ForEach(tracks) { track in
+                ForEach(tracks.filter { $0.matchesSearch(query) }) { track in
                     TrackRow(track: track) { playback.play(track, in: tracks, source: detail?.title ?? fallbackTitle) }
                         .swipeActions {
                             if detail?.editable == true,
@@ -1418,6 +1458,7 @@ struct PlaylistDetailView: View {
         .listStyle(.plain)
         .collectionArtworkTheme(detail?.artwork_url ?? fallbackArtwork)
         .appNavigationTitle("")
+        .collectionSearch(text: $query)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -1516,6 +1557,8 @@ struct ArtistDetailView: View {
         detail?.top_songs.map(\.track) ?? []
     }
 
+    @State private var query = ""
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Layout.spacing * 1.5) {
@@ -1562,22 +1605,22 @@ struct ArtistDetailView: View {
                             Text("ios-top-songs")
                                 .appFont(.title3, weight: .bold)
                                 .padding(.horizontal, Layout.spacing)
-                            ForEach(topSongs) { track in
+                            ForEach(topSongs.filter { $0.matchesSearch(query) }) { track in
                                 TrackRow(track: track) { playback.play(track, in: topSongs) }
                                     .padding(.horizontal, Layout.spacing)
                             }
                         }
                     }
 
-                    if let albums = detail?.albums.map(\.album), !albums.isEmpty {
+                    if let albums = detail?.albums.map(\.album).filter({ MusicSearch.matches(query, $0.title, $0.artist) }), !albums.isEmpty {
                         albumShelf(title: "ios-albums", albums: albums)
                     }
 
-                    if let singles = detail?.singles.map(\.album), !singles.isEmpty {
+                    if let singles = detail?.singles.map(\.album).filter({ MusicSearch.matches(query, $0.title, $0.artist) }), !singles.isEmpty {
                         albumShelf(title: "ios-singles", albums: singles)
                     }
 
-                    if let related = detail?.related.map(\.artist), !related.isEmpty {
+                    if let related = detail?.related.map(\.artist).filter({ MusicSearch.matches(query, $0.name) }), !related.isEmpty {
                         VStack(alignment: .leading, spacing: Layout.compact) {
                             Text("ios-similar-artists")
                                 .appFont(.title3, weight: .bold)
@@ -1601,6 +1644,7 @@ struct ArtistDetailView: View {
             }
             .padding(.vertical, Layout.spacing)
         }
+        .collectionSearch(text: $query)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -1670,6 +1714,8 @@ struct GenreDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
 
+    @State private var query = ""
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Layout.spacing * 1.5) {
@@ -1679,7 +1725,7 @@ struct GenreDetailView: View {
                 } else if let error {
                     Text(error).foregroundStyle(.secondary).padding(.horizontal, Layout.spacing)
                 } else {
-                    ForEach(sections) { section in
+                    ForEach(sections.compactMap { $0.matchingSearch(query) }) { section in
                         VStack(alignment: .leading, spacing: Layout.compact) {
                             Text(section.title)
                                 .appFont(.title3, weight: .bold)
@@ -1729,7 +1775,7 @@ struct GenreDetailView: View {
             }
             .padding(.vertical, Layout.spacing)
         }
-        .appNavigationTitle(genre.title)
+        .appNavigationTitle(genre.title).collectionSearch(text: $query)
         .task {
             do {
                 sections = try await NativeProvider.genre(params: genre.params)
@@ -1806,7 +1852,7 @@ struct SearchView: View {
             }
         }
         .appNavigationTitle("ios-search")
-        .searchable(text: $youtube.query, prompt: "ios-search-prompt")
+        .searchable(text: $youtube.query, placement: .navigationBarDrawer, prompt: "ios-search-prompt")
         .onSubmit(of: .search) { if scope == .youtube { youtube.submit(youtube.query) } }
         .onChange(of: youtube.query) { _, value in
             if value.isEmpty { youtube.clear() }

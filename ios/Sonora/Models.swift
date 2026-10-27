@@ -285,7 +285,11 @@ enum Layout {
     static let spacing: CGFloat = 16
     static let gridSpacing: CGFloat = 12
     static let compact: CGFloat = 8
-    static let playerSliderTrack: CGFloat = 3
+    static let playerSliderTrack: CGFloat = 6
+    static let volumeIdleTrack: CGFloat = 6
+    static let volumeActiveTrack: CGFloat = 18
+    static let volumeControlHeight: CGFloat = 24
+    static let queueProgressOverlap: CGFloat = playerSpacing + control / 2
     static let sliderIdleThumb: CGFloat = 2
     static let sliderTrackingThumb: CGFloat = 10
     static let rowArtworkRadius: CGFloat = 4

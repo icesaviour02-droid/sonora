@@ -33,6 +33,8 @@ struct LocalAlbumView: View {
     let albumID: String
     private var album: LocalAlbum? { LocalAlbum.collect(library.tracks).first { $0.id == albumID } }
 
+    @State private var query = ""
+
     var body: some View {
         Group {
             if let album {
@@ -40,7 +42,7 @@ struct LocalAlbumView: View {
                     MusicCollectionHeader(title: album.title, subtitle: album.artist,
                         artworkURL: album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL,
                         tracks: album.tracks, symbol: "square.stack")
-                    ForEach(album.tracks) { track in
+                    ForEach(album.tracks.filter { $0.matchesSearch(query) }) { track in
                         TrackRow(track: track) { playback.play(track, in: album.tracks) }
                     }
                 }
@@ -49,6 +51,7 @@ struct LocalAlbumView: View {
             } else { ContentUnavailableView("ios-albums", systemImage: "square.stack") }
         }
         .appNavigationTitle("")
+        .collectionSearch(text: $query)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -78,6 +81,8 @@ struct LocalArtistView: View {
     let name: String
     private var tracks: [MusicTrack] { library.tracks.filter { $0.artist.lowercased() == name.lowercased() } }
 
+    @State private var query = ""
+
     var body: some View {
         List {
             Section {
@@ -88,18 +93,19 @@ struct LocalArtistView: View {
                 }.disabled(tracks.isEmpty)
             }
             Section("ios-albums") {
-                ForEach(LocalAlbum.collect(tracks)) { album in
+                ForEach(LocalAlbum.collect(tracks).filter { MusicSearch.matches(query, $0.title, $0.artist) }) { album in
                     NavigationLink { LocalAlbumView(albumID: album.id) } label: {
                         HStack(spacing: Layout.spacing) { ArtworkView(track: album.tracks.first, side: Layout.rowArtwork); Text(album.title) }
                     }
                 }
             }
             Section("ios-songs") {
-                ForEach(tracks) { track in TrackRow(track: track) { playback.play(track, in: tracks) } }
+                ForEach(tracks.filter { $0.matchesSearch(query) }) { track in TrackRow(track: track) { playback.play(track, in: tracks) } }
             }
         }
         .listStyle(.plain)
         .appNavigationTitle(name)
+        .collectionSearch(text: $query)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(local.isFavorite(name.lowercased(), category: .artists) ? "ios-remove-favorite" : "ios-favorite",

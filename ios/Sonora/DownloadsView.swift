@@ -15,7 +15,19 @@ struct DownloadsView: View {
         }.prefix(8))
     }
 
+    @State private var query = ""
+
     var body: some View {
+        Group {
+            if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                MusicPageSearchResults(query: query, offlineOnly: true)
+            } else { downloadList }
+        }
+        .collectionSearch(text: $query)
+        .appNavigationTitle("ios-downloads")
+    }
+
+    private var downloadList: some View {
         List {
             if !tracks.isEmpty {
                 Section {
@@ -72,7 +84,7 @@ struct DownloadsView: View {
 }
 
 /// A transfer's controls stay enabled while its song is not yet playable.
-private struct DownloadTransferRow: View {
+struct DownloadTransferRow: View {
     @Environment(DownloadsStore.self) private var downloads
     let entry: DownloadEntry
     var body: some View {
@@ -135,7 +147,8 @@ struct DownloadedSongsView: View {
             }
         }
         .listSectionIndexVisibility(sort == .recent ? .hidden : .visible)
-        .listStyle(.plain).searchable(text: $query).appNavigationTitle("ios-songs")
+        .listStyle(.plain).collectionSearch(text: $query).appNavigationTitle("ios-songs")
+        .overlay { if !query.isEmpty && tracks.isEmpty { ContentUnavailableView.search(text: query) } }
         .toolbar { ToolbarItem(placement: .primaryAction) {
             Menu {
                 Picker("ios-sort-by", selection: $sort) { ForEach(DownloadSort.allCases) { Text($0.label).tag($0) } }
@@ -167,7 +180,8 @@ struct DownloadedAlbumsView: View {
     @Environment(DownloadsStore.self) private var downloads
     @Environment(PlaybackController.self) private var playback
     @AppStorage("sonora.downloaded-albums.grid") private var grid = true
-    private var albums: [LocalAlbum] { LocalAlbum.collect(downloads.completedTracks) }
+    @State private var query = ""
+    private var albums: [LocalAlbum] { LocalAlbum.collect(downloads.completedTracks).filter { MusicSearch.matches(query, $0.title, $0.artist) } }
 
     var body: some View {
         List {
@@ -183,7 +197,7 @@ struct DownloadedAlbumsView: View {
                 .sectionIndexLabel(Text(group.id))
             }
         }
-        .listStyle(.plain).listSectionIndexVisibility(.visible).appNavigationTitle("ios-albums")
+        .listStyle(.plain).listSectionIndexVisibility(.visible).appNavigationTitle("ios-albums").collectionSearch(text: $query)
         .toolbar { ToolbarItem(placement: .primaryAction) { CollectionGridMenu(grid: $grid) } }
     }
 
@@ -204,7 +218,8 @@ struct DownloadedAlbumsView: View {
 
 struct DownloadedArtistsView: View {
     @Environment(DownloadsStore.self) private var downloads
-    private var names: [String] { Array(Set(downloads.completedTracks.map(\.artist))) }
+    @State private var query = ""
+    private var names: [String] { Array(Set(downloads.completedTracks.map(\.artist))).filter { MusicSearch.matches(query, $0) } }
     var body: some View {
         List {
             ForEach(LibraryAlphabet.groups(names, title: { $0 })) { group in
@@ -225,22 +240,23 @@ struct DownloadedArtistsView: View {
                 } header: { Text(group.id).appFont(.headline) }
                 .sectionIndexLabel(Text(group.id))
             }
-        }.listStyle(.plain).listSectionIndexVisibility(.visible).appNavigationTitle("ios-artists")
+        }.listStyle(.plain).listSectionIndexVisibility(.visible).appNavigationTitle("ios-artists").collectionSearch(text: $query)
     }
 }
 
 struct DownloadedPlaylistsView: View {
     @Environment(DownloadsStore.self) private var downloads
     @AppStorage("sonora.downloaded-playlists.grid") private var grid = true
+    @State private var query = ""
     private var playlists: [DownloadedPlaylist] {
-        downloads.playlists.filter { !downloads.tracks(in: $0).isEmpty }
+        downloads.playlists.filter { !downloads.tracks(in: $0).isEmpty && MusicSearch.matches(query, $0.title, $0.author) }
             .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
     var body: some View {
         List {
             if grid { CollectionGridRows(playlists) { playlist in playlistLink(playlist) } }
             else { ForEach(playlists) { playlist in playlistLink(playlist) } }
-        }.listStyle(.plain).appNavigationTitle("ios-playlists")
+        }.listStyle(.plain).appNavigationTitle("ios-playlists").collectionSearch(text: $query)
         .toolbar { ToolbarItem(placement: .primaryAction) { CollectionGridMenu(grid: $grid) } }
         .overlay {
             if playlists.isEmpty {
@@ -270,6 +286,7 @@ struct DownloadedCollectionView: View {
     let subtitle: String
     let artwork: URL?
     let trackIDs: [String]
+    @State private var query = ""
     private var tracks: [MusicTrack] {
         let byID = Dictionary(downloads.completedTracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return trackIDs.compactMap { byID[$0] }
@@ -278,12 +295,12 @@ struct DownloadedCollectionView: View {
         List {
             MusicCollectionHeader(title: title, subtitle: subtitle, artworkURL: artwork, tracks: tracks,
                 description: String(localized: "ios-offline-songs-only"))
-            ForEach(tracks) { track in
+            ForEach(tracks.filter { $0.matchesSearch(query) }) { track in
                 TrackRow(track: track) { playback.play(track, in: tracks, source: title) }
                     .swipeActions { Button("ios-remove-download", role: .destructive) { downloads.remove(track.id) } }
             }
         }.listStyle(.plain).navigationBarTitleDisplayMode(.inline)
-        .appNavigationTitle("").collectionArtworkTheme(artwork)
+        .appNavigationTitle("").collectionSearch(text: $query).collectionArtworkTheme(artwork)
     }
 }
 

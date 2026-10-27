@@ -8,10 +8,20 @@ struct FadingText: UIViewRepresentable {
     let text: String
     let weight: UIFont.Weight
     let color: UIColor
+    private let fixedPointSize: CGFloat?
+    private let lines: Int
 
     init(_ text: String, style: Font.TextStyle, weight: UIFont.Weight = .regular, color: UIColor = .label) {
         self.text = text; self.weight = weight; self.color = color
+        self.fixedPointSize = nil; self.lines = 1
         _pointSize = ScaledMetric(wrappedValue: InterfaceTypography.baselineSize(style), relativeTo: style)
+    }
+
+    /// Already-scaled values allow the player to interpolate text size with its cover geometry.
+    init(_ text: String, fixedPointSize: CGFloat, weight: UIFont.Weight = .regular, color: UIColor = .label, lines: Int = 1) {
+        self.text = text; self.weight = weight; self.color = color
+        self.fixedPointSize = fixedPointSize; self.lines = lines
+        _pointSize = ScaledMetric(wrappedValue: fixedPointSize, relativeTo: .body)
     }
 
     func makeUIView(context: Context) -> TailFadingLabel {
@@ -24,6 +34,9 @@ struct FadingText: UIViewRepresentable {
     }
 
     func updateUIView(_ label: TailFadingLabel, context: Context) {
+        let pointSize = fixedPointSize ?? self.pointSize
+        label.numberOfLines = lines
+        label.lineBreakMode = lines == 1 ? .byClipping : .byWordWrapping
         let system = UIFont.systemFont(ofSize: pointSize, weight: weight)
         if typeface == "rounded", let rounded = system.fontDescriptor.withDesign(.rounded) {
             label.font = UIFont(descriptor: rounded, size: pointSize)
@@ -42,7 +55,9 @@ struct FadingText: UIViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: TailFadingLabel, context: Context) -> CGSize? {
         let natural = uiView.intrinsicContentSize
         let width = proposal.width ?? natural.width
-        return CGSize(width: width.isFinite ? max(0, width) : natural.width, height: natural.height)
+        let fittedWidth = width.isFinite ? max(0, width) : natural.width
+        let height = lines == 1 ? natural.height : uiView.sizeThatFits(CGSize(width: fittedWidth, height: .greatestFiniteMagnitude)).height
+        return CGSize(width: fittedWidth, height: height)
     }
 }
 
@@ -52,7 +67,7 @@ final class TailFadingLabel: UILabel {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        guard bounds.width > 0, intrinsicContentSize.width > bounds.width else { layer.mask = nil; return }
+        guard numberOfLines == 1, bounds.width > 0, intrinsicContentSize.width > bounds.width else { layer.mask = nil; return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         fade.frame = bounds

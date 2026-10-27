@@ -61,6 +61,18 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(app.buttons["download-songs"].waitForExistence(timeout: 30))
         app.buttons["download-songs"].tap()
         XCTAssertTrue(app.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 10))
+        app.collectionViews.matching(NSPredicate(format: "hittable == true")).firstMatch.swipeDown()
+        let search = app.searchFields.matching(NSPredicate(format: "hittable == true")).firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 8))
+        search.tap()
+        let missing = "zzNoMatchzz"
+        search.typeText(missing)
+        expectation(for: NSPredicate { _, _ in !app.staticTexts["Sonora Review Tone"].firstMatch.exists }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+        search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: missing.count) + "Review")
+        XCTAssertTrue(app.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 8))
+        let cancel = app.buttons.matching(identifier: "Cancel").allElementsBoundByIndex.first { $0.isHittable }
+        cancel?.tap()
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["download-albums"].tap()
         XCTAssertTrue(app.staticTexts["Sonora Review Album"].firstMatch.waitForExistence(timeout: 10))
@@ -69,6 +81,30 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Sonora Saved Playlist"].firstMatch.waitForExistence(timeout: 10))
         app.staticTexts["Sonora Saved Playlist"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 10))
+    }
+
+    func testQueueHistoryKeepsPlaybackControlsAvailable() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--sonora-review-history", "--sonora-review-url",
+            "sonora://queuereview?id=jfKfPfyJRdk&title=Sonora%20History%20Interaction&artist=Sonora"]
+        app.launch()
+        XCTAssertTrue(app.buttons["queue-add-songs"].waitForExistence(timeout: 30))
+        let queue = app.collectionViews["player-queue-list"]
+        XCTAssertTrue(queue.exists)
+        queue.swipeDown()
+        let clear = app.buttons["queue-clear-history"]
+        expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: clear)
+        waitForExpectations(timeout: 8)
+        queue.swipeDown()
+        queue.swipeDown()
+        XCTAssertTrue(clear.isHittable)
+        XCTAssertTrue(app.buttons["player-previous"].isHittable)
+        expectation(for: NSPredicate(format: "hittable == false"), evaluatedWith: app.buttons["player-return-artwork"])
+        waitForExpectations(timeout: 8)
+        clear.tap()
+        expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: app.buttons["player-return-artwork"])
+        waitForExpectations(timeout: 8)
     }
 
     func testQueueReorderSwipeAddAndClear() {

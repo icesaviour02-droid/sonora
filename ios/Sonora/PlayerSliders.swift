@@ -87,8 +87,8 @@ import UIKit
             UIColor.white.setFill()
             context.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: Layout.sliderTrackingThumb, height: Layout.sliderTrackingThumb))
         }
-    static func track(alpha: CGFloat) -> UIImage {
-        let side = Layout.playerSliderTrack
+    static func track(alpha: CGFloat, height: CGFloat = Layout.playerSliderTrack) -> UIImage {
+        let side = height
         return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { context in
             UIColor.white.withAlphaComponent(alpha).setFill()
             context.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: side, height: side))

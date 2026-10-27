@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Pull-down search filters songs, artists, albums, playlists, downloads and collection details, with page-wide search in Library and Downloads.
+
 - iPhone Downloads groups saved music into songs, albums, artists and downloaded playlists, with search, sorting and separate retry/cancel controls for unfinished transfers.
 
 - iPhone users can create and edit local playlists without a streaming account, reorder their songs, and keep track, album and artist favorites on the device.
@@ -37,6 +39,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Account playback compatibility is still under verification.
 
 ### Fixed
+
+- Queue history keeps its heading visible while scrolling. The current cover, title and controls share a fade at the progress track and cannot draw over playback controls.
+- Player mode changes move one visible title/artist layer, removing the duplicate title fade. The volume track expands while touched and returns to its idle size afterward.
 
 - iPhone Library uses compact category rows, an inline large title and a real Recently Added cover grid. Optional Sonora collections can be shown through Edit Library.
 - Player artwork moves between full and compact modes as one persistent cover instead of disappearing between image views. Revealed queue history has a separate gap before the current song.
