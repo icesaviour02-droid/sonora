@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Long-press iPhone queue and history songs to open native preview menus for queue order, favorites, playlists, downloads and removal.
+
 - Swipe across iPhone player artwork or metadata to preview and switch between actual queue entries, preserving paused playback.
 - Edit Library categories inline with animated selection controls and persisted drag reordering.
 
@@ -42,6 +44,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Account playback compatibility is still under verification.
 
 ### Fixed
+
+- Now Playing covers the entire iPhone screen and follows downward pulls from artwork or empty space back to the mini-player, including canceled gestures.
+- Queue metadata and action controls stay in one moving layer, avoiding the final control handoff. Mini-player labels are smaller, and volume activation changes track geometry without scaling its rendered pixels.
 
 - Tap or drag anywhere on the iPhone progress control to seek, with precise native audio positioning and protection against stale clock updates.
 - Player artwork now travels between its actual mini-player and expanded positions with the native sheet transition. Queue favorite/menu controls move with the metadata, history stops beneath its heading, and the queue button shows active-mode glyphs.

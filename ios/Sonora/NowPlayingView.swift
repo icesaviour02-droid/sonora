@@ -24,14 +24,7 @@ struct MiniPlayer: View {
                         .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 0) {
-                        HStack(spacing: 4) {
-                            FadingText(playback.current?.title ?? "", fixedPointSize: titleSize, weight: .semibold)
-                            if playback.current?.explicit == true {
-                                Image(systemName: "e.square.fill")
-                                    .appFont(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        FadingText(playback.current?.title ?? "", fixedPointSize: titleSize, weight: .semibold)
                         FadingText(playback.current?.artist ?? "", fixedPointSize: artistSize, color: UIColor.label.withAlphaComponent(0.88))
                     }
                     Spacer(minLength: 0)
@@ -54,7 +47,7 @@ struct MiniPlayer: View {
                             .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                     }
                 }
-                .frame(minWidth: Layout.control, minHeight: Layout.control)
+                .frame(width: Layout.control, height: Layout.control)
             }
             .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text((playback.isPlaying || playback.isLoading) ? LocalizedStringKey("ios-pause") : LocalizedStringKey("ios-play")))
@@ -91,7 +84,6 @@ struct NowPlayingView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(LocalLibraryStore.self) private var localLibrary
     @Environment(CatalogStore.self) private var catalog
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -110,6 +102,9 @@ struct NowPlayingView: View {
     @State private var lyrics = LyricsStore()
     @State private var chooseLocalPlaylist = false
     @State private var addQueueSongs = false
+    @State private var queuePlaylistTrack: MusicTrack?
+    @State private var modeMotionActive = false
+    @State private var modeMotionID = UUID()
     @State private var queueHeaderOffset: CGFloat = 0
     @State private var queueHeaderHeight: CGFloat = Layout.queueHeaderArtwork + Layout.queueModeHeight + Layout.spacing * 2
     @State private var trackHeaderHeight: CGFloat = Layout.playerTitleReserve
@@ -121,17 +116,16 @@ struct NowPlayingView: View {
     @State private var contentViewport: CGRect = .zero
     @State private var controlsFrame: CGRect = .zero
     @State private var controlsMode: Mode = .artwork
-    @State private var controlsMoving = false
-    @State private var controlsMotionID = UUID()
     @State private var historyHeaderBottom: CGFloat = 0
     @ScaledMetric(relativeTo: .title3) private var expandedTitleSize: CGFloat = Layout.playerTitleSize
     @ScaledMetric(relativeTo: .body) private var compactTitleSize: CGFloat = InterfaceTypography.baselineSize(.body)
     @ScaledMetric(relativeTo: .title3) private var expandedArtistSize: CGFloat = Layout.playerArtistSize
 
     let hero: PlayerHeroState?
+    let close: () -> Void
 
-    init(initialMode: String = "artwork", hero: PlayerHeroState? = nil) {
-        self.hero = hero
+    init(initialMode: String = "artwork", hero: PlayerHeroState? = nil, close: @escaping () -> Void = {}) {
+        self.hero = hero; self.close = close
         _mode = State(initialValue: initialMode == "lyrics" ? .lyrics : (initialMode == "queue" ? .queue : .artwork))
     }
 
@@ -159,11 +153,8 @@ struct NowPlayingView: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
-        .background { if let hero { PlayerHeroObserver(hero: hero, image: playback.currentArtwork) } }
+        .onChange(of: playback.currentArtwork) { _, image in hero?.improveImage(image) }
         .preferredColorScheme(.dark)
-        .presentationDetents([.large])
-        .presentationDragIndicator(.hidden)
-        .interactiveDismissDisabled(mode != .artwork)
         .sensoryFeedback(.selection, trigger: mode)
         .onAppear { loadLyricsIfNeeded() }
         .onChange(of: playback.currentQueueID) { _, _ in resetTrackSwipe(); loadLyricsIfNeeded() }
@@ -173,6 +164,9 @@ struct NowPlayingView: View {
         .onDisappear { lyrics.cancel() }
         .sheet(isPresented: $addQueueSongs) {
             NavigationStack { QueueSongsPicker() }
+        }
+        .sheet(item: $queuePlaylistTrack) { track in
+            NavigationStack { AddToLocalPlaylistView(trackIDs: [track.id]) }
         }
         .sheet(isPresented: $chooseLocalPlaylist) {
             NavigationStack { AddToLocalPlaylistView(trackIDs: playback.current.map { [$0.id] } ?? []) }
@@ -198,10 +192,10 @@ struct NowPlayingView: View {
                        maxHeight: expands ? .infinity : nil)
             }
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("player-artwork-space")) } action: { contentViewport = $0 }
-            scrubberSection.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            transportControls.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            volumeSection.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            bottomModeBar.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            scrubberSection.dynamicTypeSize(...DynamicTypeSize.xxxLarge).background { PlayerDismissExclusion() }
+            transportControls.dynamicTypeSize(...DynamicTypeSize.xxxLarge).background { PlayerDismissExclusion() }
+            volumeSection.dynamicTypeSize(...DynamicTypeSize.xxxLarge).background { PlayerDismissExclusion() }
+            bottomModeBar.dynamicTypeSize(...DynamicTypeSize.xxxLarge).background { PlayerDismissExclusion() }
         }
         .padding(.horizontal, Layout.playerMargin)
         .padding(.top, Layout.compact)
@@ -245,11 +239,13 @@ struct NowPlayingView: View {
                         .position(x: metadataFrame.midX, y: metadataFrame.midY)
                 }
             }
-                if controlsMoving, !controlsFrame.isEmpty {
-                    HStack(spacing: Layout.compact) { favoriteGlyph; overflowGlyph }
+                if !controlsFrame.isEmpty {
+                    HStack(spacing: Layout.compact) { favoriteControl; overflowMenu }
                         .frame(width: controlsFrame.width, height: controlsFrame.height)
+                        .background { PlayerDismissExclusion() }
                         .position(x: controlsFrame.midX, y: controlsFrame.midY)
-                        .allowsHitTesting(false).accessibilityHidden(true)
+                        .allowsHitTesting(actionsVisible)
+                        .accessibilityHidden(!actionsVisible)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -257,12 +253,10 @@ struct NowPlayingView: View {
         }
         .onPreferenceChange(PlayerActionsFrame.self) { target in
             guard !target.isEmpty else { return }
-            let changingMode = controlsMode != mode
+            let animate = !controlsFrame.isEmpty && controlsMode != mode
             controlsMode = mode
-            if (changingMode || controlsMoving) && !reduceMotion {
-                controlsMotionID = UUID()
-                let token = controlsMotionID
-                withAnimation(PlayerMotion.mode, completionCriteria: .logicallyComplete) { controlsFrame = target } completion: { if controlsMotionID == token { controlsMoving = false } }
+            if (animate || modeMotionActive) && !reduceMotion {
+                withAnimation(PlayerMotion.mode) { controlsFrame = target }
             } else {
                 var transaction = Transaction(); transaction.disablesAnimations = true
                 withTransaction(transaction) { controlsFrame = target }
@@ -275,7 +269,7 @@ struct NowPlayingView: View {
             guard !target.isEmpty else { return }
             let animate = !metadataFrame.isEmpty && metadataMode != mode
             metadataMode = mode
-            if animate && !reduceMotion {
+            if (animate || modeMotionActive) && !reduceMotion {
                 withAnimation(PlayerMotion.mode) { metadataFrame = target }
             } else {
                 var transaction = Transaction(); transaction.disablesAnimations = true
@@ -288,7 +282,7 @@ struct NowPlayingView: View {
             let animate = !artworkFrame.isEmpty && (modeChanged || artworkWasPlaying != playback.isPlaying)
             artworkMode = mode
             artworkWasPlaying = playback.isPlaying
-            if animate && !reduceMotion {
+            if (animate || modeMotionActive) && !reduceMotion {
                 withAnimation(modeChanged ? PlayerMotion.mode : PlayerMotion.artworkScale) { artworkFrame = target }
             } else {
                 var transaction = Transaction()
@@ -370,7 +364,7 @@ struct NowPlayingView: View {
         HStack {
             Spacer()
             Button {
-                dismiss()
+                close()
             } label: {
                 Capsule()
                     .fill(.white.opacity(0.38))
@@ -381,12 +375,6 @@ struct NowPlayingView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text("ios-done"))
             .accessibilityIdentifier("player-dismiss")
-            .simultaneousGesture(DragGesture(minimumDistance: Layout.compact).onEnded { gesture in
-                guard mode != .artwork else { return }
-                if gesture.translation.height > Layout.control || gesture.predictedEndTranslation.height > Layout.control * 2 {
-                    dismiss()
-                }
-            })
             Spacer()
         }
         .frame(height: Layout.grabberHeight)
@@ -453,18 +441,10 @@ struct NowPlayingView: View {
         }
     }
 
-    /// Stable controls stay in their real native row; only their moving visual layer is shared between modes.
+    /// Layout placeholders never swap with the real controls; one persistent interactive row moves above them.
     private func trackActions(presentation: Mode, measuring: Bool = true) -> some View {
-        HStack(spacing: Layout.compact) {
-            if mode == presentation && !controlsMoving && !(presentation == .queue && measuring) {
-                favoriteControl; overflowMenu
-            } else {
-                favoriteGlyph; overflowGlyph
-            }
-        }
-            .transaction { $0.animation = nil }
-            .opacity(controlsMoving ? 0 : 1)
-            .accessibilityHidden(controlsMoving || mode != presentation || (presentation == .queue && measuring))
+        HStack(spacing: Layout.compact) { favoriteGlyph; overflowGlyph }
+            .hidden().accessibilityHidden(true)
             .background {
                 if measuring {
                     GeometryReader { geometry in
@@ -473,6 +453,11 @@ struct NowPlayingView: View {
                     }
                 }
             }
+    }
+
+    private var actionsVisible: Bool {
+        let top = contentViewport.minY + (mode == .queue ? historyHeaderBottom : 0)
+        return controlsFrame.maxY > top && controlsFrame.minY < contentViewport.maxY
     }
 
     private var trackTitles: some View {
@@ -726,11 +711,12 @@ struct NowPlayingView: View {
                                 if mode == .queue {
                                     if !artworkFrame.isEmpty { artworkFrame.origin.y += delta }
                                     if !metadataFrame.isEmpty { metadataFrame.origin.y += delta }
+                                    if !controlsFrame.isEmpty { controlsFrame.origin.y += delta }
                                 }
                             }
                         }
                     }
-                }, addSongs: { addQueueSongs = true })
+                }, addToPlaylist: { queuePlaylistTrack = $0 }, addSongs: { addQueueSongs = true })
             // Layout-only twin supplies root-space targets; controls actually live inside UIKit's scroll view.
             queueHeaderContent(measuring: true)
                 .hidden().allowsHitTesting(false).accessibilityHidden(true)
@@ -753,7 +739,6 @@ struct NowPlayingView: View {
     private var queueHeaderRevision: Int {
         var value = Hasher()
         value.combine(playback.current)
-        value.combine(controlsMoving)
         value.combine(playback.isShuffled)
         value.combine(playback.repeatMode.symbol)
         value.combine(settings.autoplayRadio)
@@ -983,12 +968,13 @@ struct NowPlayingView: View {
     /// Each opening begins at the current song; a previous history scroll cannot move the cover target.
     private func changeMode(_ next: Mode) {
         resetTrackSwipe()
-        controlsMotionID = UUID()
-        controlsMoving = !reduceMotion && !controlsFrame.isEmpty && next != mode
-        withAnimation(reduceMotion ? nil : PlayerMotion.mode) {
+        modeMotionID = UUID()
+        let token = modeMotionID
+        modeMotionActive = !reduceMotion
+        withAnimation(reduceMotion ? nil : PlayerMotion.mode, completionCriteria: .removed) {
             if next == .queue && mode != .queue { queueHeaderOffset = 0 }
             mode = next
-        }
+        } completion: { if modeMotionID == token { modeMotionActive = false } }
     }
 
     private func loadLyricsIfNeeded() {

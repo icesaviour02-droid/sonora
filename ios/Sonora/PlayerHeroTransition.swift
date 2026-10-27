@@ -2,7 +2,7 @@ import Observation
 import SwiftUI
 import UIKit
 
-/// Carries one cover above the native sheet transition, including its interactive cancellation path.
+/// Carries one cover above the fullscreen transition, including its interactive cancellation path.
 @MainActor @Observable final class PlayerHeroState {
     private(set) var coversHidden = false
     @ObservationIgnored private weak var mini: UIView?
@@ -10,17 +10,14 @@ import UIKit
     @ObservationIgnored private var cover: UIImageView?
     @ObservationIgnored private var image: UIImage?
     @ObservationIgnored private var sourceRect: CGRect = .zero
-    @ObservationIgnored private var openingCoordinator: (any UIViewControllerTransitionCoordinator)?
     @ObservationIgnored private var opening = false
     @ObservationIgnored private var animating = false
-    @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var coordinatorGeneration: UUID?
     @ObservationIgnored private var prepareTask: Task<Void, Never>?
 
     func register(_ view: UIView, role: PlayerHeroAnchor.Role) {
         switch role {
         case .mini: mini = view
-        case .expanded: expanded = view; animateOpeningIfReady()
+        case .expanded: expanded = view
         }
     }
 
@@ -33,7 +30,7 @@ import UIKit
         self.image = image ?? snapshot(in: window, rect: sourceRect)
         guard let image = self.image else { return }
         opening = true
-        install(image: image, rect: sourceRect, radius: Layout.miniArtworkRadius, in: window)
+        self.image = image
         prepareTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled, let self, self.opening, !self.animating else { return }
@@ -41,60 +38,21 @@ import UIKit
         }
     }
 
-    func opening(with coordinator: (any UIViewControllerTransitionCoordinator)?, image: UIImage?) {
-        if !opening { prepareOpening(image: image) }
-        openingCoordinator = coordinator
-        animateOpeningIfReady()
-    }
-
-    private func animateOpeningIfReady() {
-        guard opening, !animating, let cover, let expanded, let window = expanded.window else { return }
-        let target = expanded.convert(expanded.bounds, to: window)
-        guard target.width > Layout.control, target.height > Layout.control else { return }
-        animating = true
-        prepareTask?.cancel(); prepareTask = nil
-        let token = generation
-        let changes: () -> Void = { cover.frame = target; cover.layer.cornerRadius = Layout.artworkRadius }
-        if let coordinator = openingCoordinator {
-            coordinatorGeneration = token
-            let queued = coordinator.animateAlongsideTransition(in: window, animation: { _ in changes() }, completion: { [weak self] _ in
-                guard let self, self.generation == token, self.coordinatorGeneration == token else { return }; self.finish()
-            })
-            if queued { return }
-            coordinatorGeneration = nil
-        }
-        UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0,
-            options: [.beginFromCurrentState, .allowUserInteraction], animations: changes) { [weak self] _ in
-                guard let self, self.generation == token else { return }; self.finish()
-            }
-    }
-
-    /// UIKit's coordinator drives the same cover when a sheet drag finishes or reverses.
-    func closing(with coordinator: (any UIViewControllerTransitionCoordinator)?, image: UIImage?) {
+    /// The same native interactive animator interpolates the panel and cover with no independent timing.
+    func beginFlight(opening: Bool, in container: UIView) -> (() -> Void)? {
         guard !UIAccessibility.isReduceMotionEnabled, let mini, let expanded,
-              let window = expanded.window, mini.window === window else { finish(); return }
-        let start = expanded.convert(expanded.bounds, to: window)
-        let target = mini.convert(mini.bounds, to: window)
-        guard !start.isEmpty, !target.isEmpty,
-              let image = image ?? snapshot(in: window, rect: start) ?? self.image else { finish(); return }
+              let window = expanded.window, mini.window === window else { finish(); return nil }
+        let large = expanded.convert(expanded.bounds, to: window)
+        let small = opening && !sourceRect.isEmpty ? sourceRect : mini.convert(mini.bounds, to: window)
+        guard !large.isEmpty, !small.isEmpty,
+              let image = image ?? snapshot(in: window, rect: opening ? small : large) else { finish(); return nil }
         finish()
-        install(image: image, rect: start, radius: Layout.artworkRadius, in: window)
-        guard let cover else { return }
+        install(image: image, rect: opening ? small : large,
+            radius: opening ? Layout.miniArtworkRadius : Layout.artworkRadius, in: window)
         animating = true
-        prepareTask?.cancel(); prepareTask = nil
-        let token = generation
-        let changes: () -> Void = { cover.frame = target; cover.layer.cornerRadius = Layout.miniArtworkRadius }
-        if let coordinator {
-            coordinatorGeneration = token
-            let queued = coordinator.animateAlongsideTransition(in: window, animation: { _ in changes() }, completion: { [weak self] _ in
-                guard let self, self.generation == token, self.coordinatorGeneration == token else { return }; self.finish()
-            })
-            if queued { return }
-            coordinatorGeneration = nil
-        }
-        UIView.animate(withDuration: 0.4, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction], animations: changes) { [weak self] _ in
-            guard let self, self.generation == token else { return }; self.finish()
-        }
+        let destination = opening ? large : small
+        guard let cover else { return nil }
+        return { cover.frame = destination; cover.layer.cornerRadius = opening ? Layout.artworkRadius : Layout.miniArtworkRadius }
     }
 
     func improveImage(_ image: UIImage?) {
@@ -103,18 +61,15 @@ import UIKit
         cover?.image = image
     }
 
-    func finishIfNotAnimating() { if !animating { finish() } }
     func finish() {
-        generation = UUID(); coordinatorGeneration = nil
         prepareTask?.cancel(); prepareTask = nil
         cover?.removeFromSuperview(); cover = nil
-        opening = false; animating = false; openingCoordinator = nil
+        opening = false; animating = false; sourceRect = .zero
         var transaction = Transaction(); transaction.disablesAnimations = true
         withTransaction(transaction) { coversHidden = false }
     }
 
     private func install(image: UIImage, rect: CGRect, radius: CGFloat, in window: UIWindow) {
-        generation = UUID()
         let view = UIImageView(image: image)
         view.frame = rect; view.contentMode = .scaleAspectFill; view.clipsToBounds = true
         view.layer.cornerRadius = radius; view.isUserInteractionEnabled = false; view.isAccessibilityElement = false
@@ -152,45 +107,5 @@ struct PlayerHeroAnchor: UIViewRepresentable {
         override func didMoveToWindow() { super.didMoveToWindow(); report() }
         override func layoutSubviews() { super.layoutSubviews(); report() }
         func report() { guard window != nil, bounds.width > 0 else { return }; hero?.register(self, role: role) }
-    }
-}
-
-/// Observes the sheet's real transition coordinator without replacing native modal gestures or menus.
-struct PlayerHeroObserver: UIViewControllerRepresentable {
-    let hero: PlayerHeroState
-    let image: UIImage?
-    func makeUIViewController(context: Context) -> Controller { Controller(hero: hero, image: image) }
-    func updateUIViewController(_ controller: Controller, context: Context) { controller.image = image; hero.improveImage(image) }
-
-    final class Controller: UIViewController {
-        let hero: PlayerHeroState
-        var image: UIImage?
-        private var appeared = false
-        init(hero: PlayerHeroState, image: UIImage?) { self.hero = hero; self.image = image; super.init(nibName: nil, bundle: nil) }
-        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-        override func loadView() { view = UIView(); view.isUserInteractionEnabled = false }
-        private var sheet: UIViewController? {
-            var candidate: UIViewController? = self
-            var result: UIViewController?
-            while let value = candidate {
-                if value.presentingViewController != nil { result = value }
-                candidate = value.parent
-            }
-            return result
-        }
-        override func viewWillAppear(_ animated: Bool) {
-            super.viewWillAppear(animated)
-            guard !appeared else { return }
-            hero.opening(with: sheet?.transitionCoordinator ?? transitionCoordinator, image: image)
-        }
-        override func viewDidAppear(_ animated: Bool) {
-            super.viewDidAppear(animated); appeared = true; hero.finishIfNotAnimating()
-        }
-        override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
-            guard let sheet, sheet.isBeingDismissed || sheet.parent?.isBeingDismissed == true else { return }
-            hero.closing(with: sheet.transitionCoordinator ?? transitionCoordinator, image: image)
-        }
-        override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); hero.finishIfNotAnimating() }
     }
 }

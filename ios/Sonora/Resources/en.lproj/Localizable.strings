@@ -201,6 +201,7 @@
 "ios-pin" = "Pin to Home";
 "ios-pinned" = "Pinned";
 "ios-play" = "Play";
+"ios-play-last" = "Play Last";
 "ios-play-next" = "Play Next";
 "ios-playback-audio" = "Audio & Playback";
 "ios-playback-error" = "This file could not be played. Try another supported audio file.";
@@ -234,6 +235,7 @@
 "ios-remove-all-downloads" = "Remove All Downloads";
 "ios-remove-download" = "Remove download";
 "ios-remove-favorite" = "Undo Favorite";
+"ios-remove-from-history" = "Remove from History";
 "ios-remove-from-library" = "Remove from Library";
 "ios-remove-from-queue" = "Remove from Queue";
 "ios-rename-playlist" = "Rename Playlist";

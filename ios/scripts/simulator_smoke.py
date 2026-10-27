@@ -124,7 +124,7 @@ def run_interactions(udid, export_images=True):
     try:
         subprocess.run(["xcodebuild", "test-without-building", "-xctestrun", str(test_run),
             "-destination", "id=" + udid, "-parallel-testing-enabled", "NO",
-            "-resultBundlePath", str(bundle)], check=True, timeout=480)
+            "-resultBundlePath", str(bundle)], check=True, timeout=600)
         failed = False
     finally:
         if failed: export_crash_summaries(bundle)
@@ -198,7 +198,7 @@ def review_interactions_only(udid, container):
     run_interactions(udid, export_images=False)
     (OUTPUT / "review-scope.json").write_text(json.dumps({
         "scope": "interactions", "passed": True,
-        "checks": ["download_categories_and_search_navigation", "playlist_rename", "queue_editing", "player_and_lyrics_source_menu", "queue_history_clipping", "artwork_track_swiping", "inline_library_editing", "tap_drag_native_audio_seeking"],
+        "checks": ["download_categories_and_search_navigation", "playlist_rename", "queue_editing", "player_and_lyrics_source_menu", "queue_history_clipping", "artwork_track_swiping", "inline_library_editing", "tap_drag_native_audio_seeking", "fullscreen_drag_cancel_dismiss", "queue_history_context_menus"],
         "full_provider_acceptance": False,
         "provider_checks": "not repeated; inspect the latest functional report"
     }, indent=2))

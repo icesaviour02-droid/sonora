@@ -1690,3 +1690,6 @@ ios-edit-library = Edit Library
 ios-downloaded-library = Downloaded
 
 ios-playlist-kind = Playlist
+
+ios-play-last = Play Last
+ios-remove-from-history = Remove from History

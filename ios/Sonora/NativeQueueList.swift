@@ -4,12 +4,16 @@ import UIKit
 /// UIKit owns row lifting, auto-scroll, cancellation and swipe actions. Playback owns every edit.
 struct NativeQueueList: UIViewRepresentable {
     @Environment(\.appTypeface) private var typeface
+    @Environment(CatalogStore.self) private var catalog
+    @Environment(LocalLibraryStore.self) private var localLibrary
+    @Environment(DownloadsStore.self) private var downloads
     let upcoming: [QueuedTrack]
     let history: [MusicTrack]
     let autoplay: Bool
     let playback: PlaybackController
     let settings: SettingsStore
     let addSongs: () -> Void
+    let addToPlaylist: (MusicTrack) -> Void
     let headerRevision: Int
     let headerView: AnyView
     let headerHeight: CGFloat
@@ -18,9 +22,9 @@ struct NativeQueueList: UIViewRepresentable {
 
     init(upcoming: [QueuedTrack], history: [MusicTrack], autoplay: Bool, playback: PlaybackController,
          settings: SettingsStore, headerRevision: Int, headerView: AnyView, headerHeight: CGFloat, historyHeaderBottom: @escaping (CGFloat) -> Void, headerOffset: @escaping (CGFloat) -> Void,
-         addSongs: @escaping () -> Void) {
+         addToPlaylist: @escaping (MusicTrack) -> Void, addSongs: @escaping () -> Void) {
         self.upcoming = upcoming; self.history = history; self.autoplay = autoplay
-        self.playback = playback; self.settings = settings; self.addSongs = addSongs
+        self.playback = playback; self.settings = settings; self.addSongs = addSongs; self.addToPlaylist = addToPlaylist
         self.headerRevision = headerRevision; self.headerView = headerView; self.headerHeight = headerHeight; self.historyHeaderBottom = historyHeaderBottom; self.headerOffset = headerOffset
     }
 
@@ -271,6 +275,72 @@ struct NativeQueueList: UIViewRepresentable {
             return UISwipeActionsConfiguration(actions: [action])
         }
 
+        /// Native context menus supply the system lift, backdrop, cancel animation and row preview.
+        func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemAt indexPath: IndexPath,
+            point: CGPoint) -> UIContextMenuConfiguration? {
+            guard let entry = dataSource.itemIdentifier(for: indexPath), let track = tracks[entry] else { return nil }
+            switch entry { case .song, .past: break; default: return nil }
+            return UIContextMenuConfiguration(identifier: nil, previewProvider: { [weak self] in
+                guard let self else { return nil }
+                let host = UIHostingController(rootView: QueueSongLabel(track: track)
+                    .padding(Layout.spacing).background(.regularMaterial)
+                    .environment(\.appTypeface, self.parent.typeface).environment(self.parent.settings)
+                    .preferredColorScheme(.dark))
+                host.preferredContentSize = CGSize(width: max(Layout.collectionArtwork, collectionView.bounds.width),
+                    height: Layout.queuePreviewHeight)
+                host.view.backgroundColor = .clear
+                return host
+            }, actionProvider: { [weak self] _ in self?.contextActions(entry: entry, track: track) })
+        }
+
+        private func contextActions(entry: Entry, track: MusicTrack) -> UIMenu {
+            func action(_ key: String, _ symbol: String, destructive: Bool = false, _ block: @escaping () -> Void) -> UIAction {
+                UIAction(title: NSLocalizedString(key, comment: ""), image: UIImage(systemName: symbol),
+                    attributes: destructive ? .destructive : []) { _ in block() }
+            }
+            let favorite = track.youtubeID != nil ? parent.catalog.isLiked(track) : parent.localLibrary.favoriteTracks.contains(track.id)
+            let favoriteAction = action(favorite ? "ios-remove-favorite" : "ios-favorite", favorite ? "star.slash" : "star") { [weak self] in
+                guard let self else { return }
+                if track.youtubeID != nil { self.parent.catalog.toggleLike(track) }
+                else { self.parent.localLibrary.toggleFavorite(track.id, category: .tracks) }
+            }
+            let playlist = action("ios-add-to-playlist", "music.note.list") { [weak self] in self?.parent.addToPlaylist(track) }
+            let next = action("ios-play-next", "text.line.first.and.arrowtriangle.forward") { [weak self] in
+                guard let self else { return }
+                if case .song(let id) = entry, let index = self.parent.playback.upcomingItems.firstIndex(where: { $0.id == id }) {
+                    self.parent.playback.moveUpcoming(fromOffsets: IndexSet(integer: index), toOffset: 0)
+                } else { self.parent.playback.playNext(track) }
+                self.refresh()
+            }
+            let later = action("ios-play-last", "text.line.last.and.arrowtriangle.forward") { [weak self] in
+                guard let self else { return }
+                let entries = self.parent.playback.upcomingItems
+                if case .song(let id) = entry, let index = entries.firstIndex(where: { $0.id == id }) {
+                    self.parent.playback.moveUpcoming(fromOffsets: IndexSet(integer: index), toOffset: entries.count)
+                } else { self.parent.playback.addToQueue(track) }
+                self.refresh()
+            }
+            var manage: [UIMenuElement] = []
+            if track.youtubeID != nil {
+                if parent.downloads.entry(for: track.id) != nil {
+                    manage.append(action("ios-remove-download", "trash", destructive: true) { [weak self] in self?.parent.downloads.remove(track.id) })
+                } else {
+                    manage.append(action("ios-download", "arrow.down.circle") { [weak self] in self?.parent.downloads.enqueue(track) })
+                }
+            }
+            switch entry {
+            case .song(let id): manage.append(action("ios-remove-from-queue", "text.badge.minus", destructive: true) { [weak self] in
+                self?.parent.playback.removeQueueItem(id); self?.refresh()
+            })
+            case .past: manage.append(action("ios-remove-from-history", "clock.badge.xmark", destructive: true) { [weak self] in
+                self?.parent.settings.removeFromHistory(track); self?.refresh()
+            })
+            default: break
+            }
+            return UIMenu(children: [UIMenu(options: .displayInline, children: [favoriteAction, playlist]),
+                UIMenu(options: .displayInline, children: [next, later]), UIMenu(options: .displayInline, children: manage)])
+        }
+
         @ViewBuilder private func row(_ entry: Entry) -> some View {
             switch entry {
             case .song(let id):
@@ -283,7 +353,7 @@ struct NativeQueueList: UIViewRepresentable {
                     Button { [weak self] in
                         guard let self else { return }
                         self.parent.playback.play(track, in: self.parent.settings.history)
-                    } label: { QueueSongLabel(track: track) }.buttonStyle(.plain)
+                    } label: { QueueSongLabel(track: track) }.buttonStyle(.plain).accessibilityIdentifier("history-row-" + track.id)
                 }
             case .playerHeader:
                 parent.headerView.frame(minHeight: parent.headerHeight)

@@ -280,13 +280,14 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable {
 enum Layout {
     static let playerHeroRendition: CGFloat = 390
     static let queueBadgeSize: CGFloat = 18
+    static let queuePreviewHeight: CGFloat = 100
     static let playerMargin: CGFloat = 32
     static let playerArtworkBleed: CGFloat = 10
     static let pausedArtworkScale: CGFloat = 0.735
     static let playerTitleSize: CGFloat = 20
     static let playerArtistSize: CGFloat = 20
-    static let miniTitleSize: CGFloat = 15
-    static let miniArtistSize: CGFloat = 15
+    static let miniTitleSize: CGFloat = 14
+    static let miniArtistSize: CGFloat = 14
     static let playerMetadataSpacing: CGFloat = 0
     static let playerShadowOpacity: Double = 0.18
     static let playerPausedShadowOpacity: Double = 0.08
@@ -296,6 +297,7 @@ enum Layout {
     static let volumeSymbolSize: CGFloat = 12
     static let volumeTrackInset: CGFloat = 24
     static let volumeExpansion: CGFloat = 8
+    static let volumeResponse: TimeInterval = 0.22
     static let playerSpacing: CGFloat = 12
     static let artworkTransportHeight: CGFloat = 100
     static let artworkVerticalOffset: CGFloat = -12

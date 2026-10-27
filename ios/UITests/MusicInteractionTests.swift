@@ -35,6 +35,70 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(app.buttons["player-queue"].waitForExistence(timeout: 8))
     }
 
+    func testFullscreenPullDownCancelAndDismissFromArtworkAndBlankSpace() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--sonora-review-url", "sonora://review?id=jfKfPfyJRdk&title=Sonora%20Fullscreen%20Interaction&artist=Sonora&mode=artwork"]
+        app.launch()
+        XCTAssertTrue(app.buttons["player-queue"].waitForExistence(timeout: 30))
+        let surface = app.otherElements["player-fullscreen"].firstMatch
+        XCTAssertTrue(surface.exists)
+        XCTAssertLessThanOrEqual(surface.frame.minY, 1)
+        XCTAssertGreaterThanOrEqual(surface.frame.maxY, app.frame.maxY - 1)
+        // Pull a short way down and reverse: the player must survive cancellation.
+        let artwork = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+        artwork.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.36)),
+            withVelocity: .slow, thenHoldForDuration: 0.5)
+        XCTAssertTrue(app.buttons["player-queue"].waitForExistence(timeout: 8))
+        // A downward artwork pull closes without needing the top grabber.
+        artwork.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.82)))
+        let mini = app.buttons["mini-player-open"]
+        expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: mini)
+        waitForExpectations(timeout: 8)
+        mini.tap()
+        XCTAssertTrue(app.buttons["player-queue"].waitForExistence(timeout: 8))
+        // Empty space beside the cover has the same dismiss gesture.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.35))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.84)))
+        expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: mini)
+        waitForExpectations(timeout: 8)
+    }
+
+    func testQueueAndHistoryLongPressMenusEditRealEntries() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--sonora-review-history", "--sonora-review-url",
+            "sonora://queuereview?id=jfKfPfyJRdk&title=Sonora%20Menu%20Interaction&artist=Sonora"]
+        app.launch()
+        XCTAssertTrue(app.buttons["queue-add-songs"].waitForExistence(timeout: 30))
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "queue-row-"))
+        XCTAssertEqual(rows.count, 2)
+        let second = rows.element(boundBy: 1).identifier
+        app.buttons[second].coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)).press(forDuration: 1)
+        let next = app.buttons["Play Next"].firstMatch
+        XCTAssertTrue(next.waitForExistence(timeout: 8), app.debugDescription)
+        next.tap()
+        expectation(for: NSPredicate { _, _ in rows.element(boundBy: 0).identifier == second }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+        app.buttons[second].coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)).press(forDuration: 1)
+        let remove = app.buttons["Remove from Queue"].firstMatch
+        XCTAssertTrue(remove.waitForExistence(timeout: 8))
+        remove.tap(); waitForQueueCount(1, rows: rows)
+        let list = app.collectionViews["player-queue-list"]
+        list.swipeDown(); list.swipeDown()
+        let history = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "history-row-"))
+        guard let past = history.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
+            XCTFail("No visible history entry: " + app.debugDescription); return
+        }
+        let pastID = past.identifier
+        past.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)).press(forDuration: 1)
+        let clear = app.buttons["Remove from History"].firstMatch
+        XCTAssertTrue(clear.waitForExistence(timeout: 8), app.debugDescription)
+        clear.tap()
+        expectation(for: NSPredicate { _, _ in !app.buttons[pastID].exists }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+    }
+
     func testLocalPlaylistRenameThroughItsMenu() {
         continueAfterFailure = false
         let app = XCUIApplication()

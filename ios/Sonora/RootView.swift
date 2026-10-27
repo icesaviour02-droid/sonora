@@ -72,8 +72,10 @@ struct RootView: View {
                 }
             }
         }
-        .sheet(isPresented: $showPlayer) {
-            NowPlayingView(initialMode: playerMode, hero: playerHero)
+        .background {
+            PlayerPresentation(isPresented: $showPlayer, hero: playerHero) {
+                NowPlayingView(initialMode: playerMode, hero: playerHero, close: { showPlayer = false })
+            }
         }
         .modifier(LocalLibraryReviewSheet(presentation: localReviewBinding))
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
