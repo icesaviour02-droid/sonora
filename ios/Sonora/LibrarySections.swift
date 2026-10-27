@@ -31,27 +31,6 @@ enum LibraryCategory: String, CaseIterable, Identifiable {
     }
 }
 
-/// Inline check circles share the Library's row identity while native edit mode supplies reorder handles.
-struct LibraryCategoryEditingRow: View {
-    let category: LibraryCategory
-    let selected: Bool
-    let toggle: () -> Void
-    var body: some View {
-        Button(action: toggle) {
-            HStack(spacing: Layout.compact) {
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
-                    .appFont(.body).frame(width: Layout.categoryIcon)
-                Label(category.label, systemImage: category.symbol)
-                    .labelStyle(LibraryCategoryLabelStyle())
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("library-category-" + category.rawValue)
-    }
-}
-
 extension LibraryCategory {
     /// Retain saved order and append new categories without dropping a valid existing selection.
     static func ordered(_ value: String) -> [LibraryCategory] {

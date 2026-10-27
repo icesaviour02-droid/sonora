@@ -8,6 +8,7 @@ struct MiniPlayer: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let open: () -> Void
+    var hero: PlayerHeroState? = nil
     @ScaledMetric(relativeTo: .subheadline) private var titleSize: CGFloat = Layout.miniTitleSize
     @ScaledMetric(relativeTo: .subheadline) private var artistSize: CGFloat = Layout.miniArtistSize
 
@@ -18,6 +19,8 @@ struct MiniPlayer: View {
                     ArtworkView(track: playback.current,
                         side: placement == .inline ? Layout.inlineMiniArtwork : Layout.miniArtwork,
                         cornerRadius: Layout.miniArtworkRadius)
+                        .background { if let hero { PlayerHeroAnchor(hero: hero, role: .mini) } }
+                        .opacity(hero?.coversHidden == true ? 0 : 1)
                         .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 0) {
@@ -116,11 +119,19 @@ struct NowPlayingView: View {
     @State private var metadataFrame: CGRect = .zero
     @State private var metadataMode: Mode = .artwork
     @State private var contentViewport: CGRect = .zero
+    @State private var controlsFrame: CGRect = .zero
+    @State private var controlsMode: Mode = .artwork
+    @State private var controlsMoving = false
+    @State private var controlsMotionID = UUID()
+    @State private var historyHeaderBottom: CGFloat = 0
     @ScaledMetric(relativeTo: .title3) private var expandedTitleSize: CGFloat = Layout.playerTitleSize
     @ScaledMetric(relativeTo: .body) private var compactTitleSize: CGFloat = InterfaceTypography.baselineSize(.body)
     @ScaledMetric(relativeTo: .title3) private var expandedArtistSize: CGFloat = Layout.playerArtistSize
 
-    init(initialMode: String = "artwork") {
+    let hero: PlayerHeroState?
+
+    init(initialMode: String = "artwork", hero: PlayerHeroState? = nil) {
+        self.hero = hero
         _mode = State(initialValue: initialMode == "lyrics" ? .lyrics : (initialMode == "queue" ? .queue : .artwork))
     }
 
@@ -148,6 +159,7 @@ struct NowPlayingView: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
+        .background { if let hero { PlayerHeroObserver(hero: hero, image: playback.currentArtwork) } }
         .preferredColorScheme(.dark)
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
@@ -198,7 +210,7 @@ struct NowPlayingView: View {
         .overlay(alignment: .topLeading) {
             ZStack(alignment: .topLeading) {
             if !artworkFrame.isEmpty {
-                playerCover(playback.current, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
+                playerCover(playback.current, anchorsHero: true, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
                     .modifier(PlayerTrackTranslation(offset: mode == .artwork ? trackOffset : 0))
                 if mode == .artwork, let preview = trackPreview {
                     playerCover(preview.track, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
@@ -233,9 +245,28 @@ struct NowPlayingView: View {
                         .position(x: metadataFrame.midX, y: metadataFrame.midY)
                 }
             }
+                if controlsMoving, !controlsFrame.isEmpty {
+                    HStack(spacing: Layout.compact) { favoriteControl; overflowMenu }
+                        .frame(width: controlsFrame.width, height: controlsFrame.height)
+                        .position(x: controlsFrame.midX, y: controlsFrame.midY)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .mask(alignment: .topLeading) { playerOverlayMask }
+        }
+        .onPreferenceChange(PlayerActionsFrame.self) { target in
+            guard !target.isEmpty else { return }
+            let changingMode = controlsMode != mode
+            controlsMode = mode
+            if (changingMode || controlsMoving) && !reduceMotion {
+                controlsMotionID = UUID()
+                let token = controlsMotionID
+                withAnimation(PlayerMotion.mode, completionCriteria: .logicallyComplete) { controlsFrame = target } completion: { if controlsMotionID == token { controlsMoving = false } }
+            } else {
+                var transaction = Transaction(); transaction.disablesAnimations = true
+                withTransaction(transaction) { controlsFrame = target }
+            }
         }
         .onPreferenceChange(PlayerTrackPosition.self) { position in
             if abs(visibleTrackOffset - position) > 0.25 { visibleTrackOffset = position }
@@ -272,7 +303,7 @@ struct NowPlayingView: View {
         if !contentViewport.isEmpty {
             // Expanded art and its soft shadow may extend above the flexible content slot.
             // Keep the lower edge fixed at progress while allowing that upper breathing room.
-            let topAllowance = mode == .artwork ? Layout.playerMargin : 0
+            let topAllowance = mode == .artwork ? Layout.playerMargin : (mode == .queue ? -historyHeaderBottom : 0)
             let height = contentViewport.height + Layout.queueProgressOverlap + topAllowance
             VStack(spacing: 0) {
                 Rectangle()
@@ -411,16 +442,30 @@ struct NowPlayingView: View {
             if textSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: Layout.compact) {
                     trackTitles
-                    HStack { favoriteControl; overflowMenu; Spacer() }
+                    HStack { trackActions(presentation: .artwork); Spacer() }
                 }
             } else {
                 HStack(spacing: Layout.compact) {
                     trackTitles
-                    favoriteControl
-                    overflowMenu
+                    trackActions(presentation: .artwork)
                 }
             }
         }
+    }
+
+    /// Stable controls stay in their real native row; only their moving visual layer is shared between modes.
+    private func trackActions(presentation: Mode, measuring: Bool = true) -> some View {
+        HStack(spacing: Layout.compact) { favoriteControl; overflowMenu }
+            .opacity(controlsMoving ? 0 : 1)
+            .accessibilityHidden(controlsMoving)
+            .background {
+                if measuring {
+                    GeometryReader { geometry in
+                        Color.clear.preference(key: PlayerActionsFrame.self,
+                            value: mode == presentation ? geometry.frame(in: .named("player-artwork-space")) : .zero)
+                    }
+                }
+            }
     }
 
     private var trackTitles: some View {
@@ -441,7 +486,7 @@ struct NowPlayingView: View {
     }
 
     /// Shadow belongs to the rounded cover and scales with play/pause, without a rectangular backing layer.
-    private func playerCover(_ track: MusicTrack?, renderSide: CGFloat) -> some View {
+    private func playerCover(_ track: MusicTrack?, anchorsHero: Bool = false, renderSide: CGFloat) -> some View {
         ArtworkView(track: track, side: renderSide, cornerRadius: 0)
             .scaleEffect(artworkFrame.width / renderSide, anchor: .topLeading)
             .frame(width: artworkFrame.width, height: artworkFrame.height, alignment: .topLeading)
@@ -451,6 +496,8 @@ struct NowPlayingView: View {
                 (playback.isPlaying ? Layout.playerShadowOpacity : Layout.playerPausedShadowOpacity)),
                 radius: Layout.playerShadowRadius, y: Layout.compact / 2)
             .animation(reduceMotion ? nil : PlayerMotion.artworkScale, value: playback.isPlaying)
+            .background { if anchorsHero, let hero { PlayerHeroAnchor(hero: hero, role: .expanded) } }
+            .opacity(anchorsHero && hero?.coversHidden == true ? 0 : 1)
             .position(x: artworkFrame.midX, y: artworkFrame.midY)
             .allowsHitTesting(false).accessibilityHidden(true)
     }
@@ -540,8 +587,7 @@ struct NowPlayingView: View {
             .accessibilityLabel(Text(playback.current?.title ?? "") + Text(", ") + Text(playback.current?.artist ?? ""))
             .accessibilityHint(Text("ios-open-player"))
             .accessibilityIdentifier("player-return-artwork")
-            favoriteControl
-            overflowMenu
+            trackActions(presentation: presentation, measuring: measuring)
         }
     }
 
@@ -652,6 +698,9 @@ struct NowPlayingView: View {
                     .environment(playback).environment(downloads).environment(settings)
                     .environment(localLibrary).environment(catalog)),
                 headerHeight: queueHeaderHeight,
+                historyHeaderBottom: { bottom in
+                    DispatchQueue.main.async { if abs(historyHeaderBottom - bottom) > 0.5 { historyHeaderBottom = bottom } }
+                },
                 headerOffset: { offset in
                     DispatchQueue.main.async {
                         if abs(queueHeaderOffset - offset) > 0.5 {
@@ -690,6 +739,7 @@ struct NowPlayingView: View {
     private var queueHeaderRevision: Int {
         var value = Hasher()
         value.combine(playback.current)
+        value.combine(controlsMoving)
         value.combine(playback.isShuffled)
         value.combine(playback.repeatMode.symbol)
         value.combine(settings.autoplayRadio)
@@ -751,6 +801,16 @@ struct NowPlayingView: View {
             .frame(height: Layout.control)
             .disabled(playback.duration <= 0)
             .accessibilityLabel(Text("ios-playback-position"))
+            .accessibilityIdentifier("player-seek")
+            .overlay(alignment: .bottomLeading) {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--sonora-review-seek") {
+                    Text(String(format: "%.2f", playback.presentationElapsed))
+                        .appFont(.caption2).opacity(0.01).allowsHitTesting(false)
+                        .accessibilityIdentifier("player-native-clock")
+                }
+                #endif
+            }
 
             HStack {
                 Text(time(isSeeking ? seekValue : playback.elapsed))
@@ -871,11 +931,14 @@ struct NowPlayingView: View {
                         .foregroundStyle(mode == .queue ? Color.black : Color.white.opacity(0.82))
                         .frame(width: Layout.control, height: Layout.control)
                         .background(mode == .queue ? Color.white : Color.clear, in: Capsule())
-                    if playback.isShuffled || playback.repeatMode != .off {
-                        Circle()
-                            .fill(mode == .queue ? Color.black : Color.white)
-                            .frame(width: 6, height: 6)
-                            .offset(x: -6, y: 6)
+                    if let status = queueStatusSymbol {
+                        Image(systemName: status)
+                            .appFont(.caption2, weight: .semibold)
+                            .foregroundStyle(mode == .queue ? Color.white : Color.white.opacity(0.9))
+                            .frame(width: Layout.queueBadgeSize, height: Layout.queueBadgeSize)
+                            .background(mode == .queue ? Color.black : Color.white.opacity(0.16), in: Circle())
+                            .offset(x: Layout.compact / 2, y: -Layout.compact / 2)
+                            .accessibilityHidden(true)
                     }
                 }
             }
@@ -885,6 +948,14 @@ struct NowPlayingView: View {
             .accessibilityAddTraits(mode == .queue ? .isSelected : [])
         }
         .padding(.horizontal, Layout.spacing)
+    }
+
+    /// The badge follows the enabled queue mode; unsupported Apple-only crossfade controls are not faked.
+    private var queueStatusSymbol: String? {
+        if playback.isShuffled { return "shuffle" }
+        if playback.repeatMode != .off { return playback.repeatMode.symbol }
+        if settings.autoplayRadio { return "infinity" }
+        return nil
     }
 
     private var repeatLabel: LocalizedStringKey {
@@ -898,6 +969,8 @@ struct NowPlayingView: View {
     /// Each opening begins at the current song; a previous history scroll cannot move the cover target.
     private func changeMode(_ next: Mode) {
         resetTrackSwipe()
+        controlsMotionID = UUID()
+        controlsMoving = !reduceMotion && !controlsFrame.isEmpty && next != mode
         withAnimation(reduceMotion ? nil : PlayerMotion.mode) {
             if next == .queue && mode != .queue { queueHeaderOffset = 0 }
             mode = next
@@ -953,5 +1026,13 @@ private struct PlayerMetadataFrame: PreferenceKey {
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         let next = nextValue()
         if !next.isEmpty { value = next }
+    }
+}
+
+/// Active geometry targets drive the favorite/menu group's shared visual transition.
+private struct PlayerActionsFrame: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue(); if !next.isEmpty { value = next }
     }
 }

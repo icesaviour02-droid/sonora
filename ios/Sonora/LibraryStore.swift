@@ -72,6 +72,16 @@ final class LibraryStore {
         }
     }
 
+    /// Opens a real imported recording paused so touch tests can check the actual AVPlayer clock after seeks.
+    func reviewSeekSurface(_ playback: PlaybackController, ready: @escaping @MainActor () -> Void) {
+        reviewTask?.cancel()
+        reviewTask = Task { [weak self] in
+            guard let self, let track = await self.importReviewRecording() else { return }
+            playback.prepareReview(track)
+            ready()
+        }
+    }
+
     /// Imports the runner's generated WAV, checks the real player clock and removes that import.
     func reviewLocalPlayback(_ playback: PlaybackController) {
         reviewTask?.cancel()

@@ -147,7 +147,8 @@ struct DownloadedSongsView: View {
             }
         }
         .listSectionIndexVisibility(sort == .recent ? .hidden : .visible)
-        .listStyle(.plain).collectionSearch(text: $query).appNavigationTitle("ios-songs")
+        .listStyle(.plain).accessibilityIdentifier("downloaded-songs-list")
+        .collectionSearch(text: $query).appNavigationTitle("ios-songs")
         .overlay { if !query.isEmpty && tracks.isEmpty { ContentUnavailableView.search(text: query) } }
         .toolbar { ToolbarItem(placement: .primaryAction) {
             Menu {

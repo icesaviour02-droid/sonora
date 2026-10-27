@@ -43,6 +43,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Tap or drag anywhere on the iPhone progress control to seek, with precise native audio positioning and protection against stale clock updates.
+- Player artwork now travels between its actual mini-player and expanded positions with the native sheet transition. Queue favorite/menu controls move with the metadata, history stops beneath its heading, and the queue button shows active-mode glyphs.
+
 - iPhone player metadata uses matching font measurements and trailing fades, with smaller mini-player type, corrected play/pause cover sizing and aligned sharp volume controls.
 - Songs no longer shows separator lines around Play/Shuffle, and the main Search page lists only the implemented streaming provider.
 

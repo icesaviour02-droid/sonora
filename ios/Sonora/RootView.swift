@@ -21,7 +21,7 @@ struct RootView: View {
     @State private var showPlayer = false
     @State private var playerMode = "artwork"
     @State private var didHandleLaunchURL = false
-    @Namespace private var playerTransition
+    @State private var playerHero = PlayerHeroState()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if DEBUG
     @State private var guestProbe = GuestAcceptanceProbe()
@@ -57,7 +57,10 @@ struct RootView: View {
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-        .modifier(PlayerAccessory(namespace: playerTransition, open: { showPlayer = true }))
+        .modifier(PlayerAccessory(hero: playerHero, open: {
+            playerHero.prepareOpening(image: playback.currentArtwork)
+            showPlayer = true
+        }))
         .preferredColorScheme(settings.theme.colorScheme)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showSoundProfiles) { NavigationStack { SoundProfilesView() } }
@@ -70,11 +73,7 @@ struct RootView: View {
             }
         }
         .sheet(isPresented: $showPlayer) {
-            if reduceMotion { NowPlayingView(initialMode: playerMode) }
-            else {
-                NowPlayingView(initialMode: playerMode)
-                    .navigationTransition(.zoom(sourceID: "sonora-now-playing", in: playerTransition))
-            }
+            NowPlayingView(initialMode: playerMode, hero: playerHero)
         }
         .modifier(LocalLibraryReviewSheet(presentation: localReviewBinding))
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
@@ -142,6 +141,10 @@ struct RootView: View {
         #if DEBUG
         if url.host == "sessionreview" {
             account.reviewSessionStorage()
+            return
+        }
+        if url.host == "seekreview" {
+            library.reviewSeekSurface(playback) { playerMode = "artwork"; showPlayer = true }
             return
         }
         if url.host == "libraryreview" {
@@ -284,18 +287,18 @@ struct RootView: View {
 /// omits the modifier altogether, since an empty accessory still reserves a glass capsule.
 private struct PlayerAccessory: ViewModifier {
     @Environment(PlaybackController.self) private var playback
-    let namespace: Namespace.ID
+    let hero: PlayerHeroState
     let open: () -> Void
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.1, *) {
             content.tabViewBottomAccessory(isEnabled: playback.current != nil) {
-                MiniPlayer(open: open).matchedTransitionSource(id: "sonora-now-playing", in: namespace)
+                MiniPlayer(open: open, hero: hero)
             }
         } else if playback.current != nil {
             content.tabViewBottomAccessory {
-                MiniPlayer(open: open).matchedTransitionSource(id: "sonora-now-playing", in: namespace)
+                MiniPlayer(open: open, hero: hero)
             }
         } else {
             content
@@ -625,11 +628,11 @@ struct LibraryView: View {
     private func categoryEnabled(_ category: LibraryCategory) -> Bool {
         visibleCategories.split(separator: ",").contains(Substring(category.rawValue))
     }
-    private func toggleCategory(_ category: LibraryCategory) {
-        var selected = Set(visibleCategories.split(separator: ",").map(String.init))
-        if selected.contains(category.rawValue) { selected.remove(category.rawValue) }
-        else { selected.insert(category.rawValue) }
-        visibleCategories = orderedCategories.filter { selected.contains($0.rawValue) }.map(\.rawValue).joined(separator: ",")
+    private var categorySelection: Binding<Set<LibraryCategory>> {
+        Binding(get: { editCategories ? Set(orderedCategories.filter { categoryEnabled($0) }) : [] }, set: { selected in
+            guard editCategories else { return }
+            visibleCategories = orderedCategories.filter { selected.contains($0) }.map(\.rawValue).joined(separator: ",")
+        })
     }
     private func moveCategories(from source: IndexSet, to destination: Int) {
         var categories = orderedCategories
@@ -649,20 +652,19 @@ struct LibraryView: View {
                 }
                 .modifier(ScrollableEmptyState())
             } else {
-                List {
+                List(selection: categorySelection) {
                     Section {
                         ForEach(shownCategories) { category in
                             Group {
                                 if editCategories {
-                                    LibraryCategoryEditingRow(category: category, selected: categoryEnabled(category)) {
-                                        toggleCategory(category)
-                                    }
+                                    Label(category.label, systemImage: category.symbol)
+                                        .accessibilityIdentifier("library-category-" + category.rawValue)
                                 } else {
                                     NavigationLink { categoryDestination(category) } label: {
                                         Label(category.label, systemImage: category.symbol)
                                     }.accessibilityIdentifier("library-destination-" + category.rawValue)
                                 }
-                            }.libraryCategoryRow()
+                            }.tag(category).libraryCategoryRow()
                         }
                         .onMove(perform: moveCategories)
                     }
@@ -753,6 +755,7 @@ struct LibraryView: View {
                     }
                 }
                 .listStyle(.plain)
+                .accessibilityIdentifier("library-main-list")
                 .environment(\.editMode, .constant(editCategories ? .active : .inactive))
                 .environment(\.defaultMinListRowHeight, Layout.libraryRowHeight)
                 .contentMargins(.top, 0, for: .scrollContent)

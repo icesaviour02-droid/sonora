@@ -13,14 +13,15 @@ struct NativeQueueList: UIViewRepresentable {
     let headerRevision: Int
     let headerView: AnyView
     let headerHeight: CGFloat
+    let historyHeaderBottom: (CGFloat) -> Void
     let headerOffset: (CGFloat) -> Void
 
     init(upcoming: [QueuedTrack], history: [MusicTrack], autoplay: Bool, playback: PlaybackController,
-         settings: SettingsStore, headerRevision: Int, headerView: AnyView, headerHeight: CGFloat, headerOffset: @escaping (CGFloat) -> Void,
+         settings: SettingsStore, headerRevision: Int, headerView: AnyView, headerHeight: CGFloat, historyHeaderBottom: @escaping (CGFloat) -> Void, headerOffset: @escaping (CGFloat) -> Void,
          addSongs: @escaping () -> Void) {
         self.upcoming = upcoming; self.history = history; self.autoplay = autoplay
         self.playback = playback; self.settings = settings; self.addSongs = addSongs
-        self.headerRevision = headerRevision; self.headerView = headerView; self.headerHeight = headerHeight; self.headerOffset = headerOffset
+        self.headerRevision = headerRevision; self.headerView = headerView; self.headerHeight = headerHeight; self.historyHeaderBottom = historyHeaderBottom; self.headerOffset = headerOffset
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
@@ -161,7 +162,7 @@ struct NativeQueueList: UIViewRepresentable {
                 if let self {
                     self.row(.historyHeader).environment(self.parent.settings).environment(\.appTypeface, self.parent.typeface)
                 }
-            }.margins(.all, 0).background { Rectangle().fill(.ultraThinMaterial) })
+            }.margins(.all, 0))
         }
 
         private func refreshVisibleHistoryHeader() {
@@ -181,12 +182,14 @@ struct NativeQueueList: UIViewRepresentable {
                 collection.scrollToItem(at: index, at: .top, animated: false)
             }
             updateHeaderOffset(collection)
+            clipUnderHistoryHeader(collection)
         }
 
         /// The current-song header shares the queue's scroll position; history lives above it.
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             guard didPositionQueue, let collection else { return }
             updateHeaderOffset(collection)
+            clipUnderHistoryHeader(collection)
         }
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -204,6 +207,26 @@ struct NativeQueueList: UIViewRepresentable {
                 historyFeedback.impactOccurred()
             } else if offset < Layout.historyRevealReset {
                 historyRevealed = false
+            }
+        }
+
+        /// History rows stop below their pinned heading instead of showing through or above History/Clear.
+        private func clipUnderHistoryHeader(_ view: UICollectionView) {
+            let heading = view.layoutAttributesForSupplementaryElement(ofKind: UICollectionView.elementKindSectionHeader,
+                at: IndexPath(item: 0, section: 0))
+            let bottom = hasHistory ? max(0, (heading?.frame.maxY ?? view.bounds.minY) - view.bounds.minY) : 0
+            parent.historyHeaderBottom(bottom)
+            let cutoff = view.bounds.minY + bottom
+            for index in view.indexPathsForVisibleItems {
+                guard let cell = view.cellForItem(at: index) else { continue }
+                if bottom <= 0 || cell.frame.minY >= cutoff { cell.layer.mask = nil; continue }
+                let mask = cell.layer.mask ?? CALayer()
+                CATransaction.begin(); CATransaction.setDisableActions(true)
+                let top = min(cell.bounds.height, max(0, cutoff - cell.frame.minY))
+                mask.backgroundColor = UIColor.black.cgColor
+                mask.frame = CGRect(x: 0, y: top, width: cell.bounds.width, height: max(0, cell.bounds.height - top))
+                cell.layer.mask = mask
+                CATransaction.commit()
             }
         }
 

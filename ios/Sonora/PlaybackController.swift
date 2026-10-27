@@ -19,8 +19,13 @@ final class PlaybackController {
     private(set) var isPlaying = false
     private(set) var isLoading = false
     private(set) var elapsed: Double = 0
+    private(set) var currentArtwork: UIImage?
+    private var seekID: UUID?
+    private var pendingSeekTarget: Double?
+    private var nativeClockRevision = 0
     /// The native clock is sampled for word timing without guessing from coarse UI updates.
     var presentationElapsed: Double {
+        _ = nativeClockRevision
         let seconds = player.currentTime().seconds
         return seconds.isFinite ? max(0, seconds) : elapsed
     }
@@ -68,7 +73,7 @@ final class PlaybackController {
         ) { [weak self] time in
             Task { @MainActor in
                 guard let self else { return }
-                self.elapsed = time.seconds.isFinite ? max(0, time.seconds) : 0
+                if self.pendingSeekTarget == nil { self.elapsed = time.seconds.isFinite ? max(0, time.seconds) : 0 }
                 if self.isPlaying && self.elapsed > 1 && self.audioEffects.isAttached && self.audioEffects.processedFrames == 0 {
                     self.audioEffects.reportUnprocessedAudio()
                     self.applyAudioGain()
@@ -396,6 +401,7 @@ final class PlaybackController {
     func selectQueueItem(_ id: UUID, autoplay: Bool = true) {
         guard let item = queueItems.first(where: { $0.id == id }) else { return }
         let track = item.track
+        seekID = nil; pendingSeekTarget = nil
         pause()
         var localItem: AVPlayerItem?
         currentLoudnessDB = nil
@@ -592,12 +598,28 @@ final class PlaybackController {
         }
     }
 
+    /// Keeps the requested position stable until the native audio clock confirms the exact seek.
     func seek(to seconds: Double) {
-        trackListen()
-        listen.rebase()
+        guard seconds.isFinite, duration > 0, let item = player.currentItem else { return }
+        trackListen(); listen.rebase()
         let target = min(max(0, seconds), duration)
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
+        let token = UUID()
+        seekID = token; pendingSeekTarget = target
+        item.cancelPendingSeeks()
         elapsed = target
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self, weak item] completed in
+            Task { @MainActor in
+                guard let self, let item, self.seekID == token, self.player.currentItem === item else { return }
+                self.seekID = nil; self.pendingSeekTarget = nil
+                self.nativeClockRevision &+= 1
+                let actual = self.player.currentTime().seconds
+                self.elapsed = actual.isFinite ? max(0, actual) : target
+                self.publishNowPlaying()
+                #if DEBUG
+                self.writeReviewState()
+                #endif
+            }
+        }
         publishNowPlaying()
     }
 
@@ -707,9 +729,10 @@ final class PlaybackController {
         artworkTask?.cancel()
         if artworkTrackID != track.id {
             nowPlayingArtwork = nil
+            currentArtwork = nil
             artworkTrackID = track.id
         }
-        guard let url = track.displayArtworkURL else { return }
+        guard let url = ArtworkRendition.url(track.displayArtworkURL, side: Layout.playerHeroRendition) else { return }
         let trackID = track.id
         artworkTask = Task { [weak self] in
             guard let data = try? await ArtworkFiles.shared.data(url),
@@ -717,6 +740,7 @@ final class PlaybackController {
                   let image = UIImage(data: data) else { return }
             let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
             guard let self, self.current?.id == trackID else { return }
+            self.currentArtwork = image
             self.nowPlayingArtwork = artwork
             self.publishNowPlaying()
         }

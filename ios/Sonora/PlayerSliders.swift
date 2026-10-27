@@ -12,8 +12,6 @@ import UIKit
         let slider = SeekControl()
         slider.minimumTrackTintColor = .white.withAlphaComponent(0.6)
         slider.maximumTrackTintColor = .white.withAlphaComponent(0.2)
-        slider.setThumbImage(PlayerSliderImages.idleThumb, for: .normal)
-        slider.setThumbImage(PlayerSliderImages.trackingThumb, for: .highlighted)
         slider.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .valueChanged)
         let coordinator = context.coordinator
         slider.editingChanged = { [weak coordinator] editing in coordinator?.parent.onEditingChanged(editing) }
@@ -40,35 +38,71 @@ import UIKit
     }
 
     /// Any point on the 44 pt control can start a seek; progress follows the finger continuously.
-    final class SeekControl: UISlider {
+    final class SeekControl: UIControl {
         var editingChanged: ((Bool) -> Void)?
         private(set) var scrubbing = false
-        override func trackRect(forBounds bounds: CGRect) -> CGRect {
-            CGRect(x: bounds.minX, y: bounds.midY - Layout.playerSliderTrack / 2,
-                width: bounds.width, height: Layout.playerSliderTrack)
+        var minimumValue: Float = 0
+        var maximumValue: Float = 1
+        private(set) var value: Float = 0
+        var minimumTrackTintColor: UIColor = .white
+        var maximumTrackTintColor: UIColor = .white.withAlphaComponent(0.2)
+        private let backgroundTrack = CALayer()
+        private let progressTrack = CALayer()
+        private let thumb = CALayer()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            for item in [backgroundTrack, progressTrack, thumb] { layer.addSublayer(item) }
+            isAccessibilityElement = true
+            accessibilityTraits = .adjustable
+            backgroundColor = .clear
+        }
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        func setValue(_ value: Float, animated: Bool) {
+            self.value = min(maximumValue, max(minimumValue, value))
+            accessibilityValue = Double(fraction).formatted(.percent.precision(.fractionLength(0)))
+            setNeedsLayout()
+        }
+        private var fraction: CGFloat { CGFloat((value - minimumValue) / max(maximumValue - minimumValue, .ulpOfOne)) }
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            let height = Layout.playerSliderTrack
+            let track = CGRect(x: 0, y: bounds.midY - height / 2, width: bounds.width, height: height)
+            backgroundTrack.frame = track; backgroundTrack.cornerRadius = height / 2
+            backgroundTrack.backgroundColor = maximumTrackTintColor.cgColor
+            progressTrack.frame = CGRect(x: track.minX, y: track.minY, width: track.width * fraction, height: height)
+            progressTrack.cornerRadius = height / 2; progressTrack.backgroundColor = minimumTrackTintColor.cgColor
+            let side = Layout.sliderTrackingThumb
+            thumb.frame = CGRect(x: track.width * fraction - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+            thumb.cornerRadius = side / 2; thumb.backgroundColor = UIColor.white.cgColor
+            thumb.isHidden = !scrubbing
+            CATransaction.commit()
         }
         override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
             guard isEnabled else { return false }
             scrubbing = true
-            isHighlighted = true
             editingChanged?(true)
             updateValue(touch)
             return true
         }
         override func continueTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
-            updateValue(touch)
-            return true
+            updateValue(touch); return true
         }
         override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
             if let touch { updateValue(touch) }
-            scrubbing = false
-            isHighlighted = false
-            editingChanged?(false)
+            scrubbing = false; setNeedsLayout(); editingChanged?(false)
         }
         override func cancelTracking(with event: UIEvent?) {
-            scrubbing = false
-            isHighlighted = false
-            editingChanged?(false)
+            scrubbing = false; setNeedsLayout(); editingChanged?(false)
+        }
+        override func accessibilityIncrement() { adjust(1) }
+        override func accessibilityDecrement() { adjust(-1) }
+        private func adjust(_ direction: Float) {
+            guard isEnabled else { return }
+            setValue(value + direction * max(1, (maximumValue - minimumValue) / 20), animated: false)
+            sendActions(for: .valueChanged)
         }
         private func updateValue(_ touch: UITouch) {
             let fraction = min(1, max(0, touch.location(in: self).x / max(bounds.width, 1)))

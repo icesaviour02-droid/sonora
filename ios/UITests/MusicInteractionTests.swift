@@ -60,10 +60,9 @@ final class MusicInteractionTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["download-songs"].waitForExistence(timeout: 30))
         app.buttons["download-songs"].tap()
-        XCTAssertTrue(app.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 10))
-        guard let list = app.collectionViews.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
-            XCTFail("The Songs list is not visible"); return
-        }
+        let list = app.collectionViews["downloaded-songs-list"]
+        XCTAssertTrue(list.waitForExistence(timeout: 10))
+        XCTAssertTrue(list.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 10))
         list.swipeDown()
         expectation(for: NSPredicate { _, _ in app.searchFields.allElementsBoundByIndex.contains { $0.isHittable } }, evaluatedWith: app)
         waitForExpectations(timeout: 8)
@@ -73,10 +72,10 @@ final class MusicInteractionTests: XCTestCase {
         search.tap()
         let missing = "zzNoMatchzz"
         search.typeText(missing)
-        expectation(for: NSPredicate { _, _ in !app.staticTexts["Sonora Review Tone"].firstMatch.exists }, evaluatedWith: app)
+        expectation(for: NSPredicate { _, _ in !list.staticTexts["Sonora Review Tone"].firstMatch.exists }, evaluatedWith: app)
         waitForExpectations(timeout: 8)
         search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: missing.count) + "Review")
-        XCTAssertTrue(app.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 8))
+        XCTAssertTrue(list.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 8))
         let cancel = app.buttons.matching(identifier: "Cancel").allElementsBoundByIndex.first { $0.isHittable }
         cancel?.tap()
         navigateBack(in: app)
@@ -119,6 +118,26 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(app.buttons["player-queue"].isHittable)
     }
 
+    func testSeekSurfaceTapsAndDragsMoveNativeAudioClock() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--sonora-review-seek", "--sonora-review-url", "sonora://seekreview"]
+        app.launch()
+        let seek = app.descendants(matching: .any).matching(identifier: "player-seek").firstMatch
+        XCTAssertTrue(seek.waitForExistence(timeout: 30))
+        let clock = app.staticTexts["player-native-clock"]
+        seek.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)).tap()
+        expectation(for: NSPredicate { _, _ in (Double(clock.label) ?? 0) > 10 }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+        seek.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+            .press(forDuration: 0.1, thenDragTo: seek.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)))
+        expectation(for: NSPredicate { _, _ in
+            let value = Double(clock.label) ?? 0
+            return value > 2 && value < 7
+        }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+    }
+
     func testLibraryEditingStaysInlineAndPersistsSelection() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -126,28 +145,23 @@ final class MusicInteractionTests: XCTestCase {
         app.launch()
         let edit = app.buttons["library-edit"]
         XCTAssertTrue(edit.waitForExistence(timeout: 30))
-        edit.tap()
-        let pinned = app.buttons["library-category-pinned"]
-        XCTAssertTrue(pinned.waitForExistence(timeout: 8))
-        let wasSelected = pinned.isSelected
-        pinned.tap()
-        app.buttons["library-edit-done"].tap()
-        XCTAssertTrue(edit.waitForExistence(timeout: 8))
-        edit.tap()
-        XCTAssertEqual(pinned.isSelected, !wasSelected, "Category selection must survive leaving and reopening inline editing")
-        app.buttons["library-edit-done"].tap()
-        let destination = app.descendants(matching: .any).matching(NSPredicate(
+        let library = app.collectionViews["library-main-list"]
+        XCTAssertTrue(library.waitForExistence(timeout: 8))
+        let destination = library.descendants(matching: .any).matching(NSPredicate(
             format: "identifier == %@ OR label == %@", "library-destination-pinned", "Pinned")).firstMatch
-        if !wasSelected {
-            XCTAssertTrue(destination.waitForExistence(timeout: 8), app.debugDescription)
-        } else {
-            expectation(for: NSPredicate { _, _ in !destination.exists }, evaluatedWith: app)
-            waitForExpectations(timeout: 8)
-        }
+        let wasSelected = destination.exists
         edit.tap()
+        let pinned = app.cells.containing(.any, identifier: "library-category-pinned").firstMatch
+        XCTAssertTrue(pinned.waitForExistence(timeout: 8))
         pinned.tap()
         app.buttons["library-edit-done"].tap()
-        app.collectionViews.firstMatch.swipeDown()
+        expectation(for: NSPredicate { _, _ in destination.exists != wasSelected }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+        app.terminate(); app.launch()
+        XCTAssertTrue(edit.waitForExistence(timeout: 30))
+        XCTAssertEqual(destination.exists, !wasSelected, "Category visibility must persist across relaunch")
+        edit.tap(); pinned.tap(); app.buttons["library-edit-done"].tap()
+        library.swipeDown()
         XCTAssertFalse(app.searchFields.allElementsBoundByIndex.contains { $0.isHittable })
     }
 
