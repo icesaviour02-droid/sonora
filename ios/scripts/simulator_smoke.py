@@ -152,6 +152,18 @@ def review_changed_screens(udid, container):
     }, indent=2))
 
 
+def review_interactions_only(udid, container):
+    """Rerun native touch regressions without screenshots or repeated provider acceptance."""
+    generate_review_media(container)
+    run_interactions(udid, export_images=False)
+    (OUTPUT / "review-scope.json").write_text(json.dumps({
+        "scope": "interactions", "passed": True,
+        "checks": ["download_categories", "playlist_rename", "queue_editing", "player_and_lyrics_source_menu"],
+        "full_provider_acceptance": False,
+        "provider_checks": "not repeated; inspect the latest functional report"
+    }, indent=2))
+
+
 def review_functionality(udid, container):
     """Exercise real state/playback and touch behavior without generating appearance screenshots."""
     generate_review_media(container)
@@ -311,6 +323,9 @@ if __name__ == "__main__":
         if BUNDLE not in processes:
             raise RuntimeError("Sonora did not remain running after launch")
         container = Path(sim("get_app_container", udid, BUNDLE, "data"))
+        if os.environ.get("SONORA_REVIEW_SCOPE") == "interactions":
+            review_interactions_only(udid, container)
+            raise SystemExit(0)
         if os.environ.get("SONORA_REVIEW_SCOPE") == "functional":
             review_functionality(udid, container)
             raise SystemExit(0)

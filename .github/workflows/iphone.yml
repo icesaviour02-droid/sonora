@@ -10,7 +10,7 @@ on:
       review_scope:
         description: 'Build only for phone review, or explicitly run simulator checks'
         type: choice
-        options: [build_only, functional, full, changed_ui]
+        options: [build_only, functional, interactions, full, changed_ui]
         default: build_only
       runner:
         description: 'iOS 27 tools on the standard free public-repository Apple runner'
