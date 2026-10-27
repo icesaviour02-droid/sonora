@@ -1,6 +1,6 @@
 # iPhone port status
 
-Development beta, 26 October 2026. Target: iPhone 13, iOS 26+; the intended phone runs iOS 27.
+Development beta, updated 27 October 2026. Latest accepted development IPA: build 19 (source b10b94a3), with 10/10 targeted iPhone 13 / iOS 27 interaction cases passing. The historical records below retain earlier results and open feature limitations; see the final build-19 section for current delivery details.
 
 ## Verified
 
@@ -728,3 +728,14 @@ The duplicate menu and queue-editing exit from the previous run did not recur. T
 - First build-19 run 40526280563 at c8d2d8af compiled device and simulator targets. Nine of ten tests passed with no runtime warnings. Fullscreen bounds, a canceled pull, and committed artwork pull-down all passed, but reopening after the interactive dismissal failed. Long-press queue/history reorder/removal passed alongside all eight previous cases. This is an app lifecycle issue candidate, not visual acceptance. Interactive cleanup now waits for UIKit's actual dismiss completion, with success/cancel recorded by the animator before transition completion; it no longer clears the retained controller inside the animator completion. Debug-only flag evidence is exported without screenshots. The final build also corrects remote playlist actions to editable YouTube playlists with retained/cancelable store requests, preserves local playlists for imported songs, rounds the surface during a pull, and captures fullscreen status-bar appearance. Replacement native acceptance required; first IPA is staged only.
 
 - Inline pill measurements from the provided crops locate Apple's play center about8 pt farther right than Sonora relative to equal pill widths. Final inline trailing padding is8 pt instead of16 pt; leading inset and44 pt hit target are retained, allowing the metadata fade boundary to extend accordingly. Run40530414310 is superseded before delivery so this final requested position correction and the dismissal fix are built/tested together.
+
+
+## Final build-19 acceptance and delivery
+
+App source b10b94a365c255c91e09d5d8b4d849c647c01e1e; successful run https://github.com/icesaviour02-droid/sonora/actions/runs/40531111456. Both native targets compiled. All ten targeted iPhone 13 / iOS 27.0 (24A434) interaction cases passed, with zero failures and no runtime warnings.
+
+The added fullscreen case confirmed the player covers the full window, survives a canceled pull, dismisses from artwork, reopens afterward, and dismisses again from empty space. Debug lifecycle flags confirm cancel retained the presented controller, committed cleanup occurred with no presented controller remaining, reopening presented a new controller, and the second pull cleaned up. This validates the UIKit-completion cleanup fix; the previous candidate's reopening failure did not recur. The added context-menu case moved an actual queue occurrence with Play Next, removed it, opened a history-row menu and removed that history entry. Existing eight touch regressions also passed, including native audio clock seeking, queue reorder/swipe/add/clear, history clipping, artwork/metadata horizontal swipes, Library persistence, Downloads/search/navigation, playlist rename and player/lyrics-source/menu return.
+
+Delivered: ios/build/LATEST-VERSION/Sonora-0.3.0-build19-b10b94a3.ipa; 8,603,290 bytes; SHA256 2dd529d51489dcdd775d1db0dc63104a8680c7c50a73b456caf04bb7ec56119a. Unsigned for iLoader. ZIP integrity, device metadata, arm64 iPhoneOS Mach-O platform and absence of test bundles were verified. Build 18 and all previous IPA files remain untouched; build-18 delivery notes were saved under Previous-Versions. Current BUILD-INFO.json, README.txt, VALIDATION.md and CHECKS/ios27-build19-*.json describe the accepted candidate. Documentation-only commits after the app source do not alter this artifact.
+
+No app appearance screenshots were exported/visually reviewed and no iOS 26 tests ran. Native behavior acceptance does not certify one-to-one Apple Music visual/motion identity or physical system volume. Only supplied reference media was sampled. No original Apple Music source was obtained. Live YouTube streaming/downloads, authenticated account persistence, background audio and AirPlay were not repeated in this UI run. System Safari sign-in, additional remote providers and complete desktop parity remain unfinished. Native provider playlist operations compile and are appropriately routed, but require a signed-in phone account for live acceptance.
