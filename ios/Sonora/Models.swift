@@ -292,6 +292,8 @@ enum Layout {
     static let playerTransportInset: CGFloat = 28
     static let playerTransportLift: CGFloat = 14
     static let playerTimeLabelLift: CGFloat = 10
+    static let playerOfflineBadgeOffset: CGFloat = 16
+    static let playerCoverHandoffStart: CGFloat = 0.6
     static let playerSeekOffset: CGFloat = 3
     static let playerFooterInset: CGFloat = 26
     static let playerFooterOffset: CGFloat = 5

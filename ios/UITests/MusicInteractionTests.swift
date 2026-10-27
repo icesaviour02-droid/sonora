@@ -38,7 +38,7 @@ final class MusicInteractionTests: XCTestCase {
     func testFullscreenPullDownCancelAndDismissFromArtworkAndBlankSpace() {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["--sonora-review-fullscreen", "--sonora-review-url", "sonora://review?id=jfKfPfyJRdk&title=Sonora%20Fullscreen%20Interaction&artist=Sonora&mode=artwork"]
+        app.launchArguments = ["--sonora-review-fullscreen", "--sonora-review-url", "sonora://seekreview"]
         app.launch()
         XCTAssertTrue(app.buttons["player-queue"].waitForExistence(timeout: 30))
         let surface = app.otherElements["player-fullscreen"].firstMatch

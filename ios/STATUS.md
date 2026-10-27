@@ -1,6 +1,6 @@
 # iPhone port status
 
-Development beta, updated 27 October 2026. Latest accepted development IPA: build20 (source d03b6d96), with11/11 targeted iPhone13/iOS27 interaction cases passing. The historical records below retain earlier results and open feature limitations; see the final build-19 section for current delivery details.
+Development beta, updated 28 October 2026. Latest accepted development IPA: build21 (source055ce861), with12/12 targeted iPhone13/iOS27 interaction cases passing. Build22 refinements are awaiting native acceptance. Historical records below retain earlier results and open limitations; see the final build-21 section for current delivery details.
 
 ## Verified
 
@@ -782,3 +782,16 @@ User explicitly requested timed lyrics files with music downloads while UI20 tes
 - First21 run40557011562 at9f9e7b0a compiled both targets and passed11/12 native cases. The new timed-download case passed, including cache-clear/fresh-store restore, app relaunch, visible offline lyric rows and a lyric tap checked against the audio clock. All eight disk/timestamp flags passed. Existing Downloads search timed out while asserting that a filtered row's accessibility node no longer existed; this does not establish a filtering failure or a test-only cause. The test now checks the actual input value, visible No Results content and absence of a hittable old result, then checks visible restored content. It uses a bounded12 s wait to accommodate native accessibility updates. An AVAudioSession main-thread activation warning was also reported; system category/activation now runs on a serial actor with retained task, pause/occurrence/generation guards before starting native playback. A final guard prevents lyric fetches/mutations while download-index restoration has failed. Replacement compilation and all12 cases required before delivery; no21 IPA has been promoted.
 
 - Before delivery, async audio activation now publishes loading state and Toggle follows the existing playback intent as well as native play/loading flags. A second tap while session activation is pending therefore pauses/cancels rather than issuing another Play. Success/error clear the activation loading state. Run40560148128 is superseded before acceptance so this final cancellation behavior is included in the exact tested archive; no further UI/design changes were added.
+
+
+## Final build-21 acceptance
+
+Source055ce8611bdbc86d34a339a51cf2ec2012d9fe0c; run https://github.com/icesaviour02-droid/sonora/actions/runs/40561102402 succeeded with both native targets compiled,12/12 targeted interaction cases passed and zero runtime warnings on iPhone13/iOS27.0(24A434). All eight durable lyric checks passed, plus queue/history native targeted-preview evidence. The native case confirms offline timed lyrics survive cache clearing and relaunch, and tapping a line moves the audio clock. Live source availability and phone background completion remain unverified.
+
+Delivered archive: ios/build/LATEST-VERSION/Sonora-0.3.0-build21-055ce861.ipa;8,660,045 bytes; SHA2564cd66b515c37a2a8e1b095e0ff94ca5596766f52d8c4b31604dcfe0403f3e5ee. Older IPAs preserved. These checks do not certify exact Apple Music pixels, physical volume, live account/provider parity, background or AirPlay. No appearance screenshots or iOS26 tests were run.
+
+## Build22: late cover handoff, native volume and offline spacing
+
+Pending native acceptance. Keeps the accepted rounded full-window percent-driven pull/cancel lifecycle. Artwork stays in the panel while the finger is down. After committed release, its actual high-resolution image moves into the actual mini-player cover during the final40% of panel travel; the live presentation-layer displacement drives the handoff. Real UIKit cover nodes and their shadows hide/restore synchronously, without SwiftUI opacity races. Reduced Motion skips the separate flight. Twelve targeted cases remain, with full-window dismissal using generated tagged AAC artwork and DEBUG geometric/alpha evidence required for a late, post-release handoff and restored real images.
+
+Per the user's explicit request to simplify the glitchy volume control, MPVolumeView now has no custom track/thumb images, scaling, activation animation or separate speaker icons. Native iOS owns the slider's internal alignment and touches. Physical hardware-volume behavior still requires phone review. The offline badge is centered separately below the time-label row in the gap before transport; its position no longer inherits the labels' upward offset. Automatic durable lyric downloads from21 remain included.

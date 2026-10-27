@@ -16,10 +16,11 @@ struct MiniPlayer: View {
         HStack(spacing: Layout.compact) {
             Button(action: open) {
                 HStack(spacing: Layout.compact) {
-                    ArtworkView(track: playback.current,
-                        side: placement == .inline ? Layout.inlineMiniArtwork : Layout.miniArtwork,
-                        cornerRadius: Layout.miniArtworkRadius)
-                        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+                    PlayerArtworkVisual(image: playback.currentArtwork, hero: hero, role: .mini,
+                        radius: Layout.miniArtworkRadius, shadowOpacity: 0.18,
+                        shadowRadius: Layout.miniArtworkRadius, shadowOffset: Layout.miniArtworkRadius / 2)
+                        .frame(width: placement == .inline ? Layout.inlineMiniArtwork : Layout.miniArtwork,
+                            height: placement == .inline ? Layout.inlineMiniArtwork : Layout.miniArtwork)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 0) {
                         FadingText(playback.current?.title ?? "", fixedPointSize: titleSize, weight: .semibold)
@@ -204,7 +205,7 @@ struct NowPlayingView: View {
         .overlay(alignment: .topLeading) {
             ZStack(alignment: .topLeading) {
             if !artworkFrame.isEmpty {
-                playerCover(playback.current, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
+                playerCover(playback.current, primary: true, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
                     .modifier(PlayerTrackTranslation(offset: mode == .artwork ? trackOffset : 0))
                 if mode == .artwork, let preview = trackPreview {
                     playerCover(preview.track, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
@@ -480,7 +481,16 @@ struct NowPlayingView: View {
     }
 
     /// Shadow belongs to the rounded cover and scales with play/pause, without a rectangular backing layer.
-    private func playerCover(_ track: MusicTrack?, renderSide: CGFloat) -> some View {
+    @ViewBuilder private func playerCover(_ track: MusicTrack?, primary: Bool = false, renderSide: CGFloat) -> some View {
+        if primary {
+            PlayerArtworkVisual(image: playback.currentArtwork, hero: hero, role: .expanded,
+                radius: mode == .artwork ? Layout.artworkRadius : Layout.compact,
+                shadowOpacity: Float(mode != .artwork ? 0 : (playback.isPlaying ? Layout.playerShadowOpacity : Layout.playerPausedShadowOpacity)),
+                shadowRadius: Layout.playerShadowRadius, shadowOffset: Layout.compact / 2)
+                .frame(width: artworkFrame.width, height: artworkFrame.height)
+                .position(x: artworkFrame.midX, y: artworkFrame.midY)
+                .allowsHitTesting(false).accessibilityHidden(true)
+        } else {
         ArtworkView(track: track, side: renderSide, cornerRadius: 0)
             .scaleEffect(artworkFrame.width / renderSide, anchor: .topLeading)
             .frame(width: artworkFrame.width, height: artworkFrame.height, alignment: .topLeading)
@@ -492,6 +502,7 @@ struct NowPlayingView: View {
             .animation(reduceMotion ? nil : PlayerMotion.artworkScale, value: playback.isPlaying)
             .position(x: artworkFrame.midX, y: artworkFrame.midY)
             .allowsHitTesting(false).accessibilityHidden(true)
+        }
     }
 
     private var trackPageWidth: CGFloat { max(Layout.control, contentViewport.width + Layout.playerMargin * 2) }
@@ -815,21 +826,23 @@ struct NowPlayingView: View {
                 #endif
             }
 
-            HStack {
-                Text(time(isSeeking ? seekValue : playback.elapsed))
-                Spacer()
+            ZStack {
+                HStack {
+                    Text(time(isSeeking ? seekValue : playback.elapsed))
+                    Spacer()
+                    Text("-" + time(max(0, playback.duration - (isSeeking ? seekValue : playback.elapsed))))
+                }
+                .appFont(.caption).monospacedDigit()
+                .offset(y: -Layout.playerTimeLabelLift)
                 if let badge = qualityBadgeText {
                     Text(badge)
                         .appFont(.caption2, weight: .semibold)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, Layout.compact - 2)
+                        .padding(.vertical, Layout.compact / 4)
                         .background(.white.opacity(0.14), in: Capsule())
+                        .offset(y: Layout.playerOfflineBadgeOffset)
                 }
-                Spacer()
-                Text("-" + time(max(0, playback.duration - (isSeeking ? seekValue : playback.elapsed))))
             }
-            .appFont(.caption).monospacedDigit()
-            .offset(y: -Layout.playerTimeLabelLift)
             .foregroundStyle(.white.opacity(0.68))
             .accessibilityHidden(true)
         }

@@ -107,6 +107,7 @@ final class LibraryStore {
         reviewTask = Task { [weak self] in
             guard let self, let track = await self.importReviewRecording() else { return }
             playback.prepareReview(track)
+            for _ in 0..<100 where playback.currentArtwork == nil { try? await Task.sleep(for: .milliseconds(20)) }
             ready()
         }
     }

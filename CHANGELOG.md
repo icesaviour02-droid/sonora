@@ -47,6 +47,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The iPhone player keeps artwork inside its rounded surface while being pulled down, then moves it into the mini-player after release. System volume now uses a plain native slider, and the offline badge sits separately below the time labels.
+
 - Now Playing pulls down as one full-screen surface, keeping artwork and controls together throughout dismissal and cancellation.
 - Long-pressed queue and history songs lift from their own rows and return to the same row when dismissed.
 - Library, artist and downloaded album/playlist navigation starts from the tapped cover, with visible category separators and consistent native toolbar actions.

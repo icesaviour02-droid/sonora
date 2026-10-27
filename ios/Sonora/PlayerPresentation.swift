@@ -109,6 +109,7 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
                 let projected = progress + velocity / height * 0.2
                 let finish = pan.state != .cancelled && (progress > 0.25 || projected > 0.35) && velocity > -100
                 interaction?.completionSpeed = min(1.5, max(0.5, abs(velocity) / height))
+                hero?.release(committing: finish)
                 if finish { interaction?.finish() } else { interaction?.cancel() }
                 interaction = nil
             default: break
@@ -165,10 +166,12 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
             if opening { container.addSubview(surface) }
             surface.frame = container.bounds
             surface.layoutIfNeeded()
+            if opening { surface.setNeedsLayout(); surface.layoutIfNeeded() }
             let reduced = UIAccessibility.isReduceMotionEnabled
+            hero?.begin(surface: surface, opening: opening, interactive: context.isInteractive)
             surface.layer.cornerCurve = .continuous
             surface.layer.masksToBounds = true
-            surface.layer.cornerRadius = opening && !reduced ? Layout.playerDismissRadius : 0
+            surface.layer.cornerRadius = reduced ? 0 : Layout.playerDismissRadius
             if opening {
                 if reduced { surface.alpha = 0 }
                 else { surface.transform = CGAffineTransform(translationX: 0, y: container.bounds.height) }
@@ -178,14 +181,15 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
                 else { surface.transform = self.opening ? .identity : CGAffineTransform(translationX: 0, y: container.bounds.height) }
                 surface.layer.cornerRadius = self.opening || reduced ? 0 : Layout.playerDismissRadius
             }
-            animation.addCompletion { [weak self] _ in
+            animation.addCompletion { _ in
                 let success = !context.transitionWasCancelled
                 surface.transform = .identity; surface.alpha = 1
                 surface.layer.cornerRadius = 0; surface.layer.masksToBounds = false
-                if !success && self?.opening == true { surface.removeFromSuperview() }
-                self?.completed(success)
+                if !success && self.opening { surface.removeFromSuperview() }
+                self.hero?.finish()
+                self.completed(success)
                 context.completeTransition(success)
-                self?.animator = nil
+                self.animator = nil
             }
             animator = animation
             return animation
