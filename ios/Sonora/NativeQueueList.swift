@@ -46,6 +46,7 @@ struct NativeQueueList: UIViewRepresentable {
         private var lastHeaderHeight: CGFloat?
         private var historyRevealed = false
         private var hasHistory = false
+        private let historyMasks = NSMapTable<UICollectionViewCell, CALayer>(keyOptions: .weakMemory, valueOptions: .strongMemory)
         private let historyFeedback = UIImpactFeedbackGenerator(style: .soft)
 
         init(parent: NativeQueueList) { self.parent = parent }
@@ -212,15 +213,24 @@ struct NativeQueueList: UIViewRepresentable {
 
         /// History rows stop below their pinned heading instead of showing through or above History/Clear.
         private func clipUnderHistoryHeader(_ view: UICollectionView) {
-            let heading = view.layoutAttributesForSupplementaryElement(ofKind: UICollectionView.elementKindSectionHeader,
-                at: IndexPath(item: 0, section: 0))
-            let bottom = hasHistory ? max(0, (heading?.frame.maxY ?? view.bounds.minY) - view.bounds.minY) : 0
+            // UIKit owns lifted cells and transient layouts during a native reorder.
+            guard !view.hasActiveDrag, !view.hasActiveDrop else { return }
+            let heading = hasHistory ? view.visibleSupplementaryViews(ofKind: UICollectionView.elementKindSectionHeader).first : nil
+            let bottom = max(0, (heading?.frame.maxY ?? view.bounds.minY) - view.bounds.minY)
             parent.historyHeaderBottom(bottom)
             let cutoff = view.bounds.minY + bottom
             for index in view.indexPathsForVisibleItems {
                 guard let cell = view.cellForItem(at: index) else { continue }
-                if bottom <= 0 || cell.frame.minY >= cutoff { cell.layer.mask = nil; continue }
-                let mask = cell.layer.mask ?? CALayer()
+                let ownMask = historyMasks.object(forKey: cell)
+                if bottom <= 0 || cell.frame.minY >= cutoff {
+                    if let ownMask, cell.layer.mask === ownMask { cell.layer.mask = nil }
+                    historyMasks.removeObject(forKey: cell)
+                    continue
+                }
+                // Never replace a mask installed by native row lifting, highlighting or swipe controls.
+                if let existing = cell.layer.mask, existing !== ownMask { continue }
+                let mask = ownMask ?? CALayer()
+                historyMasks.setObject(mask, forKey: cell)
                 CATransaction.begin(); CATransaction.setDisableActions(true)
                 let top = min(cell.bounds.height, max(0, cutoff - cell.frame.minY))
                 mask.backgroundColor = UIColor.black.cgColor

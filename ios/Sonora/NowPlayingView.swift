@@ -246,7 +246,7 @@ struct NowPlayingView: View {
                 }
             }
                 if controlsMoving, !controlsFrame.isEmpty {
-                    HStack(spacing: Layout.compact) { favoriteControl; overflowMenu }
+                    HStack(spacing: Layout.compact) { favoriteGlyph; overflowGlyph }
                         .frame(width: controlsFrame.width, height: controlsFrame.height)
                         .position(x: controlsFrame.midX, y: controlsFrame.midY)
                         .allowsHitTesting(false).accessibilityHidden(true)
@@ -455,9 +455,16 @@ struct NowPlayingView: View {
 
     /// Stable controls stay in their real native row; only their moving visual layer is shared between modes.
     private func trackActions(presentation: Mode, measuring: Bool = true) -> some View {
-        HStack(spacing: Layout.compact) { favoriteControl; overflowMenu }
+        HStack(spacing: Layout.compact) {
+            if mode == presentation && !controlsMoving && !(presentation == .queue && measuring) {
+                favoriteControl; overflowMenu
+            } else {
+                favoriteGlyph; overflowGlyph
+            }
+        }
+            .transaction { $0.animation = nil }
             .opacity(controlsMoving ? 0 : 1)
-            .accessibilityHidden(controlsMoving)
+            .accessibilityHidden(controlsMoving || mode != presentation || (presentation == .queue && measuring))
             .background {
                 if measuring {
                     GeometryReader { geometry in
@@ -549,6 +556,20 @@ struct NowPlayingView: View {
         trackPreview = nil; trackDragging = false; trackDragOrigin = 0
     }
 
+    /// Animation snapshots are glyphs only, so they cannot create duplicate native menu elements.
+    private var favoriteGlyph: some View {
+        let favorite = playback.current.map { current in
+            current.youtubeID != nil ? catalog.isLiked(current) : localLibrary.favoriteTracks.contains(current.id)
+        } ?? false
+        return Image(systemName: favorite ? "star.fill" : "star")
+            .appFont(.title2, weight: .regular).foregroundStyle(.white.opacity(0.88))
+            .frame(width: Layout.control, height: Layout.control)
+    }
+    private var overflowGlyph: some View {
+        Image(systemName: "ellipsis").appFont(.body, weight: .semibold)
+            .foregroundStyle(.white.opacity(0.88)).frame(width: Layout.control, height: Layout.control)
+    }
+
     @ViewBuilder
     private var favoriteControl: some View {
         if let current = playback.current {
@@ -557,10 +578,7 @@ struct NowPlayingView: View {
                 if current.youtubeID != nil { catalog.toggleLike(current) }
                 else { localLibrary.toggleFavorite(current.id, category: .tracks) }
             } label: {
-                Image(systemName: favorite ? "star.fill" : "star")
-                    .appFont(.title2, weight: .regular)
-                    .foregroundStyle(.white.opacity(0.88))
-                    .frame(width: Layout.control, height: Layout.control)
+                favoriteGlyph
             }
             .buttonStyle(.plain)
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -672,11 +690,7 @@ struct NowPlayingView: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis")
-                .appFont(.body, weight: .semibold)
-                .foregroundStyle(.white.opacity(0.88))
-                .frame(width: Layout.control, height: Layout.control)
-
+            overflowGlyph
         }
         .buttonStyle(.plain)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)

@@ -79,15 +79,55 @@ def generate_review_media(container):
     (tone.parent / "sonora-review-cover.png").write_bytes(cover)
 
 
+def export_crash_summaries(bundle):
+    """Export text crash evidence only; never export screenshots for appearance review."""
+    destination = OUTPUT / "CrashDiagnostics"
+    try:
+        result = subprocess.run(["xcrun", "xcresulttool", "export", "diagnostics", "--path", str(bundle),
+            "--output-path", str(destination)], capture_output=True, text=True, timeout=45)
+        reports = []
+        if result.returncode == 0:
+            import zipfile
+            entries = []
+            for path in destination.rglob("*"):
+                if path.suffix == ".ips": entries.append((path.name, path.read_bytes()))
+                elif path.suffix == ".zip":
+                    try:
+                        with zipfile.ZipFile(path) as archive:
+                            entries.extend((name, archive.read(name)) for name in archive.namelist()
+                                if name.endswith(".ips") and archive.getinfo(name).file_size < 2_000_000)
+                    except (OSError, zipfile.BadZipFile): pass
+            for name, data in entries:
+                try:
+                    text = data.decode("utf-8")
+                    try: value = json.loads(text)
+                    except ValueError: value = json.loads(text.split("\n", 1)[1])
+                    if "Sonora" not in value.get("procName", name): continue
+                    index = value.get("faultingThread", 0)
+                    threads = value.get("threads", [])
+                    frames = threads[index].get("frames", [])[:30] if isinstance(index, int) and index < len(threads) else []
+                    reports.append({"file": name, "process": value.get("procName"), "exception": value.get("exception"),
+                        "termination": value.get("termination"), "lastExceptionBacktrace": value.get("lastExceptionBacktrace", [])[:30],
+                        "faultingFrames": frames, "images": [{"name": image.get("name"), "base": image.get("base")}
+                            for image in value.get("usedImages", [])]})
+                except (ValueError, IndexError, UnicodeError): pass
+        (OUTPUT / "crash-summary.json").write_text(json.dumps({"exported": result.returncode == 0, "reports": reports}, indent=2))
+    except (OSError, subprocess.SubprocessError) as error:
+        (OUTPUT / "crash-summary.json").write_text(json.dumps({"exported": False, "error": type(error).__name__}))
+
+
 def run_interactions(udid, export_images=True):
     """Run real touch tests on the same populated simulator; failure preserves the result bundle."""
     test_run = next((IOS / "build/simulator/Build/Products").glob("*.xctestrun"))
     bundle = OUTPUT / "MusicInteractions.xcresult"
+    failed = True
     try:
         subprocess.run(["xcodebuild", "test-without-building", "-xctestrun", str(test_run),
             "-destination", "id=" + udid, "-parallel-testing-enabled", "NO",
             "-resultBundlePath", str(bundle)], check=True, timeout=480)
+        failed = False
     finally:
+        if failed: export_crash_summaries(bundle)
         current = Path(sim("get_app_container", udid, BUNDLE, "data"))
         drag = current / "Library/Application Support/queue-drag-review.json"
         if drag.exists():

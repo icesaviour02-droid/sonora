@@ -23,6 +23,8 @@ final class MusicInteractionTests: XCTestCase {
         waitForExpectations(timeout: 8)
         XCTAssertTrue(app.buttons["player-return-artwork"].waitForExistence(timeout: 8))
         app.buttons["player-return-artwork"].tap()
+        XCTAssertTrue(app.buttons["player-more"].waitForExistence(timeout: 8))
+        XCTAssertEqual(app.buttons.matching(identifier: "player-more").count, 1)
         app.buttons["player-more"].tap()
         XCTAssertTrue(app.buttons["Add to Queue"].firstMatch.waitForExistence(timeout: 8))
         app.buttons["Add to Queue"].firstMatch.tap()
