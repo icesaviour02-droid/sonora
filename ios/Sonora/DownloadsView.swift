@@ -164,39 +164,100 @@ private enum DownloadSort: String, CaseIterable, Identifiable {
 
 struct DownloadedAlbumsView: View {
     @Environment(DownloadsStore.self) private var downloads
+    @Environment(PlaybackController.self) private var playback
+    @AppStorage("sonora.downloaded-albums.grid") private var grid = true
+    private var albums: [LocalAlbum] { LocalAlbum.collect(downloads.completedTracks) }
+
     var body: some View {
-        List(LocalAlbum.collect(downloads.completedTracks)) { album in
-            NavigationLink {
-                DownloadedCollectionView(title: album.title, subtitle: album.artist, artwork: album.tracks.first?.displayArtworkURL, trackIDs: album.tracks.map(\.id))
-            } label: { DownloadedCollectionLabel(title: album.title, subtitle: album.artist, artwork: album.tracks.first?.displayArtworkURL) }
-        }.listStyle(.plain).appNavigationTitle("ios-albums")
+        List {
+            CollectionPlayShuffleHeader(playAction: {
+                if let first = downloads.completedTracks.first { playback.play(first, in: downloads.completedTracks) }
+            }, shuffleAction: { playback.playShuffled(downloads.completedTracks) })
+                .disabled(downloads.completedTracks.isEmpty).listRowSeparator(.hidden)
+            ForEach(LibraryAlphabet.groups(albums, title: { $0.artist })) { group in
+                Section {
+                    if grid { CollectionGridRows(group.items) { album in albumLink(album) } }
+                    else { ForEach(group.items) { album in albumLink(album) } }
+                } header: { Text(group.id).appFont(.headline) }
+                .sectionIndexLabel(Text(group.id))
+            }
+        }
+        .listStyle(.plain).listSectionIndexVisibility(.visible).appNavigationTitle("ios-albums")
+        .toolbar { ToolbarItem(placement: .primaryAction) { CollectionGridMenu(grid: $grid) } }
+    }
+
+    private func albumLink(_ album: LocalAlbum) -> some View {
+        NavigationLink {
+            DownloadedCollectionView(title: album.title, subtitle: album.artist,
+                artwork: album.tracks.first?.displayArtworkURL, trackIDs: album.tracks.map(\.id))
+        } label: {
+            if grid {
+                SquareCard(title: album.title, subtitle: album.artist, artworkURL: album.tracks.first?.displayArtworkURL,
+                    fillsColumn: true)
+            } else {
+                DownloadedCollectionLabel(title: album.title, subtitle: album.artist, artwork: album.tracks.first?.displayArtworkURL)
+            }
+        }.buttonStyle(.plain)
     }
 }
 
 struct DownloadedArtistsView: View {
     @Environment(DownloadsStore.self) private var downloads
-    private var names: [String] { Array(Set(downloads.completedTracks.map(\.artist))).sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
+    private var names: [String] { Array(Set(downloads.completedTracks.map(\.artist))) }
     var body: some View {
-        List(names, id: \.self) { name in
-            let tracks = downloads.completedTracks.filter { $0.artist == name }
-            NavigationLink {
-                DownloadedCollectionView(title: name, subtitle: String(localized: "ios-downloaded"), artwork: tracks.first?.displayArtworkURL, trackIDs: tracks.map(\.id))
-            } label: { DownloadedCollectionLabel(title: name, subtitle: "", artwork: tracks.first?.displayArtworkURL) }
-        }.listStyle(.plain).appNavigationTitle("ios-artists")
+        List {
+            ForEach(LibraryAlphabet.groups(names, title: { $0 })) { group in
+                Section {
+                    ForEach(group.items, id: \.self) { name in
+                        let tracks = downloads.completedTracks.filter { $0.artist == name }
+                        NavigationLink {
+                            DownloadedCollectionView(title: name, subtitle: String(localized: "ios-downloaded"),
+                                artwork: tracks.first?.displayArtworkURL, trackIDs: tracks.map(\.id))
+                        } label: {
+                            HStack(spacing: Layout.spacing) {
+                                ArtworkView(url: tracks.first?.displayArtworkURL, side: Layout.rowArtwork)
+                                    .placeholderSymbol("music.mic").clipShape(Circle())
+                                Text(name).appFont(.body)
+                            }
+                        }
+                    }
+                } header: { Text(group.id).appFont(.headline) }
+                .sectionIndexLabel(Text(group.id))
+            }
+        }.listStyle(.plain).listSectionIndexVisibility(.visible).appNavigationTitle("ios-artists")
     }
 }
 
 struct DownloadedPlaylistsView: View {
     @Environment(DownloadsStore.self) private var downloads
-    private var playlists: [DownloadedPlaylist] { downloads.playlists.filter { !downloads.tracks(in: $0).isEmpty } }
+    @AppStorage("sonora.downloaded-playlists.grid") private var grid = true
+    private var playlists: [DownloadedPlaylist] {
+        downloads.playlists.filter { !downloads.tracks(in: $0).isEmpty }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
     var body: some View {
-        List(playlists) { playlist in
-            NavigationLink {
-                DownloadedCollectionView(title: playlist.title, subtitle: playlist.author, artwork: playlist.artworkURL,
-                    trackIDs: playlist.trackIDs)
-            } label: { DownloadedCollectionLabel(title: playlist.title, subtitle: playlist.author, artwork: playlist.artworkURL) }
+        List {
+            if grid { CollectionGridRows(playlists) { playlist in playlistLink(playlist) } }
+            else { ForEach(playlists) { playlist in playlistLink(playlist) } }
         }.listStyle(.plain).appNavigationTitle("ios-playlists")
-        .overlay { if playlists.isEmpty { ContentUnavailableView("ios-playlists", systemImage: "music.note.list", description: Text("ios-downloaded-playlists-description")) } }
+        .toolbar { ToolbarItem(placement: .primaryAction) { CollectionGridMenu(grid: $grid) } }
+        .overlay {
+            if playlists.isEmpty {
+                ContentUnavailableView("ios-playlists", systemImage: "music.note.list",
+                    description: Text("ios-downloaded-playlists-description"))
+            }
+        }
+    }
+
+    private func playlistLink(_ playlist: DownloadedPlaylist) -> some View {
+        NavigationLink {
+            DownloadedCollectionView(title: playlist.title, subtitle: playlist.author,
+                artwork: playlist.artworkURL, trackIDs: playlist.trackIDs)
+        } label: {
+            if grid {
+                SquareCard(title: playlist.title, subtitle: playlist.author, artworkURL: playlist.artworkURL, fillsColumn: true)
+            } else { DownloadedCollectionLabel(title: playlist.title, subtitle: playlist.author, artwork: playlist.artworkURL) }
+        }.buttonStyle(.plain)
     }
 }
 
@@ -221,6 +282,7 @@ struct DownloadedCollectionView: View {
                     .swipeActions { Button("ios-remove-download", role: .destructive) { downloads.remove(track.id) } }
             }
         }.listStyle(.plain).navigationBarTitleDisplayMode(.inline)
+        .appNavigationTitle("").collectionArtworkTheme(artwork)
     }
 }
 

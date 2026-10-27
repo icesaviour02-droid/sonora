@@ -730,6 +730,7 @@ struct PlaylistsCollectionView: View {
     @Environment(AccountStore.self) private var account
     @Environment(LocalLibraryStore.self) private var local
     @Environment(LibraryStore.self) private var library
+    @Namespace private var coverTransition
     @State private var createLocal = false
     @State private var createYouTube = false
     @State private var createdID: String?
@@ -742,19 +743,23 @@ struct PlaylistsCollectionView: View {
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: Layout.spacing), GridItem(.flexible(), spacing: Layout.spacing)],
                         alignment: .leading, spacing: Layout.spacing) {
                         ForEach(local.playlists) { playlist in
-                            NavigationLink { LocalPlaylistView(playlistID: playlist.id) } label: {
+                            NavigationLink { LocalPlaylistView(playlistID: playlist.id)
+                                .collectionCoverTransition(id: "local:" + playlist.id, in: coverTransition) } label: {
                                 SquareCard(title: playlist.title, subtitle: String(localized: "ios-on-my-iphone"),
                                     artworkURL: playlist.tracks(in: library.tracks).first { $0.displayArtworkURL != nil }?.displayArtworkURL,
                                     fillsColumn: true)
+                                    .matchedTransitionSource(id: "local:" + playlist.id, in: coverTransition)
                             }.buttonStyle(.plain)
                         }
                         ForEach(catalog.savedPlaylists) { playlist in
                             NavigationLink {
                                 PlaylistDetailView(playlistID: playlist.id, fallbackTitle: playlist.title,
                                     fallbackAuthor: playlist.author, fallbackArtwork: playlist.artworkURL)
+                                    .collectionCoverTransition(id: "remote:" + playlist.id, in: coverTransition)
                             } label: {
                                 SquareCard(title: playlist.title, subtitle: playlist.author,
                                     artworkURL: playlist.artworkURL, fillsColumn: true)
+                                    .matchedTransitionSource(id: "remote:" + playlist.id, in: coverTransition)
                             }.buttonStyle(.plain)
                         }
                     }.padding(Layout.spacing)
@@ -801,8 +806,10 @@ struct PlaylistsCollectionView: View {
                 Button("ios-create-playlist", systemImage: "plus") { createLocal = true }
                     .disabled(local.isBusy || !local.isLoaded)
                 ForEach(local.playlists) { playlist in
-                    NavigationLink { LocalPlaylistView(playlistID: playlist.id) } label: {
+                    NavigationLink { LocalPlaylistView(playlistID: playlist.id)
+                                .collectionCoverTransition(id: "local:" + playlist.id, in: coverTransition) } label: {
                         LocalPlaylistLabel(playlist: playlist, tracks: playlist.tracks(in: library.tracks))
+                            .matchedTransitionSource(id: "local:" + playlist.id, in: coverTransition)
                     }
                 }
             } header: { Text("ios-on-my-iphone") } footer: { Text("ios-local-playlists-description") }
@@ -814,6 +821,7 @@ struct PlaylistsCollectionView: View {
                         NavigationLink {
                             PlaylistDetailView(playlistID: playlist.id, fallbackTitle: playlist.title,
                                 fallbackAuthor: playlist.author, fallbackArtwork: playlist.artworkURL)
+                                    .collectionCoverTransition(id: "remote:" + playlist.id, in: coverTransition)
                         } label: {
                             HStack(spacing: Layout.spacing) {
                                 ArtworkView(url: playlist.artworkURL, side: Layout.rowArtwork)
@@ -821,7 +829,7 @@ struct PlaylistsCollectionView: View {
                                     Text(playlist.title).appFont(.body, weight: .medium).lineLimit(2)
                                     Text(playlist.author).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                                 }
-                            }
+                            }.matchedTransitionSource(id: "remote:" + playlist.id, in: coverTransition)
                         }
                     }
                 }
@@ -908,6 +916,7 @@ struct AlbumsCollectionView: View {
     @Environment(CatalogStore.self) private var catalog
     @Environment(AccountStore.self) private var account
     @Environment(PlaybackController.self) private var playback
+    @Namespace private var coverTransition
     @AppStorage("sonora.albums.grid") private var grid = true
     @State private var sort = AlbumSort.artist
     @State private var playTask: Task<Void, Never>?
@@ -944,13 +953,13 @@ struct AlbumsCollectionView: View {
     }
 
     private var groups: [AlphabeticGroup<AlbumEntry>] {
-        LibraryAlphabet.groups(albums) { album in
-            switch sort {
-            case .title: album.title
-            case .artist: album.artist
-            case .year: album.year.map(String.init) ?? "#"
+        if sort == .year {
+            let grouped = Dictionary(grouping: albums) { $0.year.map(String.init) ?? String(localized: "ios-unknown-year") }
+            return grouped.keys.sorted().map { key in
+                AlphabeticGroup(id: key, items: (grouped[key] ?? []).sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending })
             }
         }
+        return LibraryAlphabet.groups(albums) { sort == .title ? $0.title : $0.artist }
     }
 
     var body: some View {
@@ -1008,16 +1017,20 @@ struct AlbumsCollectionView: View {
 
     private func albumLink(_ album: AlbumEntry, grid: Bool) -> some View {
         NavigationLink {
-            if let local = album.local { LocalAlbumView(albumID: local.id) }
+            if let local = album.local { LocalAlbumView(albumID: local.id)
+                    .collectionCoverTransition(id: album.id, in: coverTransition) }
             else if let remote = album.remote {
                 AlbumDetailView(browseID: remote.id, fallbackTitle: remote.title,
                     fallbackArtist: remote.artist, fallbackArtwork: remote.artworkURL)
+                    .collectionCoverTransition(id: album.id, in: coverTransition)
             }
         } label: {
             if grid {
                 SquareCard(title: album.title, subtitle: album.artist, artworkURL: album.artwork, fillsColumn: true)
+                    .matchedTransitionSource(id: album.id, in: coverTransition)
             } else {
                 DownloadedCollectionLabel(title: album.title, subtitle: album.artist, artwork: album.artwork)
+                    .matchedTransitionSource(id: album.id, in: coverTransition)
             }
         }
         .buttonStyle(.plain)
@@ -1253,6 +1266,8 @@ struct AlbumDetailView: View {
             }
         }
         .listStyle(.plain)
+        .collectionArtworkTheme(detail?.artwork_url ?? fallbackArtwork)
+        .appNavigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -1357,6 +1372,8 @@ struct PlaylistDetailView: View {
             }
         }
         .listStyle(.plain)
+        .collectionArtworkTheme(detail?.artwork_url ?? fallbackArtwork)
+        .appNavigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

@@ -41,6 +41,7 @@ struct NativeQueueList: UIViewRepresentable {
         private var lastSource: String?
         private var lastHeaderHeight: CGFloat?
         private var historyRevealed = false
+        private var hasHistory = false
         private let historyFeedback = UIImpactFeedbackGenerator(style: .soft)
 
         init(parent: NativeQueueList) { self.parent = parent }
@@ -93,6 +94,7 @@ struct NativeQueueList: UIViewRepresentable {
             guard let collection, dataSource != nil, !collection.hasActiveDrag, !collection.hasActiveDrop else { return }
             let upcoming = parent.playback.upcomingItems
             let history = Array(parent.history.filter { $0.id != parent.playback.current?.id }.reversed())
+            hasHistory = !history.isEmpty
             var entries: [Entry] = []
             var updated: [Entry: MusicTrack] = [:]
             if !history.isEmpty {
@@ -155,7 +157,7 @@ struct NativeQueueList: UIViewRepresentable {
             let offset = attributes.frame.minY - view.contentOffset.y
             parent.headerOffset(offset)
             // Native scroll physics provide resistance; crossing the reveal threshold clicks once.
-            if !parent.history.isEmpty, view.isDragging, offset > Layout.historyRevealThreshold, !historyRevealed {
+            if hasHistory, view.isDragging, offset > Layout.historyRevealThreshold, !historyRevealed {
                 historyRevealed = true
                 historyFeedback.impactOccurred()
             } else if offset < Layout.historyRevealReset {

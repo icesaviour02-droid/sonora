@@ -151,6 +151,7 @@ struct LocalPlaylistView: View {
                     if let error = local.error { Text(error).foregroundStyle(.secondary) }
                 }
                 .listStyle(.plain)
+                .collectionArtworkTheme(tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL)
                 .environment(\.editMode, $editMode)
                 .onScrollGeometryChange(for: Bool.self) { geometry in
                     geometry.contentOffset.y > Layout.collectionArtwork

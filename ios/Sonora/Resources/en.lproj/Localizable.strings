@@ -315,6 +315,7 @@
 "ios-track-unavailable" = "This song is no longer in your imported library.";
 "ios-unit-hertz" = "Hz";
 "ios-unknown-artist" = "Unknown artist";
+"ios-unknown-year" = "Unknown Year";
 "ios-unpin" = "Unpin";
 "ios-version" = "Version";
 "ios-view-as" = "View As";

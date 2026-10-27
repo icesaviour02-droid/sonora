@@ -45,6 +45,7 @@ struct LocalAlbumView: View {
                     }
                 }
                 .listStyle(.plain)
+                .collectionArtworkTheme(album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL)
             } else { ContentUnavailableView("ios-albums", systemImage: "square.stack") }
         }
         .appNavigationTitle("")

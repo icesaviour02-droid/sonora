@@ -38,6 +38,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- iPhone album and playlist pages use cover-derived backgrounds and cover-origin navigation. Downloaded collections offer matching grids and alphabetical navigation.
+
 - iPhone page titles follow the selected interface font, including collapsed navigation titles and sheets. Songs and Artists gain alphabetical section indexes, and collection grids use the available width.
 
 - Queue history scrolls above the current song with a tactile reveal. Collection transport buttons use matching capsules, and mini-player artwork uses smaller reference proportions.
