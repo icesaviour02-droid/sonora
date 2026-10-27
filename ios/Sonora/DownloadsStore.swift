@@ -305,7 +305,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--sonora-review-url") { return }
         #endif
-        guard !isRestoring, lyricsTask == nil, lyricsNetworkAvailable,
+        guard !isRestoring, error == nil, lyricsTask == nil, lyricsNetworkAvailable,
               allowsCellular || !lyricsOnCellular else { return }
         let sources = lyricsSources
         guard !sources.isEmpty, let entry = entries.first(where: {

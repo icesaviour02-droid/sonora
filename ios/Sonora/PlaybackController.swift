@@ -51,6 +51,8 @@ final class PlaybackController {
     @ObservationIgnored private var originalQueue: [QueuedTrack] = []
     @ObservationIgnored private var radioTask: Task<Void, Never>?
     @ObservationIgnored private var resolutionTask: Task<Void, Never>?
+    @ObservationIgnored private var audioActivationTask: Task<Void, Never>?
+    @ObservationIgnored private var audioActivationID = UUID()
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var nowPlayingArtwork: MPMediaItemArtwork?
     @ObservationIgnored private var artworkTrackID: String?
@@ -531,22 +533,34 @@ final class PlaybackController {
         startAudio()
     }
 
+    /// Activate the audio session on its serial actor; a pause/track change cancels only the playback intent.
     private func startAudio() {
         wantsToPlay = true
         guard !audioEffects.isPreparing else { isLoading = true; return }
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, policy: .longFormAudio, options: [])
-            try session.setActive(true)
-            if duration > 0 && elapsed >= duration {
-                listen = ListeningProgress(); listenID = UUID(); announcedListen = false
-                seek(to: 0)
+        audioActivationTask?.cancel()
+        audioActivationID = UUID()
+        let token = audioActivationID
+        let occurrence = currentQueueID
+        audioActivationTask = Task { [weak self] in
+            do {
+                try await PlaybackAudioSession.shared.activate()
+                try Task.checkCancellation()
+                guard let self, self.audioActivationID == token, self.wantsToPlay,
+                      self.currentQueueID == occurrence else { return }
+                if self.duration > 0 && self.elapsed >= self.duration {
+                    self.listen = ListeningProgress(); self.listenID = UUID(); self.announcedListen = false
+                    self.seek(to: 0)
+                }
+                self.applyAudioGain()
+                self.player.play()
+                self.audioActivationTask = nil
+            } catch is CancellationError {
+            } catch {
+                guard let self, self.audioActivationID == token, !Task.isCancelled else { return }
+                self.audioActivationTask = nil
+                self.error = String(localized: "ios-audio-session-error")
+                self.publishNowPlaying()
             }
-            applyAudioGain()
-            player.play()
-        } catch {
-            self.error = String(localized: "ios-audio-session-error")
-            publishNowPlaying()
         }
     }
 
@@ -554,6 +568,7 @@ final class PlaybackController {
         trackListen()
         listen.rebase()
         wantsToPlay = false
+        audioActivationTask?.cancel(); audioActivationTask = nil; audioActivationID = UUID()
         radioTask?.cancel()
         radioTask = nil
         resolutionTask?.cancel()
@@ -892,5 +907,16 @@ final class PlaybackController {
             entries: queueItems, original: originalQueue, currentEntry: currentQueueID,
             shuffled: isShuffled, repeatMode: repeatMode, source: queueSource)
         if let data = try? JSONEncoder().encode(value) { UserDefaults.standard.set(data, forKey: snapshotKey) }
+    }
+}
+
+
+/// Serializes blocking system-audio setup away from the UI, without moving player or view state off MainActor.
+private actor PlaybackAudioSession {
+    static let shared = PlaybackAudioSession()
+    func activate() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .default, policy: .longFormAudio, options: [])
+        try session.setActive(true)
     }
 }

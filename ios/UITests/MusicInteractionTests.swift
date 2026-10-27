@@ -189,10 +189,16 @@ final class MusicInteractionTests: XCTestCase {
         search.tap()
         let missing = "zzNoMatchzz"
         search.typeText(missing)
-        expectation(for: NSPredicate { _, _ in !list.staticTexts["Sonora Review Tone"].firstMatch.exists }, evaluatedWith: app)
-        waitForExpectations(timeout: 8)
+        expectation(for: NSPredicate { _, _ in (search.value as? String) == missing }, evaluatedWith: app)
+        waitForExpectations(timeout: 12)
+        let emptyResult = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", missing)).firstMatch
+        expectation(for: NSPredicate { _, _ in
+            emptyResult.exists && emptyResult.isHittable && !list.staticTexts["Sonora Review Tone"].firstMatch.isHittable
+        }, evaluatedWith: app)
+        waitForExpectations(timeout: 12)
         search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: missing.count) + "Review")
-        XCTAssertTrue(list.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 8))
+        expectation(for: NSPredicate { _, _ in list.staticTexts["Sonora Review Tone"].firstMatch.isHittable }, evaluatedWith: app)
+        waitForExpectations(timeout: 12)
         let cancel = app.buttons.matching(identifier: "Cancel").allElementsBoundByIndex.first { $0.isHittable }
         cancel?.tap()
         navigateBack(in: app)
