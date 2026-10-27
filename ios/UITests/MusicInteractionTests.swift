@@ -193,7 +193,8 @@ final class MusicInteractionTests: XCTestCase {
         waitForExpectations(timeout: 12)
         let emptyResult = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", missing)).firstMatch
         expectation(for: NSPredicate { _, _ in
-            emptyResult.exists && emptyResult.isHittable && !list.staticTexts["Sonora Review Tone"].firstMatch.isHittable
+            let previous = list.staticTexts["Sonora Review Tone"].firstMatch
+            return emptyResult.exists && emptyResult.isHittable && (!previous.exists || !previous.isHittable)
         }, evaluatedWith: app)
         waitForExpectations(timeout: 12)
         search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: missing.count) + "Review")
