@@ -14,7 +14,6 @@ struct LyricsContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.compact) {
-            options
             if store.isLoading && store.sheet == nil {
                 ProgressView("ios-loading-lyrics").tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = store.error {
@@ -42,6 +41,8 @@ struct LyricsContentView: View {
             } else {
                 ContentUnavailableView("ios-lyrics-unavailable", systemImage: "quote.bubble", description: Text("ios-no-lyrics-description"))
             }
+            LyricsSourceToolbar(store: store, showSources: $showSources, showImport: $showImport,
+                select: { index in followsPlayback = true; store.select(index) }, retry: retry)
         }
         .foregroundStyle(.white)
         .sheet(isPresented: $showSources) {
@@ -59,39 +60,6 @@ struct LyricsContentView: View {
             }
         }
         .onChange(of: playback.current?.id) { _, _ in followsPlayback = true }
-    }
-
-    private var options: some View {
-        HStack {
-            if let source = store.sheet?.source {
-                Text(source).appFont(.caption).foregroundStyle(.white.opacity(0.7))
-            }
-            if store.usingSaved { Image(systemName: "arrow.down.circle").accessibilityLabel(Text("ios-saved-lyrics")) }
-            Spacer()
-            Menu {
-                ForEach(Array(store.available.enumerated()), id: \.offset) { index, choice in
-                    if let source = choice.source {
-                        Button { followsPlayback = true; store.select(index) } label: {
-                            Label {
-                                Text(source)
-                                Text(choice.worded == true ? "ios-lyrics-word-timing" : (choice.synced == true ? "ios-lyrics-synced-format" : "ios-lyrics-plain-format"))
-                            } icon: { Image(systemName: store.selected == index ? "checkmark" : "quote.bubble") }
-                        }
-                    }
-                }
-                Button("ios-lyrics-sources", systemImage: "slider.horizontal.3") { showSources = true }
-                Button("ios-import-lyrics", systemImage: "square.and.arrow.down") { showImport = true }
-                    .disabled(settings.lyricsSources.first { $0.source == .local }?.enabled != true)
-                Button("ios-copy-lyrics", systemImage: "doc.on.doc") { UIPasteboard.general.string = store.sheet?.text }
-                    .disabled(store.sheet?.hasContent != true)
-                Button("ios-refresh-lyrics", systemImage: "arrow.clockwise", action: retry)
-            } label: {
-                Image(systemName: "ellipsis").appFont(.body, weight: .semibold)
-            }
-            .buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
-            .frame(minWidth: Layout.control, minHeight: Layout.control)
-            .accessibilityLabel(Text("ios-lyrics-options"))
-        }
     }
 
     private func synced(_ lines: [LyricsLineItem], at elapsed: Double) -> some View {
@@ -133,6 +101,62 @@ struct LyricsContentView: View {
                 }
             }
         }
+    }
+}
+
+/// A stable footer anchors the native source menu outside lyric scrolling and timing updates.
+/// Its fixed touch target and single-line source caption cannot move when lyrics advance.
+private struct LyricsSourceToolbar: View {
+    @Environment(SettingsStore.self) private var settings
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    let store: LyricsStore
+    @Binding var showSources: Bool
+    @Binding var showImport: Bool
+    let select: (Int) -> Void
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(spacing: Layout.compact) {
+            Text(store.sheet?.source ?? String(localized: "ios-lyrics"))
+                .appFont(.caption).foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1).truncationMode(.tail)
+                .contentTransition(.identity)
+            if store.usingSaved {
+                Image(systemName: "arrow.down.circle")
+                    .appFont(.caption).accessibilityLabel(Text("ios-saved-lyrics"))
+            }
+            Spacer(minLength: Layout.compact)
+            Menu {
+                ForEach(Array(store.available.enumerated()), id: \.offset) { index, choice in
+                    if let source = choice.source {
+                        Button { select(index) } label: {
+                            Label {
+                                Text(source)
+                                Text(choice.worded == true ? "ios-lyrics-word-timing" : (choice.synced == true ? "ios-lyrics-synced-format" : "ios-lyrics-plain-format"))
+                            } icon: { Image(systemName: store.selected == index ? "checkmark" : "quote.bubble") }
+                        }
+                    }
+                }
+                Button("ios-lyrics-sources", systemImage: "slider.horizontal.3") { showSources = true }
+                Button("ios-import-lyrics", systemImage: "square.and.arrow.down") { showImport = true }
+                    .disabled(settings.lyricsSources.first { $0.source == .local }?.enabled != true)
+                Button("ios-copy-lyrics", systemImage: "doc.on.doc") { UIPasteboard.general.string = store.sheet?.text }
+                    .disabled(store.sheet?.hasContent != true)
+                Button("ios-refresh-lyrics", systemImage: "arrow.clockwise", action: retry)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .appFont(.body, weight: .semibold)
+                    .foregroundStyle(.white)
+                    .frame(width: Layout.control, height: Layout.control)
+                    .background(reduceTransparency ? Color(uiColor: .secondarySystemBackground) : Color.white.opacity(0.12), in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("ios-lyrics-options"))
+            .accessibilityIdentifier("lyrics-source-options")
+        }
+        .frame(height: Layout.control)
+        .transaction { $0.animation = nil }
     }
 }
 

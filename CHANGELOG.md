@@ -38,6 +38,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The iPhone lyrics-source menu stays in a fixed footer above playback controls, so advancing lyrics and long source names cannot shift its button.
+
 - iPhone album and playlist pages use cover-derived backgrounds and cover-origin navigation. Downloaded collections offer matching grids and alphabetical navigation.
 
 - iPhone page titles follow the selected interface font, including collapsed navigation titles and sheets. Songs and Artists gain alphabetical section indexes, and collection grids use the available width.
