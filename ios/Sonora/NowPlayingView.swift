@@ -63,7 +63,8 @@ struct MiniPlayer: View {
             .accessibilityLabel(Text("ios-next"))
             }
         }
-        .padding(.horizontal, Layout.spacing)
+        .padding(.leading, Layout.spacing)
+        .padding(.trailing, placement == .inline ? Layout.compact : Layout.spacing)
         .gesture(
             DragGesture(minimumDistance: 14)
                 .onEnded { value in
