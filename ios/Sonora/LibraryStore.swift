@@ -83,6 +83,24 @@ final class LibraryStore {
         }
     }
 
+    /// Saves generated timed lyrics with a real audio download, then presents the actual offline player.
+    func reviewDownloadLyrics(_ downloads: DownloadsStore, playback: PlaybackController,
+        restoreOnly: Bool, ready: @escaping @MainActor () -> Void) {
+        reviewTask?.cancel()
+        reviewTask = Task { [weak self] in
+            guard let self else { return }
+            if !restoreOnly {
+                guard let track = await self.importReviewRecording() else { return }
+                await downloads.reviewDownloads(file: self.url(for: track), track: track)
+                guard await downloads.reviewDownloadedLyrics() else { return }
+            }
+            for _ in 0..<150 where downloads.isRestoring { try? await Task.sleep(for: .milliseconds(20)) }
+            guard let track = downloads.entry(for: "youtube:reviewSaved")?.track,
+                  downloads.fileURL(for: track.id) != nil, !Task.isCancelled else { return }
+            playback.play(track, in: [track]); playback.pause(); ready()
+        }
+    }
+
     /// Opens a real imported recording paused so touch tests can check the actual AVPlayer clock after seeks.
     func reviewSeekSurface(_ playback: PlaybackController, ready: @escaping @MainActor () -> Void) {
         reviewTask?.cancel()

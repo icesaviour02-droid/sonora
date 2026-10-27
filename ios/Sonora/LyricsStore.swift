@@ -22,7 +22,7 @@ final class LyricsStore {
     private var selectedSource: String?
 
     func load(_ id: String?, title: String? = nil, artist: String? = nil, album: String? = nil,
-              duration: Double? = nil, sources: [String]? = nil, cacheID: String? = nil, savedOnly: Bool = false) {
+              duration: Double? = nil, sources: [String]? = nil, cacheID: String? = nil, savedOnly: Bool = false, downloadURL: URL? = nil) {
         clear()
         let generation = UUID()
         self.generation = generation
@@ -34,12 +34,14 @@ final class LyricsStore {
         task = Task { [weak self] in
             guard let self else { return }
             let cacheGeneration = await self.files.currentGeneration()
-            let cached = await self.files.cached(key)
+            let downloaded = if let downloadURL { await self.files.downloaded(downloadURL) } else { nil as NativeProvider.Lyrics? }
+            let regularCache = await self.files.cached(key)
+            let cached = downloaded ?? regularCache
             let sidecar = await self.files.sidecar(identity)
             guard self.generation == generation, !Task.isCancelled else { return }
             if let cached { self.apply(cached); self.usingSaved = true; self.isLoading = false }
             if savedOnly {
-                if cached == nil, sources?.contains("Local") != false, let sidecar, let parsed = try? await NativeProvider.parseLyrics(sidecar.text, format: sidecar.format), self.generation == generation {
+                if sources?.contains("Local") != false, let sidecar, let parsed = try? await NativeProvider.parseLyrics(sidecar.text, format: sidecar.format), self.generation == generation {
                     self.apply(parsed)
                     self.usingSaved = true
                 }
@@ -156,6 +158,13 @@ final class LyricsStore {
         try await LyricsFiles.shared.saveSidecar(.init(text: text, format: format), id: trackID)
     }
 
+    /// Download sidecars preserve all sources, line/word timing, romanization and backing-vocal lanes.
+    static func saveDownloaded(_ response: NativeProvider.Lyrics, audioURL: URL) async throws -> Bool {
+        try await LyricsFiles.shared.saveDownloaded(response, audioURL: audioURL)
+    }
+    static func hasDownloaded(audioURL: URL) async -> Bool { await LyricsFiles.shared.downloaded(audioURL) != nil }
+    static func removeDownloaded(audioURL: URL) async { await LyricsFiles.shared.removeDownloaded(audioURL) }
+
     static func removeImported(trackID: String) async { await LyricsFiles.shared.removeSidecar(trackID) }
 
     static func clearCachedSheets() async { await LyricsFiles.shared.clearCachedSheets() }
@@ -240,6 +249,61 @@ private actor LyricsFiles {
         guard generation == expected else { return }
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         if let data = try? JSONEncoder().encode(sheet) { try? data.write(to: path(key, prefix: "cache"), options: .atomic) }
+    }
+
+    /// A download's durable lyrics live beside its unique audio file, outside the disposable cache.
+    func downloaded(_ audioURL: URL) -> NativeProvider.Lyrics? {
+        guard validAudioPath(audioURL), FileManager.default.fileExists(atPath: audioURL.path),
+              let data = try? Data(contentsOf: audioURL.deletingPathExtension().appendingPathExtension("lyrics.json")) else { return nil }
+        return try? JSONDecoder().decode(NativeProvider.Lyrics.self, from: data)
+    }
+
+    func saveDownloaded(_ response: NativeProvider.Lyrics, audioURL: URL) throws -> Bool {
+        guard !Task.isCancelled, validAudioPath(audioURL), FileManager.default.fileExists(atPath: audioURL.path) else { return false }
+        let choices = (response.choices?.isEmpty == false ? response.choices! : [response]).filter(\.hasContent)
+            .enumerated().sorted { left, right in
+                func rank(_ sheet: NativeProvider.Lyrics) -> Int {
+                    let timed = sheet.lines?.contains { ($0.start_seconds ?? -1) >= 0 } == true
+                    return timed ? (sheet.worded == true ? 2 : 1) : 0
+                }
+                let a = rank(left.element), b = rank(right.element)
+                return a == b ? left.offset < right.offset : a > b
+            }.map(\.element)
+        guard let first = choices.first else { return false }
+        let saved = NativeProvider.Lyrics(text: first.text, lines: first.lines, synced: first.synced,
+            instrumental: first.instrumental, source: first.source, worded: first.worded, romanized: first.romanized,
+            romanization_script: first.romanization_script, writers: first.writers, choices: choices)
+        let data = try JSONEncoder().encode(saved)
+        guard data.count <= 4 * 1_024 * 1_024, !Task.isCancelled else { return false }
+        let json = audioURL.deletingPathExtension().appendingPathExtension("lyrics.json")
+        try data.write(to: json, options: .atomic)
+        if let lines = first.lines, !lines.isEmpty {
+            func stamp(_ seconds: Double, brackets: (String, String)) -> String {
+                let ticks = Int((min(604_800, max(0, seconds)) * 100).rounded())
+                return String(format: "%@%02d:%02d.%02d%@", brackets.0, ticks / 6000, (ticks / 100) % 60, ticks % 100, brackets.1)
+            }
+            let text = lines.compactMap { line -> String? in
+                guard let start = line.start_seconds, start.isFinite, start >= 0 else { return nil }
+                let words = (line.words ?? []).filter { $0.start_seconds.isFinite && $0.start_seconds >= 0 }
+                let body = words.isEmpty ? line.text : words.map { stamp($0.start_seconds, brackets: ("<", ">")) + $0.text }.joined(separator: " ")
+                return stamp(start, brackets: ("[", "]")) + body.replacingOccurrences(of: "\n", with: " ")
+            }.joined(separator: "\n")
+            if !text.isEmpty { try text.write(to: audioURL.deletingPathExtension().appendingPathExtension("lrc"), atomically: true, encoding: .utf8) }
+        }
+        // Audio removal can race actor IO. Never leave a completed sidecar for a removed transfer.
+        guard !Task.isCancelled, FileManager.default.fileExists(atPath: audioURL.path) else {
+            removeDownloaded(audioURL); return false
+        }
+        return true
+    }
+
+    func removeDownloaded(_ audioURL: URL) {
+        guard validAudioPath(audioURL) else { return }
+        for ext in ["lyrics.json", "lrc"] { try? FileManager.default.removeItem(at: audioURL.deletingPathExtension().appendingPathExtension(ext)) }
+    }
+    private func validAudioPath(_ url: URL) -> Bool {
+        url.deletingLastPathComponent().standardizedFileURL == DownloadsStore.root.standardizedFileURL &&
+            url.pathExtension == "m4a" && UUID(uuidString: url.deletingPathExtension().lastPathComponent) != nil
     }
 
     func sidecar(_ id: String) -> Sidecar? {

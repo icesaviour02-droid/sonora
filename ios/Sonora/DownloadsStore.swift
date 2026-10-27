@@ -1,11 +1,13 @@
 import AVFoundation
 import Foundation
 import Observation
+import Network
 import UIKit
 
 /// A persisted transfer, keyed by the provider track, with a sandbox-owned destination.
 struct DownloadEntry: Codable, Identifiable {
     enum State: String, Codable { case queued, resolving, downloading, downloaded, failed }
+    enum LyricsState: String, Codable { case queued, saved, unavailable, failed }
     var id: String { track.id }
     let track: MusicTrack
     var filename: String
@@ -15,6 +17,8 @@ struct DownloadEntry: Codable, Identifiable {
     var sourceDuration: Double? = nil
     var progress: Double = 0
     var failureCode: String? = nil
+    var lyricsState: LyricsState? = nil
+    var lyricsSources: [String]? = nil
 }
 
 /// A downloaded playlist retains its name and original ordering, independent of an online reload.
@@ -75,12 +79,27 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
     private(set) var isRestoring = true
     var error: String?
     var allowsCellular: Bool {
-        didSet { UserDefaults.standard.set(allowsCellular, forKey: "sonora.downloads.cellular") }
+        didSet { UserDefaults.standard.set(allowsCellular, forKey: "sonora.downloads.cellular"); pumpLyrics() }
     }
     @ObservationIgnored private var session: URLSession!
     @ObservationIgnored private var resolving: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var transfers: [Int: URLSessionTask] = [:]
     @ObservationIgnored private var restoration: Task<Void, Never>?
+    @ObservationIgnored private var lyricsTask: Task<Void, Never>?
+    @ObservationIgnored private var lyricsID: String?
+    @ObservationIgnored private var lyricsGeneration = UUID()
+    @ObservationIgnored private var lyricsBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    @ObservationIgnored private var lyricCleanup: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private let network = NWPathMonitor()
+    private var lyricsNetworkAvailable = false
+    private var lyricsOnCellular = false
+    private var lyricsSources: [String] {
+        if let data = UserDefaults.standard.data(forKey: "sonora.settings.lyricsSources"),
+           let saved = try? JSONDecoder().decode([LyricsSourcePreference].self, from: data) {
+            return saved.filter(\.enabled).map { $0.source.rawValue }
+        }
+        return LyricsSourceID.allCases.filter { $0 != .kugou && $0 != .netease }.map(\.rawValue)
+    }
     @ObservationIgnored private var lastProgress: [Int: Date] = [:]
     private var indexURL: URL { Self.root.appendingPathComponent("downloads.json") }
     private var playlistsURL: URL { Self.root.appendingPathComponent("playlists.json") }
@@ -122,6 +141,18 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         config.isDiscretionary = false
         config.httpMaximumConnectionsPerHost = 2
         session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        network.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                guard let self else { return }
+                self.lyricsNetworkAvailable = path.status == .satisfied
+                self.lyricsOnCellular = path.usesInterfaceType(.cellular)
+                if !self.lyricsNetworkAvailable || (!self.allowsCellular && self.lyricsOnCellular) {
+                    self.lyricsTask?.cancel()
+                }
+                self.pumpLyrics()
+            }
+        }
+        network.start(queue: DispatchQueue(label: "sonora.download-lyrics-network"))
         restoration = Task { [weak self] in
             guard let self else { return }
             let tasks = await self.session.allTasks
@@ -132,6 +163,10 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
                 case .downloaded:
                     let url = Self.root.appendingPathComponent(self.entries[index].filename)
                     if !FileManager.default.fileExists(atPath: url.path) { self.entries[index].state = .failed }
+                    else if self.entries[index].lyricsState == .saved && !FileManager.default.fileExists(
+                        atPath: url.deletingPathExtension().appendingPathExtension("lyrics.json").path) {
+                        self.entries[index].lyricsState = .queued
+                    }
                 case .resolving, .queued:
                     self.entries[index].state = .queued
                 case .downloading:
@@ -200,7 +235,10 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
 
     func retry(_ id: String) {
         guard let index = entries.firstIndex(where: { $0.id == id }), entries[index].state == .failed else { return }
-        try? FileManager.default.removeItem(at: Self.root.appendingPathComponent(entries[index].filename))
+        let previous = Self.root.appendingPathComponent(entries[index].filename)
+        try? FileManager.default.removeItem(at: previous)
+        removeLyricsFiles(previous)
+        entries[index].lyricsState = .queued; entries[index].lyricsSources = nil
         entries[index].filename = UUID().uuidString + ".m4a"
         entries[index].state = .queued
         entries[index].progress = 0
@@ -211,20 +249,35 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         pump()
     }
 
-    func resumeQueue() { pump() }
+    func resumeQueue() {
+        for index in entries.indices where entries[index].lyricsState == .failed { entries[index].lyricsState = .queued }
+        pump()
+    }
 
     /// Cancels unfinished transfers and removes a completed download only when the listener asks.
     func remove(_ id: String) {
         guard let entry = entry(for: id) else { return }
         resolving.removeValue(forKey: id)?.cancel()
+        if lyricsID == id { lyricsTask?.cancel(); lyricsTask = nil; lyricsID = nil; lyricsGeneration = UUID(); endLyricsBackground() }
         entries.removeAll { $0.id == id }
         persist()
         if let taskID = entry.taskID {
             lastProgress.removeValue(forKey: taskID)
             transfers.removeValue(forKey: taskID)?.cancel()
         }
-        try? FileManager.default.removeItem(at: Self.root.appendingPathComponent(entry.filename))
+        let audioURL = Self.root.appendingPathComponent(entry.filename)
+        try? FileManager.default.removeItem(at: audioURL)
+        removeLyricsFiles(audioURL)
         pump()
+    }
+
+    private func removeLyricsFiles(_ audioURL: URL) {
+        let filename = audioURL.lastPathComponent
+        guard lyricCleanup[filename] == nil else { return }
+        lyricCleanup[filename] = Task { [weak self] in
+            await LyricsStore.removeDownloaded(audioURL: audioURL)
+            self?.lyricCleanup[filename] = nil
+        }
     }
 
     /// Isolates saved provider data when an account signs in or out, or when the listener clears all downloads.
@@ -240,13 +293,109 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
     }
 
     private func pump() {
+        pumpLyrics()
         guard !isRestoring, error == nil, UIApplication.shared.applicationState != .background else { return }
         let active = entries.filter { $0.state == .resolving }.count
         let queued = entries.filter { $0.state == .queued }.prefix(max(0, 2 - active))
         for entry in queued { start(entry) }
     }
 
+    /// Lyrics never block audio completion. Missing/transient failures remain independent of the saved music.
+    private func pumpLyrics() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--sonora-review-url") { return }
+        #endif
+        guard !isRestoring, lyricsTask == nil, lyricsNetworkAvailable,
+              allowsCellular || !lyricsOnCellular else { return }
+        let sources = lyricsSources
+        guard !sources.isEmpty, let entry = entries.first(where: {
+            $0.state == .downloaded && ($0.lyricsState == nil || $0.lyricsState == .queued ||
+                ($0.lyricsState == .unavailable && $0.lyricsSources != sources))
+        }) else { return }
+        lyricsGeneration = UUID()
+        let token = lyricsGeneration
+        lyricsBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "sonora.download-lyrics") { [weak self] in
+            Task { @MainActor in
+                guard let self, self.lyricsGeneration == token else { return }
+                self.lyricsTask?.cancel(); self.endLyricsBackground()
+            }
+        }
+        guard UIApplication.shared.applicationState != .background || lyricsBackgroundTask != .invalid else { return }
+        lyricsID = entry.id
+        lyricsTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if self.lyricsGeneration == token {
+                    self.endLyricsBackground(); self.lyricsTask = nil; self.lyricsID = nil; self.pumpLyrics()
+                }
+            }
+            do {
+                let url = Self.root.appendingPathComponent(entry.filename)
+                if entry.lyricsState != .queued, await LyricsStore.hasDownloaded(audioURL: url) {
+                    self.finishLyrics(entry, status: .saved); return
+                }
+                let response = try await NativeProvider.lyrics(entry.track.youtubeID, title: entry.track.title,
+                    artist: entry.track.artist, album: entry.track.albumTitle,
+                    duration: entry.sourceDuration ?? entry.track.durationSeconds, sources: sources)
+                guard !Task.isCancelled, self.entry(for: entry.id)?.filename == entry.filename else { return }
+                let saved = try await LyricsStore.saveDownloaded(response, audioURL: url)
+                guard !Task.isCancelled else { return }
+                self.finishLyrics(entry, status: saved ? .saved : .unavailable, sources: sources)
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.finishLyrics(entry, status: .failed, sources: sources)
+            }
+        }
+    }
+    /// Explicit retry is independent of audio re-downloading and remains queued while offline.
+    func retryLyrics(for id: String) {
+        guard let index = entries.firstIndex(where: { $0.id == id && $0.state == .downloaded }) else { return }
+        entries[index].lyricsState = .queued; persist(); pumpLyrics()
+    }
+    private func endLyricsBackground() {
+        guard lyricsBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(lyricsBackgroundTask); lyricsBackgroundTask = .invalid
+    }
+    private func finishLyrics(_ entry: DownloadEntry, status: DownloadEntry.LyricsState, sources: [String]? = nil) {
+        guard let index = entries.firstIndex(where: { $0.filename == entry.filename && $0.state == .downloaded }) else { return }
+        entries[index].lyricsState = status
+        entries[index].lyricsSources = sources
+        persist()
+    }
+
     #if DEBUG
+    /// Verifies durable timed lyrics against actual downloaded audio; all text is generated fixture data.
+    func reviewDownloadedLyrics() async -> Bool {
+        var checks: [String: Bool] = [:]
+        guard let entry = entry(for: "youtube:reviewSaved"), let audio = fileURL(for: entry.id) else { return false }
+        do {
+            let timed = try await NativeProvider.parseLyrics("[00:01.25]<00:01.25>Downloaded <00:02.00>lyrics<00:03.00>\n[00:04.50]Ready offline\n", format: "lrc")
+            let plain = try await NativeProvider.parseLyrics("A plain fallback", format: "lrc")
+            let response = NativeProvider.Lyrics(text: plain.text, lines: plain.lines, synced: false, instrumental: nil,
+                source: "Review", worded: nil, romanized: nil, romanization_script: nil, writers: nil, choices: [plain, timed])
+            checks["saved_bundle"] = try await LyricsStore.saveDownloaded(response, audioURL: audio)
+            finishLyrics(entry, status: .saved)
+            checks["json_and_lrc"] = ["lyrics.json", "lrc"].allSatisfy {
+                FileManager.default.fileExists(atPath: audio.deletingPathExtension().appendingPathExtension($0).path)
+            }
+            await LyricsStore.clearCachedSheets()
+            let reopened = LyricsStore()
+            reopened.load(entry.track.youtubeID, title: "Changed metadata", artist: "Changed artist", sources: [],
+                cacheID: entry.id, savedOnly: true, downloadURL: audio)
+            for _ in 0..<100 where reopened.isLoading { try? await Task.sleep(for: .milliseconds(20)) }
+            checks["offline_after_cache_clear"] = reopened.usingSaved && reopened.sheet?.lines?.count == 2
+            checks["timed_source_preferred"] = reopened.sheet?.synced == true
+            checks["line_timestamps"] = abs((reopened.sheet?.lines?.first?.start_seconds ?? 0) - 1.25) < 0.001
+            checks["word_timestamps"] = reopened.sheet?.worded == true && reopened.sheet?.lines?.first?.words?.count == 2
+            let disk = try JSONDecoder().decode([DownloadEntry].self, from: Data(contentsOf: indexURL))
+            checks["status_persisted"] = disk.first { $0.filename == entry.filename }?.lyricsState == .saved
+            checks["audio_kept"] = fileURL(for: entry.id) != nil
+            let report: [String: Any] = ["passed": checks.count == 8 && checks.values.allSatisfy { $0 }, "checks": checks]
+            try JSONSerialization.data(withJSONObject: report).write(to: URL.applicationSupportDirectory.appendingPathComponent("download-lyrics-review.json"), options: .atomic)
+            return checks.count == 8 && checks.values.allSatisfy { $0 }
+        } catch { return false }
+    }
+
     /// Seeds only self-generated, real AAC files for the simulator's populated Downloads review.
     func reviewDownloads(file: URL, track: MusicTrack) async {
         for _ in 0..<150 {

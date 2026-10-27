@@ -149,6 +149,27 @@ final class MusicInteractionTests: XCTestCase {
         app.buttons["library-edit-done"].tap()
     }
 
+    func testDownloadedTimedLyricsSurviveCacheClearAndRelaunch() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--sonora-review-seek", "--sonora-review-url", "sonora://downloadlyricsreview"]
+        app.launch()
+        XCTAssertTrue(app.buttons["player-lyrics"].waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ready offline")).firstMatch.waitForExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments = ["--sonora-review-seek", "--sonora-review-url", "sonora://downloadlyricsrestore"]
+        app.launch()
+        XCTAssertTrue(app.buttons["player-lyrics"].waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ready offline")).firstMatch.waitForExistence(timeout: 10))
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ready offline")).firstMatch.tap()
+        let clock = app.staticTexts["player-native-clock"]
+        expectation(for: NSPredicate { _, _ in
+            let elapsed = Double(clock.label) ?? 0
+            return elapsed > 3.5 && elapsed < 8
+        }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+    }
+
     func testDownloadedCategoriesUseSavedMusic() {
         continueAfterFailure = false
         let app = XCUIApplication()

@@ -157,6 +157,7 @@ struct NowPlayingView: View {
         .sensoryFeedback(.selection, trigger: mode)
         .onAppear { loadLyricsIfNeeded() }
         .onChange(of: playback.currentQueueID) { _, _ in resetTrackSwipe(); loadLyricsIfNeeded() }
+        .onChange(of: downloads.entry(for: playback.current?.id ?? "")?.lyricsState) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: settings.localFileLyrics) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: settings.lyricsSources) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: mode) { _, _ in loadLyricsIfNeeded() }
@@ -683,7 +684,10 @@ struct NowPlayingView: View {
     }
 
     private var lyricsStage: some View {
-        LyricsContentView(store: lyrics, retry: loadLyricsIfNeeded)
+        LyricsContentView(store: lyrics, retry: {
+            if let id = playback.current?.id, downloads.fileURL(for: id) != nil { downloads.retryLyrics(for: id) }
+            loadLyricsIfNeeded()
+        })
     }
 
     /// Keeps the matched artwork in the same SwiftUI scene while UIKit scrolls history and rows.
@@ -978,7 +982,8 @@ struct NowPlayingView: View {
         guard current.youtubeID != nil || settings.localFileLyrics else { lyrics.clear(); return }
         lyrics.load(current.youtubeID, title: current.title, artist: current.artist,
             album: current.albumTitle, duration: current.durationSeconds,
-            sources: settings.enabledLyricsSources, cacheID: current.id)
+            sources: settings.enabledLyricsSources, cacheID: current.id,
+            savedOnly: downloads.fileURL(for: current.id) != nil, downloadURL: downloads.fileURL(for: current.id))
     }
 
     private func time(_ seconds: Double) -> String {

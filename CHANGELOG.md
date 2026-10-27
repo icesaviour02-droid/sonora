@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Music downloads automatically save available lyrics, preferring synchronized line and word timing. Saved JSON and LRC sidecars work offline, survive cache clearing and are removed with the audio file.
+
 - Long-press iPhone queue and history songs to open native preview menus for queue order, favorites, playlists, downloads and removal.
 
 - Swipe across iPhone player artwork or metadata to preview and switch between actual queue entries, preserving paused playback.

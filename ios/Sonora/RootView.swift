@@ -148,6 +148,12 @@ struct RootView: View {
             library.reviewSeekSurface(playback) { playerMode = "artwork"; showPlayer = true }
             return
         }
+        if url.host == "downloadlyricsreview" || url.host == "downloadlyricsrestore" {
+            library.reviewDownloadLyrics(downloads, playback: playback, restoreOnly: url.host == "downloadlyricsrestore") {
+                playerMode = "lyrics"; showPlayer = true
+            }
+            return
+        }
         if url.host == "collectionreview" {
             selectedTab = .library
             library.reviewCollectionSurface(localLibrary)
