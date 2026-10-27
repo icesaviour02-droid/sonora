@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Uses UIKit's continuously interactive whole-screen zoom between Now Playing and its live accessory.
+/// Keeps the player as one full-window surface while a downward drag controls its native transition.
 struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
     let hero: PlayerHeroState
@@ -9,82 +9,47 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> Presenter { Presenter() }
     func updateUIViewController(_ presenter: Presenter, context: Context) {
-        presenter.update(show: isPresented, root: AnyView(content().environment(\.self, context.environment)),
-            hero: hero, changed: { isPresented = $0 })
+        let root = AnyView(content().environment(\.self, context.environment))
+        presenter.update(show: isPresented, root: root, hero: hero, changed: { isPresented = $0 })
     }
 
-    final class Presenter: UIViewController, UIAdaptivePresentationControllerDelegate {
+    final class Presenter: UIViewController, UIViewControllerTransitioningDelegate, UIGestureRecognizerDelegate {
         private var player: Hosting?
         private var changed: ((Bool) -> Void)?
+        private var hero: PlayerHeroState?
+        private var interaction: UIPercentDrivenInteractiveTransition?
         private var wanted = false
+        private var dismissalSucceeded = false
         private var root: AnyView = AnyView(EmptyView())
-        private weak var hero: PlayerHeroState?
         override func loadView() { view = UIView(); view.isUserInteractionEnabled = false }
         override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); reconcile() }
 
         func update(show: Bool, root: AnyView, hero: PlayerHeroState, changed: @escaping (Bool) -> Void) {
             wanted = show; self.root = root; self.hero = hero; self.changed = changed
+            record("update")
             player?.rootView = root
             reconcile()
         }
         private func reconcile() {
-            if !wanted, let player, !player.isBeingDismissed {
-                player.dismiss(animated: true) { [weak self, weak player] in
-                    guard let self, let player else { return }; self.closed(player)
-                }
-                return
-            }
             guard viewIfLoaded?.window != nil else { return }
             if wanted, player == nil, presentedViewController == nil {
                 let host = Hosting(rootView: root)
-                host.modalPresentationStyle = .fullScreen
+                host.modalPresentationStyle = .custom
                 host.modalPresentationCapturesStatusBarAppearance = true
+                host.transitioningDelegate = self
                 host.view.backgroundColor = .clear
                 host.view.accessibilityIdentifier = "player-fullscreen"
-                let options = UIViewController.Transition.ZoomOptions()
-                options.interactiveDismissShouldBegin = { [weak host] context in
-                    guard let host, host.presentedViewController == nil else { return false }
-                    return context.velocity.dy > 0 && context.velocity.dy > abs(context.velocity.dx) &&
-                        !Self.blocksDismissal(at: context.location, in: host.view)
-                }
-                host.preferredTransition = .zoom(options: options) { [weak self] _ in self?.hero?.pillView }
-                host.didClose = { [weak self, weak host] in
-                    guard let self, let host else { return }
-                    self.closed(host)
-                }
+                let pan = UIPanGestureRecognizer(target: self, action: #selector(drag(_:)))
+                pan.delegate = self; host.view.addGestureRecognizer(pan)
                 player = host
                 record("present")
                 present(host, animated: true) { [weak self] in self?.record("present-complete") }
-                host.presentationController?.delegate = self
+            } else if !wanted, let player, !player.isBeingDismissed {
+                player.dismiss(animated: true) { [weak self] in self?.player = nil; self?.reconcile() }
             }
         }
 
-        private func closed(_ host: UIViewController) {
-            guard player === host, host.presentingViewController == nil else { return }
-            player = nil; wanted = false; changed?(false)
-            record("native-dismiss-cleanup")
-        }
-        func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-            closed(presentationController.presentedViewController)
-        }
-
-        /// Native scrolling, sliders and explicit SwiftUI control rectangles keep their own gestures.
-        private static func blocksDismissal(at point: CGPoint, in root: UIView) -> Bool {
-            func excluded(_ view: UIView) -> Bool {
-                if let zone = view as? PlayerDismissExclusion.Zone,
-                   zone.window != nil, zone.convert(zone.bounds, to: root).contains(point) { return true }
-                return view.subviews.contains(where: excluded)
-            }
-            if excluded(root) { return true }
-            var hit = root.hitTest(point, with: nil)
-            while let view = hit, view !== root {
-                if view is UIControl || view is UIScrollView { return true }
-                hit = view.superview
-            }
-            return false
-        }
-
-        /// DEBUG lifecycle evidence contains flags only, never account data or media content.
+        /// DEBUG evidence records lifecycle flags only, without account or media content.
         private func record(_ event: String) {
             #if DEBUG
             guard ProcessInfo.processInfo.arguments.contains("--sonora-review-fullscreen") else { return }
@@ -97,18 +62,133 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
             }
             #endif
         }
+
+        /// Sliders/buttons keep their touches; queue/history scrolling keeps its native vertical gesture.
+        func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+            guard let pan = gesture as? UIPanGestureRecognizer, let player,
+                  player.presentedViewController == nil, !player.isBeingPresented else { return false }
+            let velocity = pan.velocity(in: player.view)
+            guard velocity.y > 0, velocity.y > abs(velocity.x) else { return false }
+            let point = pan.location(in: player.view)
+            func blocked(_ view: UIView) -> Bool {
+                if let zone = view as? PlayerDismissExclusion.Zone,
+                   zone.window != nil, zone.convert(zone.bounds, to: player.view).contains(point) { return true }
+                return view.subviews.contains(where: blocked)
+            }
+            if blocked(player.view) { return false }
+            var hit = player.view.hitTest(point, with: nil)
+            while let view = hit, view !== player.view {
+                if view is UIControl || view is UIScrollView { return false }
+                hit = view.superview
+            }
+            return true
+        }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
+
+        @objc private func drag(_ pan: UIPanGestureRecognizer) {
+            guard let player else { return }
+            let height = max(1, player.view.bounds.height)
+            let progress = min(1, max(0, pan.translation(in: player.view).y / height))
+            switch pan.state {
+            case .began:
+                let driver = UIPercentDrivenInteractiveTransition()
+                driver.completionCurve = .easeOut
+                interaction = driver
+                dismissalSucceeded = false
+                player.dismiss(animated: true) { [weak self] in
+                    guard let self, self.dismissalSucceeded else { return }
+                    self.player = nil; self.wanted = false; self.changed?(false)
+                    self.record("interactive-cleanup")
+                    self.reconcile()
+                }
+                driver.update(progress)
+            case .changed: interaction?.update(progress)
+            case .ended, .cancelled:
+                let velocity = pan.velocity(in: player.view).y
+                let projected = progress + velocity / height * 0.2
+                let finish = pan.state != .cancelled && (progress > 0.25 || projected > 0.35) && velocity > -100
+                interaction?.completionSpeed = min(1.5, max(0.5, abs(velocity) / height))
+                if finish { interaction?.finish() } else { interaction?.cancel() }
+                interaction = nil
+            default: break
+            }
+        }
+
+        func animationController(forPresented presented: UIViewController, presenting: UIViewController,
+            source: UIViewController) -> (any UIViewControllerAnimatedTransitioning)? { Animator(opening: true, hero: hero) }
+        func animationController(forDismissed dismissed: UIViewController) -> (any UIViewControllerAnimatedTransitioning)? {
+            Animator(opening: false, hero: hero) { [weak self] success in
+                guard let self else { return }
+                self.dismissalSucceeded = success
+                self.record(success ? "dismiss-animation-finished" : "dismiss-canceled")
+            }
+        }
+        func interactionControllerForDismissal(using animator: any UIViewControllerAnimatedTransitioning)
+            -> (any UIViewControllerInteractiveTransitioning)? { interaction }
+        func presentationController(forPresented presented: UIViewController, presenting: UIViewController?,
+            source: UIViewController) -> UIPresentationController? { Fullscreen(presentedViewController: presented, presenting: presenting) }
     }
 
-    /// Native lifecycle callbacks distinguish a completed dismissal from an interrupted pull.
     final class Hosting: UIHostingController<AnyView> {
-        var didClose: (() -> Void)?
         override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
-        override func viewDidDisappear(_ animated: Bool) {
-            super.viewDidDisappear(animated)
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.presentingViewController == nil else { return }
-                self.didClose?()
+    }
+    final class Fullscreen: UIPresentationController {
+        override var shouldRemovePresentersView: Bool { false }
+        override var frameOfPresentedViewInContainerView: CGRect { containerView?.bounds ?? .zero }
+        override func containerViewWillLayoutSubviews() {
+            guard let containerView, let presentedView else { return }
+            presentedView.bounds = CGRect(origin: .zero, size: containerView.bounds.size)
+            presentedView.center = CGPoint(x: containerView.bounds.midX, y: containerView.bounds.midY)
+        }
+    }
+
+    /// Artwork, labels and controls remain inside this single interruptible moving surface, including cancellation.
+    final class Animator: NSObject, UIViewControllerAnimatedTransitioning {
+        let opening: Bool
+        let hero: PlayerHeroState?
+        private var animator: UIViewPropertyAnimator?
+        let completed: (Bool) -> Void
+        init(opening: Bool, hero: PlayerHeroState?, completed: @escaping (Bool) -> Void = { _ in }) {
+            self.opening = opening; self.hero = hero; self.completed = completed
+        }
+        func transitionDuration(using context: (any UIViewControllerContextTransitioning)?) -> TimeInterval { 0.5 }
+        func animateTransition(using context: any UIViewControllerContextTransitioning) {
+            interruptibleAnimator(using: context).startAnimation()
+        }
+        func interruptibleAnimator(using context: any UIViewControllerContextTransitioning) -> any UIViewImplicitlyAnimating {
+            if let animator { return animator }
+            let container = context.containerView
+            let key: UITransitionContextViewControllerKey = opening ? .to : .from
+            let controller = context.viewController(forKey: key)!
+            let surface = controller.view!
+            if opening { container.addSubview(surface) }
+            surface.frame = container.bounds
+            surface.layoutIfNeeded()
+            let reduced = UIAccessibility.isReduceMotionEnabled
+            surface.layer.cornerCurve = .continuous
+            surface.layer.masksToBounds = true
+            surface.layer.cornerRadius = opening && !reduced ? Layout.playerDismissRadius : 0
+            if opening {
+                if reduced { surface.alpha = 0 }
+                else { surface.transform = CGAffineTransform(translationX: 0, y: container.bounds.height) }
             }
+            let animation = UIViewPropertyAnimator(duration: transitionDuration(using: context), dampingRatio: 1) {
+                if reduced { surface.alpha = self.opening ? 1 : 0 }
+                else { surface.transform = self.opening ? .identity : CGAffineTransform(translationX: 0, y: container.bounds.height) }
+                surface.layer.cornerRadius = self.opening || reduced ? 0 : Layout.playerDismissRadius
+            }
+            animation.addCompletion { [weak self] _ in
+                let success = !context.transitionWasCancelled
+                surface.transform = .identity; surface.alpha = 1
+                surface.layer.cornerRadius = 0; surface.layer.masksToBounds = false
+                if !success && self?.opening == true { surface.removeFromSuperview() }
+                self?.completed(success)
+                context.completeTransition(success)
+                self?.animator = nil
+            }
+            animator = animation
+            return animation
         }
     }
 }

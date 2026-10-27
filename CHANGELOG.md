@@ -45,7 +45,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Now Playing uses the system's whole-screen interactive zoom back to its live pill, keeping artwork and controls inside the moving page.
+- Now Playing pulls down as one full-screen surface, keeping artwork and controls together throughout dismissal and cancellation.
 - Long-pressed queue and history songs lift from their own rows and return to the same row when dismissed.
 - Library, artist and downloaded album/playlist navigation starts from the tapped cover, with visible category separators and consistent native toolbar actions.
 - Player cover, grabber and playback controls follow the updated reference proportions; technical codec text no longer crowds the progress labels.
