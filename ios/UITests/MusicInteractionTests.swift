@@ -79,10 +79,10 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 8))
         let cancel = app.buttons.matching(identifier: "Cancel").allElementsBoundByIndex.first { $0.isHittable }
         cancel?.tap()
-        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons["BackButton"].firstMatch.tap()
         app.buttons["download-albums"].tap()
         XCTAssertTrue(app.staticTexts["Sonora Review Album"].firstMatch.waitForExistence(timeout: 10))
-        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons["BackButton"].firstMatch.tap()
         app.buttons["download-playlists"].tap()
         XCTAssertTrue(app.staticTexts["Sonora Saved Playlist"].firstMatch.waitForExistence(timeout: 10))
         app.staticTexts["Sonora Saved Playlist"].firstMatch.tap()

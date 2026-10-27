@@ -266,12 +266,14 @@ struct NowPlayingView: View {
     }
 
     /// Invisible geometry targets guide one persistent cover rather than replacing the image.
-    private func artworkTarget(side: CGFloat, presentation: Mode) -> some View {
+    private func artworkTarget(side: CGFloat, presentation: Mode, measuring: Bool = true) -> some View {
         Color.clear.frame(width: side, height: side)
             .background {
-                GeometryReader { geometry in
-                    Color.clear.preference(key: PlayerArtworkFrame.self,
-                        value: mode == presentation ? geometry.frame(in: .named("player-artwork-space")) : .zero)
+                if measuring {
+                    GeometryReader { geometry in
+                        Color.clear.preference(key: PlayerArtworkFrame.self,
+                            value: mode == presentation ? geometry.frame(in: .named("player-artwork-space")) : .zero)
+                    }
                 }
             }
             .accessibilityHidden(true)
@@ -427,19 +429,19 @@ struct NowPlayingView: View {
         }
     }
 
-    private func compactTrackHeader(presentation: Mode) -> some View {
+    private func compactTrackHeader(presentation: Mode, measuring: Bool = true) -> some View {
         HStack(spacing: Layout.compact + 2) {
             Button {
                 changeMode(.artwork)
             } label: {
                 HStack(spacing: Layout.spacing - Layout.compact / 2) {
-                    artworkTarget(side: Layout.queueHeaderArtwork, presentation: presentation)
+                    artworkTarget(side: Layout.queueHeaderArtwork, presentation: presentation, measuring: measuring)
                     VStack(alignment: .leading, spacing: 2) {
                         FadingText(playback.current?.title ?? "", style: .body, weight: .semibold)
                         FadingText(playback.current?.artist ?? "", style: .body, color: .secondaryLabel)
                     }
                     .opacity(0).accessibilityHidden(true)
-                    .background { metadataTarget(presentation: presentation) }
+                    .background { if measuring { metadataTarget(presentation: presentation) } }
                 }.contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -553,6 +555,10 @@ struct NowPlayingView: View {
         ZStack(alignment: .top) {
             NativeQueueList(upcoming: playback.upcomingItems, history: settings.history,
                 autoplay: settings.autoplayRadio, playback: playback, settings: settings,
+                headerRevision: queueHeaderRevision,
+                headerView: AnyView(queueHeaderContent(measuring: false)
+                    .environment(playback).environment(downloads).environment(settings)
+                    .environment(localLibrary).environment(catalog)),
                 headerHeight: queueHeaderHeight,
                 headerOffset: { offset in
                     DispatchQueue.main.async {
@@ -570,18 +576,9 @@ struct NowPlayingView: View {
                         }
                     }
                 }, addSongs: { addQueueSongs = true })
-            VStack(spacing: Layout.spacing) {
-                compactTrackHeader(presentation: .queue)
-                HStack(spacing: Layout.compact) {
-                    queueModePill(symbol: "shuffle", label: "ios-shuffle", isActive: playback.isShuffled,
-                        action: playback.toggleShuffle)
-                    queueModePill(symbol: playback.repeatMode.symbol, label: repeatLabel,
-                        isActive: playback.repeatMode != .off, action: playback.cycleRepeat)
-                    queueModePill(symbol: "infinity", label: "ios-autoplay-radio", isActive: settings.autoplayRadio,
-                        action: { settings.autoplayRadio.toggle() })
-                }
-            }
-            .padding(.bottom, Layout.spacing)
+            // Layout-only twin supplies root-space targets; controls actually live inside UIKit's scroll view.
+            queueHeaderContent(measuring: true)
+                .hidden().allowsHitTesting(false).accessibilityHidden(true)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { queueHeaderHeight = $0 }
             .offset(y: queueHeaderOffset)
         }
@@ -595,6 +592,38 @@ struct NowPlayingView: View {
             }
         }
         .padding(.bottom, -Layout.queueProgressOverlap)
+    }
+
+    /// Refresh only changed header controls; scrolling must not rebuild the hosting cell each frame.
+    private var queueHeaderRevision: Int {
+        var value = Hasher()
+        value.combine(playback.current)
+        value.combine(playback.isShuffled)
+        value.combine(playback.repeatMode.symbol)
+        value.combine(settings.autoplayRadio)
+        value.combine(localLibrary.isBusy)
+        value.combine(localLibrary.isLoaded)
+        if let current = playback.current {
+            value.combine(localLibrary.favoriteTracks.contains(current.id))
+            value.combine(catalog.isLiked(current))
+        }
+        return value.finalize()
+    }
+
+    /// Native hosting owns input; the hidden template measures the same geometry for the single visual cover/title.
+    private func queueHeaderContent(measuring: Bool) -> some View {
+        VStack(spacing: Layout.spacing) {
+            compactTrackHeader(presentation: .queue, measuring: measuring)
+            HStack(spacing: Layout.compact) {
+                queueModePill(symbol: "shuffle", label: "ios-shuffle", isActive: playback.isShuffled,
+                    action: playback.toggleShuffle)
+                queueModePill(symbol: playback.repeatMode.symbol, label: repeatLabel,
+                    isActive: playback.repeatMode != .off, action: playback.cycleRepeat)
+                queueModePill(symbol: "infinity", label: "ios-autoplay-radio", isActive: settings.autoplayRadio,
+                    action: { settings.autoplayRadio.toggle() })
+            }
+        }
+        .padding(.bottom, Layout.spacing)
     }
 
     private func queueModePill(symbol: String, label: LocalizedStringKey, isActive: Bool, action: @escaping () -> Void) -> some View {

@@ -10,15 +10,17 @@ struct NativeQueueList: UIViewRepresentable {
     let playback: PlaybackController
     let settings: SettingsStore
     let addSongs: () -> Void
+    let headerRevision: Int
+    let headerView: AnyView
     let headerHeight: CGFloat
     let headerOffset: (CGFloat) -> Void
 
     init(upcoming: [QueuedTrack], history: [MusicTrack], autoplay: Bool, playback: PlaybackController,
-         settings: SettingsStore, headerHeight: CGFloat, headerOffset: @escaping (CGFloat) -> Void,
+         settings: SettingsStore, headerRevision: Int, headerView: AnyView, headerHeight: CGFloat, headerOffset: @escaping (CGFloat) -> Void,
          addSongs: @escaping () -> Void) {
         self.upcoming = upcoming; self.history = history; self.autoplay = autoplay
         self.playback = playback; self.settings = settings; self.addSongs = addSongs
-        self.headerHeight = headerHeight; self.headerOffset = headerOffset
+        self.headerRevision = headerRevision; self.headerView = headerView; self.headerHeight = headerHeight; self.headerOffset = headerOffset
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
@@ -39,6 +41,7 @@ struct NativeQueueList: UIViewRepresentable {
         private var didPositionQueue = false
         private var lastTypeface: String?
         private var lastSource: String?
+        private var lastHeaderRevision: Int?
         private var lastHeaderHeight: CGFloat?
         private var historyRevealed = false
         private var hasHistory = false
@@ -130,11 +133,13 @@ struct NativeQueueList: UIViewRepresentable {
             let fontChanged = lastTypeface != parent.typeface
             let sourceChanged = lastSource != parent.playback.queueSource
             let headerChanged = lastHeaderHeight != parent.headerHeight
+            let headerContentChanged = lastHeaderRevision != parent.headerRevision
+            lastHeaderRevision = parent.headerRevision
             lastHeaderHeight = parent.headerHeight
             lastSource = parent.playback.queueSource
             lastTypeface = parent.typeface
             tracks = updated
-            if old.itemIdentifiers == allEntries && changes.isEmpty && !fontChanged && !sourceChanged && !headerChanged && !historyChanged {
+            if old.itemIdentifiers == allEntries && changes.isEmpty && !fontChanged && !sourceChanged && !headerChanged && !historyChanged && !headerContentChanged {
                 return
             }
             var snapshot = NSDiffableDataSourceSnapshot<Int, Entry>()
@@ -248,7 +253,7 @@ struct NativeQueueList: UIViewRepresentable {
                     } label: { QueueSongLabel(track: track) }.buttonStyle(.plain)
                 }
             case .playerHeader:
-                Color.clear.frame(height: parent.headerHeight).accessibilityHidden(true)
+                parent.headerView.frame(minHeight: parent.headerHeight)
             case .queueHeader:
                 header(parent.playback.queueSource == nil ? "ios-queue" : "ios-continue-playing",
                     identifier: "queue-clear", disabled: parent.playback.upcomingItems.isEmpty,
