@@ -106,7 +106,7 @@ struct NowPlayingView: View {
     @State private var artworkWasPlaying = false
     @State private var metadataFrame: CGRect = .zero
     @State private var metadataMode: Mode = .artwork
-    @State private var queueViewport: CGRect = .zero
+    @State private var contentViewport: CGRect = .zero
     @ScaledMetric(relativeTo: .title2) private var expandedTitleSize: CGFloat = InterfaceTypography.baselineSize(.title2)
     @ScaledMetric(relativeTo: .body) private var compactTitleSize: CGFloat = InterfaceTypography.baselineSize(.body)
     @ScaledMetric(relativeTo: .body) private var playerArtistSize: CGFloat = InterfaceTypography.baselineSize(.body)
@@ -163,17 +163,20 @@ struct NowPlayingView: View {
         VStack(spacing: Layout.playerSpacing) {
             grabberHeader
             if let error = playback.error { errorBanner(error) }
-            if mode == .lyrics { compactTrackHeader(presentation: .lyrics).transition(.opacity) }
-            Group {
-                switch mode {
-                case .artwork: artworkStage(side: artworkSide)
-                case .lyrics: lyricsStage.transition(.opacity)
-                case .queue: queueStage.transition(.opacity)
+            VStack(spacing: Layout.playerSpacing) {
+                if mode == .lyrics { compactTrackHeader(presentation: .lyrics).transition(.opacity) }
+                Group {
+                    switch mode {
+                    case .artwork: artworkStage(side: artworkSide)
+                    case .lyrics: lyricsStage.transition(.opacity)
+                    case .queue: queueStage.transition(.opacity)
+                    }
                 }
+                .frame(maxWidth: .infinity, minHeight: expands ? nil :
+                       (mode == .artwork ? Layout.accessibleArtwork + trackHeaderHeight + Layout.spacing : Layout.accessibleArtwork),
+                       maxHeight: expands ? .infinity : nil)
             }
-            .frame(maxWidth: .infinity, minHeight: expands ? nil :
-                   (mode == .artwork ? Layout.accessibleArtwork + trackHeaderHeight + Layout.spacing : Layout.accessibleArtwork),
-                   maxHeight: expands ? .infinity : nil)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("player-artwork-space")) } action: { contentViewport = $0 }
             scrubberSection.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             transportControls.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             volumeSection.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -212,7 +215,7 @@ struct NowPlayingView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .mask(alignment: .topLeading) { queueOverlayMask }
+            .mask(alignment: .topLeading) { playerOverlayMask }
         }
         .onPreferenceChange(PlayerMetadataFrame.self) { target in
             guard !target.isEmpty else { return }
@@ -240,16 +243,18 @@ struct NowPlayingView: View {
         }
     }
 
-    /// The same fade clips both the queue and its moving cover/metadata at the progress track.
-    @ViewBuilder private var queueOverlayMask: some View {
-        if mode == .queue && !queueViewport.isEmpty {
+    /// The cover and text can never cross playback controls, including while changing modes.
+    @ViewBuilder private var playerOverlayMask: some View {
+        if !contentViewport.isEmpty {
+            let height = contentViewport.height + Layout.queueProgressOverlap
             VStack(spacing: 0) {
                 Rectangle()
-                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [.black, .black.opacity(mode == .queue ? 0 : 1)],
+                    startPoint: .top, endPoint: .bottom)
                     .frame(height: Layout.queueFade)
             }
-            .frame(width: queueViewport.width, height: queueViewport.height)
-            .position(x: queueViewport.midX, y: queueViewport.midY)
+            .frame(width: contentViewport.width, height: height)
+            .position(x: contentViewport.midX, y: contentViewport.minY + height / 2)
         } else { Rectangle() }
     }
 
@@ -589,7 +594,6 @@ struct NowPlayingView: View {
                     .frame(height: Layout.queueFade)
             }
         }
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("player-artwork-space")) } action: { queueViewport = $0 }
         .padding(.bottom, -Layout.queueProgressOverlap)
     }
 
@@ -787,7 +791,7 @@ struct NowPlayingView: View {
     /// Each opening begins at the current song; a previous history scroll cannot move the cover target.
     private func changeMode(_ next: Mode) {
         withAnimation(reduceMotion ? nil : PlayerMotion.mode) {
-            if next == .queue && mode != .queue { queueHeaderOffset = 0; queueViewport = .zero }
+            if next == .queue && mode != .queue { queueHeaderOffset = 0 }
             mode = next
         }
     }
