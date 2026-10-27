@@ -17,7 +17,7 @@ The 08.02.49 Apple Music Library screenshot is 740 px wide and represents a 390 
 | Grid artwork corners | 8 pt | Layout.cardRadius |
 | Song artwork corners | 4 pt | Layout.rowArtworkRadius |
 | Mini-player | 32 pt art expanded / 30 inline; 4 pt corners | Layout mini tokens |
-| Mini-player text | headline 17 pt semibold / subheadline 15 pt regular; zero extra gap | FadingText, full label contrast |
+| Mini-player text | 15 pt semibold / 15 pt regular; zero extra gap | FadingText, full label contrast |
 | Queue current artwork | 72 pt | queueHeaderArtwork |
 | History-to-current separation | native 24 pt footer gap | historySectionGap |
 | Player slider | 6 pt idle track, no large idle thumb, 44 pt touch surface | MusicSeekSlider / MPVolumeView image APIs |
@@ -43,3 +43,37 @@ A history gesture test caught native sheet dismissal at the list's top. Non-artw
 The final queue header is native list content for gesture arbitration; only its geometry template is a hidden parent overlay. Header state changes update its hosting cell, while ordinary scroll offsets do not rebuild it. Collection search preserves native toolbar controls with searchPresentationToolbarBehavior(.avoidHidingContent), documented at https://developer.apple.com/documentation/swiftui/view/searchpresentationtoolbarbehavior(_:).
 
 Final validation: run 40465544047 at cf433d7f809e5c6350456649239daf3a3677a2c2 passed both native builds and five targeted iPhone 13 / iOS 27.0 touch cases. The new history case checks that current-header input does not block scrolling, transport remains accessible, the scrolled header is no longer hittable past its viewport, and Clear restores it. The search case verifies real filtering/restoration and navigation into saved albums/playlists afterward. No appearance screenshots were generated or inspected; actual physical volume, animation fidelity and reference-perfect typography remain for phone review.
+
+## Build 18: 13:46 video and Songs comparison
+
+Local-only refs: build18-apple-motion.mp4, build18-apple-metadata-swipe.png, build18-sonora-player.png, build18-apple-songs.png, build18-sonora-songs.png. Only these references were sampled; no new Sonora appearance screenshots were generated.
+
+The 384 x 832 video shows approximately 250 px paused versus 340 px playing art, sharing its center. The target ratio is 0.735, the playing cover is 10 pt wider than each 32 pt text margin, and play/pause uses a critically damped 0.48-response spring with a lighter cover-shaped shadow. Artwork-mode transport reserves 100 pt; the artwork slot is offset -12 pt to preserve the measured center while leaving footer/volume placement stable. These are measured implementation targets, not a guarantee of pixel identity.
+
+Expanded title/artist are 20/20 pt at normal Dynamic Type; mini-player title/artist are 15/15 pt. Selected fonts/accessibility scaling remain intentional. Hidden target and visible metadata use the same UILabel-derived heights, including descenders. Both metadata lines clip inside one stationary trailing gradient before favorite/menu controls; this also contains adjacent track text during swipes. No double per-label gradient is used in this visible layer.
+
+Horizontal artwork/title gestures preview real adjacent queue UUIDs, follow translation directly, use projected release and resist missing neighbors. Selection preserves paused state. Native Library editing stays inline, with check circles/native reorder handles, recents moving out, optional categories moving in, and a Done toolbar. Category order and visibility persist. The root Library has no search; its individual collection pages retain search. Main Search lists only the remote service implemented in this target (YouTube Music). Songs Play/Shuffle sections suppress action-row and section separators.
+
+Volume still uses normal MPVolumeView and public image/geometry APIs. Its native host aligns speaker symbols with the reported track center, with retina capsule end caps and no whole-view scaling/blur. Physical hardware volume cannot be accepted on the simulator. Apple reference: https://developer.apple.com/documentation/mediaplayer/mpvolumeview.
+
+Build-18 native compilation and seven targeted touch cases are pending; check STATUS.md and current delivery validation for the final outcome.
+
+## Added player-to-pill, queue-action and seeking references
+
+The 13:59 video shows the cover traveling into the actual accessory cover rather than the whole player zooming into the pill. The 14:37 video shows favorite/menu visuals following the compact metadata position. Local files: build18-apple-player-pill.mp4, build18-apple-queue-actions.mp4, build18-apple-history-heading.png and build18-sonora-history-heading.png.
+
+PlayerHeroState now measures the native mini-player/player cover in one UIWindow and moves a shared high-resolution cover with UIKit's real sheet transition coordinator, including interactive cancellation. It restores both real covers after the flight; native modal gestures remain. No private transition API is used. Favorites and the overflow menu keep real native controls while one non-interactive visual layer follows their measured mode-transition geometry. History row cells clip below the pinned heading; floating player overlays use the same upper cutoff, avoiding text/art above or behind History/Clear. Queue badge glyphs correspond to real shuffle/repeat/autoplay states; unsupported Apple-only mixing controls are not faked.
+
+Progress input is a full-target native UIControl with tap/drag mapping and adjustable accessibility. PlaybackController performs exact seeks, guards stale completions and holds the requested display position until the native clock confirms. A new interaction case checks AVPlayer.currentTime after tapping ~80% and dragging to ~25% of a real local audio file.
+
+The inline Library implementation now uses native List selection/check circles and persisted category binding because the initial custom-button-in-editing-list test did not preserve the selection. The test checks resulting category visibility and relaunch persistence. Downloads search assertions now address the current identified Songs list rather than any matching text in the underlying root page.
+
+Native compilation of source 46c6ef26240f50e2810b8bab80dcb99aa02319d6 passed for both targets in run 40482593645. Its eight-case interaction report is pending. Build 17 remains the last delivered IPA until the replacement is accepted.
+
+## Final build-18 acceptance and delivery
+
+Source d15d7b9c3d6beccc68b6866c3c87b3a6239728ba; successful run https://github.com/icesaviour02-droid/sonora/actions/runs/40504942163. Both native targets compiled. All eight iPhone 13 / iOS 27.0 (24A434) interaction cases passed; zero failures and no runtime warnings reported. The final checks include scoped Downloads search/navigation, playlist rename, player/lyrics/menu/dismiss/reopen (one real Song Actions menu), native queue reorder/swipe/add/clear without app exit, history clipping/Clear/available transport, artwork-forward and metadata-back queue swipes, inline Library selection plus relaunch persistence/no root search, and tap/drag seeking checked against AVPlayer.currentTime of real local audio.
+
+Delivered: ios/build/LATEST-VERSION/Sonora-0.3.0-build18-d15d7b9c.ipa; 8,603,227 bytes; SHA256 920dc4e7154ea721eba5be4e4cc4270df1d428ea5d03a5564cfd755c328ca0bd. Device ZIP/metadata/Mach-O arm64 iPhoneOS integrity verified; no test bundles packaged. Unsigned for iLoader. Previous IPA files remain intact and build-17 delivery notes are preserved under Previous-Versions. Small JSON is stored in CHECKS/ios27-build18-*.json; current BUILD-INFO.json and VALIDATION.md describe this exact candidate.
+
+The duplicate menu and queue-editing exit from the previous run did not recur. The exact earlier crash stack was unavailable, so do not claim a confirmed crash root cause beyond the validated safer mask handling. No app screenshots were exported or visually reviewed and no iOS 26 tests ran. Native behavioral acceptance does not certify exact Apple Music pixel/motion identity or physical system-volume behavior. Guest/authenticated streaming, downloads from a live provider, signed-phone account persistence, background audio and AirPlay were not repeated in this UI run. Safari sign-in, additional remote providers and complete desktop parity remain unfinished. The implemented queue modes are shuffle, repeat and autoplay; unsupported Apple-only mixing controls are not faked.
