@@ -49,7 +49,7 @@ struct SoundSettingsView: View {
                 Section { Text(error).foregroundStyle(.secondary) }
             }
         }
-        .navigationTitle("ios-equalizer")
+        .appNavigationTitle("ios-equalizer")
     }
 }
 
@@ -116,7 +116,7 @@ struct SoundProfilesView: View {
             if let error = store.error { Section { Text(error).foregroundStyle(.secondary) } }
             if store.isBusy { ProgressView() }
         }
-        .navigationTitle("ios-sound-profiles")
+        .appNavigationTitle("ios-sound-profiles")
         .sheet(isPresented: $showCreate) { NavigationStack { CreateSoundProfileView() } }
         .fileImporter(isPresented: $showImport, allowedContentTypes: [.plainText, .data], allowsMultipleSelection: false) { result in
             switch result {
@@ -159,7 +159,7 @@ private struct CreateSoundProfileView: View {
             }
             if let error = settings.soundProfiles.error { Text(error).foregroundStyle(.secondary) }
         }
-        .navigationTitle("ios-sound-profile-create")
+        .appNavigationTitle("ios-sound-profile-create")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("ios-cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
@@ -218,7 +218,7 @@ struct SoundProfileEditor: View {
             } header: { Text("ios-sound-filters") } footer: { Text("ios-sound-filters-description") }
             if let error = settings.soundProfiles.error { Section { Text(error).foregroundStyle(.secondary) } }
         }
-        .navigationTitle(draft.name)
+        .appNavigationTitle(draft.name)
         .toolbar {
             ToolbarItem(placement: .primaryAction) { EditButton() }
             ToolbarItem(placement: .confirmationAction) {
@@ -265,7 +265,7 @@ private struct SoundFilterEditor: View {
             if !filter.kind.isShelf { widthPicker }
             widthControl
         }
-        .navigationTitle("ios-sound-filter")
+        .appNavigationTitle("ios-sound-filter")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("ios-cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {

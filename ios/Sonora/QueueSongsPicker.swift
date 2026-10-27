@@ -40,7 +40,7 @@ struct QueueSongsPicker: View {
         .listStyle(.plain)
         .sensoryFeedback(.selection, trigger: selected)
         .searchable(text: $query)
-        .navigationTitle("ios-add-songs-to-queue")
+        .appNavigationTitle("ios-add-songs-to-queue")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("ios-cancel") { dismiss() } }

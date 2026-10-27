@@ -339,7 +339,7 @@ struct HomeView: View {
             }
             .padding(.vertical, Layout.spacing)
         }
-        .navigationTitle("ios-home")
+        .appNavigationTitle("ios-home")
         .refreshable { catalog.loadHome(force: true) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -502,10 +502,11 @@ struct SquareCard: View {
     let artworkURL: URL?
     var side: CGFloat = Layout.cardArtwork
     var circular = false
+    var fillsColumn = false
 
     var body: some View {
         VStack(alignment: circular ? .center : .leading, spacing: 6) {
-            ArtworkImage(url: ArtworkRendition.url(artworkURL, side: Layout.cardArtwork)) { image in
+            ArtworkImage(url: ArtworkRendition.url(artworkURL, side: fillsColumn ? Layout.collectionArtwork : side)) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Image(systemName: circular ? "music.mic" : "music.note")
@@ -514,7 +515,9 @@ struct SquareCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(.quaternary)
             }
-            .frame(width: side, height: side)
+            .frame(width: fillsColumn ? nil : side, height: fillsColumn ? nil : side)
+            .aspectRatio(1, contentMode: .fit)
+            .clipped()
             .clipShape(
                 circular
                     ? AnyShape(Circle())
@@ -532,7 +535,7 @@ struct SquareCard: View {
                     .lineLimit(1)
             }
         }
-        .frame(width: side, alignment: circular ? .center : .leading)
+        .frame(width: fillsColumn ? nil : side, alignment: circular ? .center : .leading)
     }
 }
 
@@ -635,7 +638,7 @@ struct LibraryView: View {
                                 Label("ios-pinned", systemImage: "pin")
                             }
                         }
-                    }
+                    }.labelStyle(LibraryCategoryLabelStyle())
 
                     Section {
                         NavigationLink { LocalFavoritesView() } label: { Label("ios-local-favorites", systemImage: "star.fill") }
@@ -697,7 +700,7 @@ struct LibraryView: View {
                 }
             }
         }
-        .navigationTitle("ios-library")
+        .appNavigationTitle("ios-library")
         .navigationDestination(item: $selectedRecentAlbum) { LocalAlbumView(albumID: $0) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -730,8 +733,69 @@ struct PlaylistsCollectionView: View {
     @State private var createLocal = false
     @State private var createYouTube = false
     @State private var createdID: String?
+    @AppStorage("sonora.playlists.grid") private var grid = true
 
     var body: some View {
+        Group {
+            if grid {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: Layout.spacing), GridItem(.flexible(), spacing: Layout.spacing)],
+                        alignment: .leading, spacing: Layout.spacing) {
+                        ForEach(local.playlists) { playlist in
+                            NavigationLink { LocalPlaylistView(playlistID: playlist.id) } label: {
+                                SquareCard(title: playlist.title, subtitle: String(localized: "ios-on-my-iphone"),
+                                    artworkURL: playlist.tracks(in: library.tracks).first { $0.displayArtworkURL != nil }?.displayArtworkURL,
+                                    fillsColumn: true)
+                            }.buttonStyle(.plain)
+                        }
+                        ForEach(catalog.savedPlaylists) { playlist in
+                            NavigationLink {
+                                PlaylistDetailView(playlistID: playlist.id, fallbackTitle: playlist.title,
+                                    fallbackAuthor: playlist.author, fallbackArtwork: playlist.artworkURL)
+                            } label: {
+                                SquareCard(title: playlist.title, subtitle: playlist.author,
+                                    artworkURL: playlist.artworkURL, fillsColumn: true)
+                            }.buttonStyle(.plain)
+                        }
+                    }.padding(Layout.spacing)
+                    if local.playlists.isEmpty && catalog.savedPlaylists.isEmpty {
+                        ContentUnavailableView("ios-playlists", systemImage: "music.note.list",
+                            description: Text("ios-local-playlists-description"))
+                    }
+                    if catalog.isLoadingLibrary { ProgressView("ios-loading-library") }
+                    if let error = local.error { Text(error).foregroundStyle(.secondary) }
+                    if let error = catalog.libraryError { Text(error).foregroundStyle(.secondary) }
+                }
+            } else {
+                playlistList
+            }
+        }
+        .appNavigationTitle("ios-playlists")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Menu {
+                    Button("ios-on-my-iphone", systemImage: "iphone") { createLocal = true }
+                        .disabled(local.isBusy || !local.isLoaded)
+                    if account.name != nil { Button("ios-youtube-music", systemImage: "play.rectangle") { createYouTube = true } }
+                } label: { Image(systemName: "plus") }
+                    .accessibilityLabel(Text("ios-create-playlist"))
+                Menu {
+                    Picker("ios-view-as", selection: $grid) {
+                        Label("ios-grid", systemImage: "square.grid.2x2").tag(true)
+                        Label("ios-list", systemImage: "list.bullet").tag(false)
+                    }
+                } label: { Image(systemName: "line.3.horizontal.decrease") }
+                    .accessibilityLabel(Text("ios-view-as"))
+            }
+        }
+        .navigationDestination(item: $createdID) { LocalPlaylistView(playlistID: $0) }
+        .sheet(isPresented: $createLocal) {
+            NavigationStack { CreateLocalPlaylistView(trackIDs: []) { createdID = $0 } }
+        }
+        .sheet(isPresented: $createYouTube) { NavigationStack { YouTubePlaylistCreationView() } }
+    }
+
+    private var playlistList: some View {
         List {
             Section {
                 Button("ios-create-playlist", systemImage: "plus") { createLocal = true }
@@ -768,12 +832,6 @@ struct PlaylistsCollectionView: View {
             if let error = catalog.libraryError { Text(error).foregroundStyle(.secondary) }
         }
         .listStyle(.plain)
-        .navigationTitle("ios-playlists")
-        .navigationDestination(item: $createdID) { LocalPlaylistView(playlistID: $0) }
-        .sheet(isPresented: $createLocal) {
-            NavigationStack { CreateLocalPlaylistView(trackIDs: []) { createdID = $0 } }
-        }
-        .sheet(isPresented: $createYouTube) { NavigationStack { YouTubePlaylistCreationView() } }
     }
 }
 
@@ -782,115 +840,214 @@ struct ArtistsCollectionView: View {
     @Environment(CatalogStore.self) private var catalog
     @Environment(LibraryStore.self) private var library
     @Environment(LocalLibraryStore.self) private var local
-    @Environment(PlaybackController.self) private var playback
 
-    private var localArtists: [String] {
-        Array(Dictionary(library.tracks.map { ($0.artist.lowercased(), $0.artist) }, uniquingKeysWith: { first, _ in first }).values).sorted()
+    private struct ArtistEntry: Identifiable {
+        let id: String
+        let name: String
+        let artwork: URL?
+        let remote: CatalogArtist?
+    }
+
+    private var artists: [ArtistEntry] {
+        let names = Array(Dictionary(library.tracks.map { ($0.artist.lowercased(), $0.artist) },
+            uniquingKeysWith: { first, _ in first }).values)
+        return names.map { name in
+            ArtistEntry(id: "local:" + name.lowercased(), name: name,
+                artwork: library.tracks.first { $0.artist == name }?.displayArtworkURL, remote: nil)
+        } + catalog.savedArtists.map {
+            ArtistEntry(id: "remote:" + $0.id, name: $0.name, artwork: $0.artworkURL, remote: $0)
+        }
     }
 
     var body: some View {
         Group {
-            if catalog.savedArtists.isEmpty && localArtists.isEmpty {
-                ContentUnavailableView(
-                    "ios-artists",
-                    systemImage: "music.mic",
-                    description: Text("ios-artists-empty-description")
-                )
-                .modifier(ScrollableEmptyState())
+            if artists.isEmpty {
+                ContentUnavailableView("ios-artists", systemImage: "music.mic",
+                    description: Text("ios-artists-empty-description"))
+                    .modifier(ScrollableEmptyState())
             } else {
                 List {
-                    if !catalog.savedArtists.isEmpty {
-                        Section("ios-youtube-music") {
-                            ForEach(catalog.savedArtists) { artist in
+                    ForEach(LibraryAlphabet.groups(artists, title: { $0.name })) { group in
+                        Section {
+                            ForEach(group.items) { artist in
                                 NavigationLink {
-                                    ArtistDetailView(browseID: artist.id, fallbackName: artist.name, fallbackArtwork: artist.artworkURL)
+                                    if let remote = artist.remote {
+                                        ArtistDetailView(browseID: remote.id, fallbackName: remote.name, fallbackArtwork: remote.artworkURL)
+                                    } else { LocalArtistView(name: artist.name) }
                                 } label: {
                                     HStack(spacing: Layout.spacing) {
-                                        AsyncImage(url: artist.artworkURL) { image in
-                                            image.resizable().scaledToFill()
-                                        } placeholder: {
-                                            Image(systemName: "music.mic")
-                                                .foregroundStyle(.secondary)
-                                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                                .background(.quaternary)
-                                        }
-                                        .frame(width: 48, height: 48)
-                                        .clipShape(Circle())
-                                        Text(artist.name).appFont(.body, weight: .medium)
+                                        ArtworkView(url: artist.artwork, side: Layout.rowArtwork)
+                                            .placeholderSymbol("music.mic").clipShape(Circle())
+                                        Text(artist.name).appFont(.body)
+                                    }
+                                }
+                                .contextMenu {
+                                    if artist.remote == nil {
+                                        Button(local.isFavorite(artist.name.lowercased(), category: .artists) ? "ios-remove-favorite" : "ios-favorite",
+                                               systemImage: local.isFavorite(artist.name.lowercased(), category: .artists) ? "star.slash" : "star") {
+                                            local.toggleFavorite(artist.name.lowercased(), category: .artists)
+                                        }.disabled(local.isBusy || !local.isLoaded)
                                     }
                                 }
                             }
-                        }
-                    }
-                    if !localArtists.isEmpty {
-                        Section("ios-library") {
-                            ForEach(localArtists, id: \.self) { name in
-                                NavigationLink(name) { LocalArtistView(name: name) }
-                                .contextMenu {
-                                    Button(local.isFavorite(name.lowercased(), category: .artists) ? "ios-remove-favorite" : "ios-favorite",
-                                           systemImage: local.isFavorite(name.lowercased(), category: .artists) ? "star.slash" : "star") {
-                                        local.toggleFavorite(name.lowercased(), category: .artists)
-                                    }.disabled(local.isBusy || !local.isLoaded)
-                                }
-                            }
-                        }
+                        } header: { Text(group.id).appFont(.headline) }
+                        .sectionIndexLabel(Text(group.id))
                     }
                 }
                 .listStyle(.plain)
+                .listSectionIndexVisibility(.visible)
             }
         }
-        .navigationTitle("ios-artists")
+        .appNavigationTitle("ios-artists")
     }
 }
 
 /// Library > Albums sub-screen.
 struct AlbumsCollectionView: View {
     @Environment(LibraryStore.self) private var library
-    private var localAlbums: [LocalAlbum] { LocalAlbum.collect(library.tracks) }
     @Environment(CatalogStore.self) private var catalog
     @Environment(AccountStore.self) private var account
+    @Environment(PlaybackController.self) private var playback
+    @AppStorage("sonora.albums.grid") private var grid = true
+    @State private var sort = AlbumSort.artist
+    @State private var playTask: Task<Void, Never>?
+    @State private var loadingPlayback = false
+    @State private var error: String?
+
+    private enum AlbumSort: String, CaseIterable, Identifiable {
+        case title, artist, year
+        var id: String { rawValue }
+        var label: LocalizedStringKey {
+            switch self { case .title: "ios-title"; case .artist: "ios-artist"; case .year: "ios-year" }
+        }
+    }
+
+    private struct AlbumEntry: Identifiable {
+        let id: String
+        let title: String
+        let artist: String
+        let artwork: URL?
+        let year: UInt16?
+        let local: LocalAlbum?
+        let remote: CatalogAlbum?
+    }
+
+    private var albums: [AlbumEntry] {
+        LocalAlbum.collect(library.tracks).map {
+            AlbumEntry(id: "local:" + $0.id, title: $0.title, artist: $0.artist,
+                artwork: $0.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL,
+                year: nil, local: $0, remote: nil)
+        } + catalog.savedAlbums.map {
+            AlbumEntry(id: "remote:" + $0.id, title: $0.title, artist: $0.artist,
+                artwork: $0.artworkURL, year: $0.year, local: nil, remote: $0)
+        }
+    }
+
+    private var groups: [AlphabeticGroup<AlbumEntry>] {
+        LibraryAlphabet.groups(albums) { album in
+            switch sort {
+            case .title: album.title
+            case .artist: album.artist
+            case .year: album.year.map(String.init) ?? "#"
+            }
+        }
+    }
 
     var body: some View {
         Group {
-            if catalog.savedAlbums.isEmpty && localAlbums.isEmpty {
-                ContentUnavailableView(
-                    "ios-albums",
-                    systemImage: "square.stack",
-                    description: Text(account.name == nil ? LocalizedStringKey("ios-sign-in-library-description") : LocalizedStringKey("ios-albums-empty-description"))
-                )
-                .modifier(ScrollableEmptyState())
+            if albums.isEmpty {
+                ContentUnavailableView("ios-albums", systemImage: "square.stack",
+                    description: Text(account.name == nil ? LocalizedStringKey("ios-sign-in-library-description") : LocalizedStringKey("ios-albums-empty-description")))
+                    .modifier(ScrollableEmptyState())
             } else {
-                ScrollView {
-                    LazyVGrid(
-                        columns: [GridItem(.flexible(), spacing: Layout.spacing), GridItem(.flexible(), spacing: Layout.spacing)],
-                        spacing: Layout.spacing
-                    ) {
-                        ForEach(localAlbums) { album in
-                            NavigationLink { LocalAlbumView(albumID: album.id) } label: {
-                                SquareCard(title: album.title, subtitle: album.artist,
-                                    artworkURL: album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL)
+                List {
+                    CollectionPlayShuffleHeader(playAction: { playAlbums(shuffled: false) },
+                        shuffleAction: { playAlbums(shuffled: true) })
+                        .disabled(loadingPlayback).listRowSeparator(.hidden)
+                    if loadingPlayback { ProgressView("ios-loading-library") }
+                    if let error { Text(error).foregroundStyle(.secondary) }
+                    ForEach(groups) { group in
+                        Section {
+                            if grid {
+                                ForEach(Array(stride(from: 0, to: group.items.count, by: 2)), id: \.self) { start in
+                                    HStack(alignment: .top, spacing: Layout.spacing) {
+                                        albumLink(group.items[start], grid: true)
+                                        if start + 1 < group.items.count { albumLink(group.items[start + 1], grid: true) }
+                                        else { Color.clear.frame(maxWidth: .infinity) }
+                                    }
+                                    .listRowSeparator(.hidden)
+                                    .listRowInsets(EdgeInsets(top: Layout.compact, leading: Layout.spacing,
+                                        bottom: Layout.compact, trailing: Layout.spacing))
+                                }
+                            } else {
+                                ForEach(group.items) { album in albumLink(album, grid: false) }
                             }
-                            .buttonStyle(.plain)
-                        }
-                        ForEach(catalog.savedAlbums) { album in
-                            NavigationLink {
-                                AlbumDetailView(
-                                    browseID: album.id,
-                                    fallbackTitle: album.title,
-                                    fallbackArtist: album.artist,
-                                    fallbackArtwork: album.artworkURL
-                                )
-                            } label: {
-                                SquareCard(title: album.title, subtitle: album.artist, artworkURL: album.artworkURL)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        } header: { Text(group.id).appFont(.headline) }
+                        .sectionIndexLabel(Text(group.id))
                     }
-                    .padding(Layout.spacing)
                 }
+                .listStyle(.plain)
+                .listSectionIndexVisibility(.visible)
             }
         }
-        .navigationTitle("ios-albums")
+        .appNavigationTitle("ios-albums")
+        .toolbar { ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Picker("ios-view-as", selection: $grid) {
+                    Label("ios-grid", systemImage: "square.grid.2x2").tag(true)
+                    Label("ios-list", systemImage: "list.bullet").tag(false)
+                }
+                Picker("ios-sort-by", selection: $sort) {
+                    ForEach(AlbumSort.allCases) { Label($0.label, systemImage: "arrow.up").tag($0) }
+                }
+            } label: { Image(systemName: "line.3.horizontal.decrease") }
+                .accessibilityLabel(Text("ios-sort-by"))
+        } }
+        .onDisappear { playTask?.cancel(); playTask = nil; loadingPlayback = false }
+    }
+
+    private func albumLink(_ album: AlbumEntry, grid: Bool) -> some View {
+        NavigationLink {
+            if let local = album.local { LocalAlbumView(albumID: local.id) }
+            else if let remote = album.remote {
+                AlbumDetailView(browseID: remote.id, fallbackTitle: remote.title,
+                    fallbackArtist: remote.artist, fallbackArtwork: remote.artworkURL)
+            }
+        } label: {
+            if grid {
+                SquareCard(title: album.title, subtitle: album.artist, artworkURL: album.artwork, fillsColumn: true)
+            } else {
+                DownloadedCollectionLabel(title: album.title, subtitle: album.artist, artwork: album.artwork)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Fetches actual album sequences before starting; cancellation never starts partial playback.
+    private func playAlbums(shuffled: Bool) {
+        playTask?.cancel()
+        let selection = groups.flatMap(\.items)
+        loadingPlayback = true
+        error = nil
+        playTask = Task { @MainActor in
+            defer { loadingPlayback = false }
+            do {
+                var tracks: [MusicTrack] = []
+                for album in selection {
+                    try Task.checkCancellation()
+                    if let local = album.local { tracks += local.tracks }
+                    else if let remote = album.remote {
+                        tracks += try await NativeProvider.album(browseID: remote.id).tracks.map(\.track)
+                    }
+                }
+                try Task.checkCancellation()
+                if shuffled { playback.playShuffled(tracks, source: String(localized: "ios-albums")) }
+                else if let first = tracks.first { playback.play(first, in: tracks, source: String(localized: "ios-albums")) }
+            } catch is CancellationError {} catch {
+                self.error = (error as? ProviderError)?.errorDescription ?? String(localized: "ios-provider-error")
+            }
+        }
     }
 }
 
@@ -902,7 +1059,9 @@ struct SongsCollectionView: View {
     let importAction: () -> Void
 
     private var allSongs: [MusicTrack] {
-        library.tracks + catalog.likedSongs
+        var seen: Set<String> = []
+        return (library.tracks + catalog.likedSongs).filter { seen.insert($0.id).inserted }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
     var body: some View {
@@ -927,25 +1086,20 @@ struct SongsCollectionView: View {
                             shuffleAction: { playback.playShuffled(allSongs) }
                         )
                     }
-                    if !library.tracks.isEmpty {
-                        Section("ios-imported-songs") {
-                            ForEach(library.tracks) { track in
-                                TrackRow(track: track) { playback.play(track, in: library.tracks) }
+                    ForEach(LibraryAlphabet.groups(allSongs, title: { $0.title })) { group in
+                        Section {
+                            ForEach(group.items) { track in
+                                TrackRow(track: track) { playback.play(track, in: allSongs) }
                             }
-                        }
-                    }
-                    if !catalog.likedSongs.isEmpty {
-                        Section("ios-liked-songs") {
-                            ForEach(catalog.likedSongs) { track in
-                                TrackRow(track: track) { playback.play(track, in: catalog.likedSongs) }
-                            }
-                        }
+                        } header: { Text(group.id).appFont(.headline) }
+                        .sectionIndexLabel(Text(group.id))
                     }
                 }
                 .listStyle(.plain)
+                .listSectionIndexVisibility(.visible)
             }
         }
-        .navigationTitle("ios-songs")
+        .appNavigationTitle("ios-songs")
     }
 }
 
@@ -977,7 +1131,7 @@ struct HistoryCollectionView: View {
                 .listStyle(.plain)
             }
         }
-        .navigationTitle("ios-history")
+        .appNavigationTitle("ios-history")
         .toolbar {
             if !settings.history.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1030,7 +1184,7 @@ struct PinsCollectionView: View {
             }
         }
         .listStyle(.plain)
-        .navigationTitle("ios-pinned")
+        .appNavigationTitle("ios-pinned")
     }
 }
 
@@ -1041,22 +1195,22 @@ struct CollectionPlayShuffleHeader: View {
 
     var body: some View {
         HStack(spacing: Layout.spacing) {
-            Button(action: playAction) {
-                Label("ios-play", systemImage: "play.fill")
-                    .appFont(.subheadline, weight: .bold)
-                    .frame(maxWidth: .infinity, minHeight: Layout.control)
-            }
-            .buttonStyle(.borderedProminent)
-
-            Button(action: shuffleAction) {
-                Label("ios-shuffle", systemImage: "shuffle")
-                    .appFont(.subheadline, weight: .bold)
-                    .frame(maxWidth: .infinity, minHeight: Layout.control)
-            }
-            .buttonStyle(.bordered)
+            transport("ios-play", symbol: "play.fill", action: playAction)
+            transport("ios-shuffle", symbol: "shuffle", action: shuffleAction)
         }
-        .buttonBorderShape(.roundedRectangle(radius: Layout.cardRadius))
-        .padding(.vertical, 4)
+        .padding(.vertical, Layout.compact / 2)
+    }
+
+    private func transport(_ title: LocalizedStringKey, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .appFont(.body, weight: .semibold)
+                .foregroundStyle(.tint)
+                .frame(maxWidth: .infinity, minHeight: Layout.control)
+                .background(.quaternary, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(PlayerControlStyle())
     }
 }
 
@@ -1514,7 +1668,7 @@ struct GenreDetailView: View {
             }
             .padding(.vertical, Layout.spacing)
         }
-        .navigationTitle(genre.title)
+        .appNavigationTitle(genre.title)
         .task {
             do {
                 sections = try await NativeProvider.genre(params: genre.params)
@@ -1590,7 +1744,7 @@ struct SearchView: View {
                 }
             }
         }
-        .navigationTitle("ios-search")
+        .appNavigationTitle("ios-search")
         .searchable(text: $youtube.query, prompt: "ios-search-prompt")
         .onSubmit(of: .search) { if scope == .youtube { youtube.submit(youtube.query) } }
         .onChange(of: youtube.query) { _, value in
@@ -1908,7 +2062,7 @@ struct SettingsView: View {
             .confirmationDialog("ios-remove-all-downloads", isPresented: $confirmRemoveDownloads, titleVisibility: .visible) {
                 Button("ios-remove-all-downloads", role: .destructive) { downloads.clearRemoteDownloads() }
             }
-            .navigationTitle("ios-settings")
+            .appNavigationTitle("ios-settings")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("ios-done") { dismiss() } } }
         }
     }

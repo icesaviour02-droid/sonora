@@ -1672,3 +1672,13 @@ ios-delete-from-iphone = Delete from iPhone
 ios-reorder-song = Reorder Song
 ios-move-up = Move Up
 ios-move-down = Move Down
+
+ios-artist = Artist
+
+ios-year = Year
+
+ios-view-as = View As
+
+ios-grid = Grid
+
+ios-list = List

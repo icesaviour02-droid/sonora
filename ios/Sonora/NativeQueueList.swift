@@ -10,11 +10,15 @@ struct NativeQueueList: UIViewRepresentable {
     let playback: PlaybackController
     let settings: SettingsStore
     let addSongs: () -> Void
+    let headerHeight: CGFloat
+    let headerOffset: (CGFloat) -> Void
 
     init(upcoming: [QueuedTrack], history: [MusicTrack], autoplay: Bool, playback: PlaybackController,
-         settings: SettingsStore, addSongs: @escaping () -> Void) {
+         settings: SettingsStore, headerHeight: CGFloat, headerOffset: @escaping (CGFloat) -> Void,
+         addSongs: @escaping () -> Void) {
         self.upcoming = upcoming; self.history = history; self.autoplay = autoplay
         self.playback = playback; self.settings = settings; self.addSongs = addSongs
+        self.headerHeight = headerHeight; self.headerOffset = headerOffset
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
@@ -26,7 +30,7 @@ struct NativeQueueList: UIViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, UICollectionViewDelegate {
         enum Entry: Hashable, Sendable {
-            case historyHeader, past(Int), queueHeader, song(UUID), add, autoplay
+            case historyHeader, past(Int), playerHeader, queueHeader, song(UUID), add, autoplay
         }
         var parent: NativeQueueList
         private weak var collection: UICollectionView?
@@ -35,6 +39,9 @@ struct NativeQueueList: UIViewRepresentable {
         private var didPositionQueue = false
         private var lastTypeface: String?
         private var lastSource: String?
+        private var lastHeaderHeight: CGFloat?
+        private var historyRevealed = false
+        private let historyFeedback = UIImpactFeedbackGenerator(style: .soft)
 
         init(parent: NativeQueueList) { self.parent = parent }
 
@@ -49,6 +56,7 @@ struct NativeQueueList: UIViewRepresentable {
             view.contentInsetAdjustmentBehavior = .never
             view.delegate = self
             view.dragInteractionEnabled = true
+            view.alwaysBounceVertical = true
             collection = view
             view.layoutReady = { [weak self] in self?.positionQueue() }
             let registration = UICollectionView.CellRegistration<UICollectionViewListCell, Entry> { [weak self] cell, _, entry in
@@ -84,13 +92,14 @@ struct NativeQueueList: UIViewRepresentable {
         func refresh() {
             guard let collection, dataSource != nil, !collection.hasActiveDrag, !collection.hasActiveDrop else { return }
             let upcoming = parent.playback.upcomingItems
-            let history = Array(parent.settings.history.reversed())
+            let history = Array(parent.history.filter { $0.id != parent.playback.current?.id }.reversed())
             var entries: [Entry] = []
             var updated: [Entry: MusicTrack] = [:]
             if !history.isEmpty {
                 entries.append(.historyHeader)
                 for (index, track) in history.enumerated() { entries.append(.past(index)); updated[.past(index)] = track }
             }
+            entries.append(.playerHeader)
             entries.append(.queueHeader)
             for item in upcoming { entries.append(.song(item.id)); updated[.song(item.id)] = item.track }
             entries.append(.add)
@@ -99,15 +108,17 @@ struct NativeQueueList: UIViewRepresentable {
             let changes = entries.filter { updated[$0] != tracks[$0] }
             let fontChanged = lastTypeface != parent.typeface
             let sourceChanged = lastSource != parent.playback.queueSource
+            let headerChanged = lastHeaderHeight != parent.headerHeight
+            lastHeaderHeight = parent.headerHeight
             lastSource = parent.playback.queueSource
             lastTypeface = parent.typeface
             tracks = updated
-            if old.itemIdentifiers == entries && changes.isEmpty && !fontChanged && !sourceChanged { return }
+            if old.itemIdentifiers == entries && changes.isEmpty && !fontChanged && !sourceChanged && !headerChanged { return }
             var snapshot = NSDiffableDataSourceSnapshot<Int, Entry>()
             snapshot.appendSections([0])
             snapshot.appendItems(entries)
             // Headers have changing disabled states, independent of the song metadata.
-            let reconfigure = Set(fontChanged ? entries : changes).union([.queueHeader, .historyHeader])
+            let reconfigure = Set(fontChanged ? entries : changes).union([.queueHeader, .historyHeader, .playerHeader])
             snapshot.reconfigureItems(entries.filter { reconfigure.contains($0) && old.indexOfItem($0) != nil })
             dataSource.apply(snapshot, animatingDifferences: didPositionQueue && !UIAccessibility.isReduceMotionEnabled) { [weak self] in
                 self?.positionQueue()
@@ -116,7 +127,7 @@ struct NativeQueueList: UIViewRepresentable {
 
         private func positionQueue() {
             guard let collection, collection.bounds.width > 0, collection.bounds.height > 0,
-                  let index = dataSource?.indexPath(for: .queueHeader),
+                  let index = dataSource?.indexPath(for: .playerHeader),
                   let attributes = collection.layoutAttributesForItem(at: index) else { return }
             let tail = collection.contentSize.height - attributes.frame.minY
             let padding = max(0, collection.bounds.height - tail)
@@ -124,6 +135,31 @@ struct NativeQueueList: UIViewRepresentable {
             if !didPositionQueue {
                 didPositionQueue = true
                 collection.scrollToItem(at: index, at: .top, animated: false)
+            }
+            updateHeaderOffset(collection)
+        }
+
+        /// The current-song header shares the queue's scroll position; history lives above it.
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard didPositionQueue, let collection else { return }
+            updateHeaderOffset(collection)
+        }
+
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            historyFeedback.prepare()
+        }
+
+        private func updateHeaderOffset(_ view: UICollectionView) {
+            guard let index = dataSource?.indexPath(for: .playerHeader),
+                  let attributes = view.layoutAttributesForItem(at: index) else { return }
+            let offset = attributes.frame.minY - view.contentOffset.y
+            parent.headerOffset(offset)
+            // Native scroll physics provide resistance; crossing the reveal threshold clicks once.
+            if !parent.history.isEmpty, view.isDragging, offset > Layout.historyRevealThreshold, !historyRevealed {
+                historyRevealed = true
+                historyFeedback.impactOccurred()
+            } else if offset < Layout.historyRevealReset {
+                historyRevealed = false
             }
         }
 
@@ -172,6 +208,8 @@ struct NativeQueueList: UIViewRepresentable {
                         self.parent.playback.play(track, in: self.parent.settings.history)
                     } label: { QueueSongLabel(track: track) }.buttonStyle(.plain)
                 }
+            case .playerHeader:
+                Color.clear.frame(height: parent.headerHeight).accessibilityHidden(true)
             case .queueHeader:
                 header(parent.playback.queueSource == nil ? "ios-queue" : "ios-continue-playing",
                     identifier: "queue-clear", disabled: parent.playback.upcomingItems.isEmpty,

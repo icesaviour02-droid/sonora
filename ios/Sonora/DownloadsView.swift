@@ -23,7 +23,7 @@ struct DownloadsView: View {
                     NavigationLink { DownloadedArtistsView() } label: { Label("ios-artists", systemImage: "music.mic") }.accessibilityIdentifier("download-artists")
                     NavigationLink { DownloadedAlbumsView() } label: { Label("ios-albums", systemImage: "square.stack") }.accessibilityIdentifier("download-albums")
                     NavigationLink { DownloadedSongsView() } label: { Label("ios-songs", systemImage: "music.note") }.accessibilityIdentifier("download-songs")
-                }.appFont(.title3)
+                }.labelStyle(LibraryCategoryLabelStyle())
             }
             if !pending.isEmpty {
                 Section("ios-downloading") {
@@ -40,7 +40,7 @@ struct DownloadsView: View {
                         ForEach(recentCollections) { track in
                             Button { selectedRecent = track } label: {
                                 SquareCard(title: track.albumTitle ?? track.title, subtitle: track.artist,
-                                    artworkURL: track.displayArtworkURL)
+                                    artworkURL: track.displayArtworkURL, fillsColumn: true)
                             }.buttonStyle(.plain)
                         }
                     }
@@ -50,7 +50,7 @@ struct DownloadsView: View {
             }
         }
         .listStyle(.plain)
-        .navigationTitle("ios-downloads")
+        .appNavigationTitle("ios-downloads")
         .navigationDestination(item: $selectedRecent) { track in
             DownloadedCollectionView(title: track.albumTitle ?? track.title, subtitle: track.artist,
                 artwork: track.displayArtworkURL, trackIDs: albumTracks(for: track).map(\.id))
@@ -116,18 +116,25 @@ struct DownloadedSongsView: View {
     @Environment(DownloadsStore.self) private var downloads
     @Environment(PlaybackController.self) private var playback
     @State private var query = ""
-    @State private var sort = DownloadSort.recent
+    @State private var sort = DownloadSort.title
     private var tracks: [MusicTrack] { sort.tracks(downloads.completedTracks).filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) || $0.artist.localizedCaseInsensitiveContains(query) } }
     var body: some View {
         List {
             CollectionPlayShuffleHeader(playAction: { if let first = tracks.first { playback.play(first, in: tracks) } },
                 shuffleAction: { playback.playShuffled(tracks) }).disabled(tracks.isEmpty).listRowSeparator(.hidden)
-            ForEach(tracks) { track in
-                TrackRow(track: track) { playback.play(track, in: tracks, source: String(localized: "ios-downloads")) }
-                    .swipeActions { Button("ios-remove-download", role: .destructive) { downloads.remove(track.id) } }
+            if sort == .title || sort == .artist {
+                ForEach(LibraryAlphabet.groups(tracks, title: { sort == .artist ? $0.artist : $0.title })) { group in
+                    Section {
+                        ForEach(group.items) { track in songRow(track) }
+                    } header: { Text(group.id).appFont(.headline) }
+                    .sectionIndexLabel(Text(group.id))
+                }
+            } else {
+                ForEach(tracks) { track in songRow(track) }
             }
         }
-        .listStyle(.plain).searchable(text: $query).navigationTitle("ios-songs")
+        .listSectionIndexVisibility(sort == .recent ? .hidden : .visible)
+        .listStyle(.plain).searchable(text: $query).appNavigationTitle("ios-songs")
         .toolbar { ToolbarItem(placement: .primaryAction) {
             Menu {
                 Picker("ios-sort-by", selection: $sort) { ForEach(DownloadSort.allCases) { Text($0.label).tag($0) } }
@@ -135,6 +142,11 @@ struct DownloadedSongsView: View {
                 .accessibilityLabel(Text("ios-sort-by"))
         } }
     }
+    private func songRow(_ track: MusicTrack) -> some View {
+        TrackRow(track: track) { playback.play(track, in: tracks, source: String(localized: "ios-downloads")) }
+            .swipeActions { Button("ios-remove-download", role: .destructive) { downloads.remove(track.id) } }
+    }
+
 }
 
 private enum DownloadSort: String, CaseIterable, Identifiable {
@@ -157,7 +169,7 @@ struct DownloadedAlbumsView: View {
             NavigationLink {
                 DownloadedCollectionView(title: album.title, subtitle: album.artist, artwork: album.tracks.first?.displayArtworkURL, trackIDs: album.tracks.map(\.id))
             } label: { DownloadedCollectionLabel(title: album.title, subtitle: album.artist, artwork: album.tracks.first?.displayArtworkURL) }
-        }.listStyle(.plain).navigationTitle("ios-albums")
+        }.listStyle(.plain).appNavigationTitle("ios-albums")
     }
 }
 
@@ -170,7 +182,7 @@ struct DownloadedArtistsView: View {
             NavigationLink {
                 DownloadedCollectionView(title: name, subtitle: String(localized: "ios-downloaded"), artwork: tracks.first?.displayArtworkURL, trackIDs: tracks.map(\.id))
             } label: { DownloadedCollectionLabel(title: name, subtitle: "", artwork: tracks.first?.displayArtworkURL) }
-        }.listStyle(.plain).navigationTitle("ios-artists")
+        }.listStyle(.plain).appNavigationTitle("ios-artists")
     }
 }
 
@@ -183,7 +195,7 @@ struct DownloadedPlaylistsView: View {
                 DownloadedCollectionView(title: playlist.title, subtitle: playlist.author, artwork: playlist.artworkURL,
                     trackIDs: playlist.trackIDs)
             } label: { DownloadedCollectionLabel(title: playlist.title, subtitle: playlist.author, artwork: playlist.artworkURL) }
-        }.listStyle(.plain).navigationTitle("ios-playlists")
+        }.listStyle(.plain).appNavigationTitle("ios-playlists")
         .overlay { if playlists.isEmpty { ContentUnavailableView("ios-playlists", systemImage: "music.note.list", description: Text("ios-downloaded-playlists-description")) } }
     }
 }
@@ -212,7 +224,7 @@ struct DownloadedCollectionView: View {
     }
 }
 
-private struct DownloadedCollectionLabel: View {
+struct DownloadedCollectionLabel: View {
     let title: String
     let subtitle: String
     let artwork: URL?

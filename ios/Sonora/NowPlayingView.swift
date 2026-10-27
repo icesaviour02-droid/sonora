@@ -97,6 +97,8 @@ struct NowPlayingView: View {
     @State private var lyrics = LyricsStore()
     @State private var chooseLocalPlaylist = false
     @State private var addQueueSongs = false
+    @State private var queueHeaderOffset: CGFloat = 0
+    @State private var queueHeaderHeight: CGFloat = Layout.queueHeaderArtwork + Layout.queueModeHeight + Layout.spacing * 2
     @State private var trackHeaderHeight: CGFloat = Layout.playerTitleReserve
     @Namespace private var playerElements
 
@@ -151,7 +153,7 @@ struct NowPlayingView: View {
         VStack(spacing: Layout.playerSpacing) {
             grabberHeader
             if let error = playback.error { errorBanner(error) }
-            if mode != .artwork { compactTrackHeader.transition(.opacity) }
+            if mode == .lyrics { compactTrackHeader.transition(.opacity) }
             Group {
                 switch mode {
                 case .artwork: artworkStage(side: artworkSide)
@@ -444,26 +446,39 @@ struct NowPlayingView: View {
         LyricsContentView(store: lyrics, retry: loadLyricsIfNeeded)
     }
 
+    /// Keeps the matched artwork in the same SwiftUI scene while UIKit scrolls history and rows.
     private var queueStage: some View {
-        VStack(alignment: .leading, spacing: Layout.spacing) {
-            HStack(spacing: Layout.compact) {
-                queueModePill(symbol: "shuffle", label: "ios-shuffle", isActive: playback.isShuffled,
-                    action: playback.toggleShuffle)
-                queueModePill(symbol: playback.repeatMode.symbol, label: repeatLabel,
-                    isActive: playback.repeatMode != .off, action: playback.cycleRepeat)
-                queueModePill(symbol: "infinity", label: "ios-autoplay-radio", isActive: settings.autoplayRadio,
-                    action: { settings.autoplayRadio.toggle() })
-            }
+        ZStack(alignment: .top) {
             NativeQueueList(upcoming: playback.upcomingItems, history: settings.history,
                 autoplay: settings.autoplayRadio, playback: playback, settings: settings,
-                addSongs: { addQueueSongs = true })
-                .mask(alignment: .bottom) {
-                    VStack(spacing: 0) {
-                        Rectangle()
-                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                            .frame(height: Layout.queueFade)
+                headerHeight: queueHeaderHeight,
+                headerOffset: { offset in
+                    DispatchQueue.main.async {
+                        if abs(queueHeaderOffset - offset) > 0.5 { queueHeaderOffset = offset }
                     }
+                }, addSongs: { addQueueSongs = true })
+            VStack(spacing: Layout.spacing) {
+                compactTrackHeader
+                HStack(spacing: Layout.compact) {
+                    queueModePill(symbol: "shuffle", label: "ios-shuffle", isActive: playback.isShuffled,
+                        action: playback.toggleShuffle)
+                    queueModePill(symbol: playback.repeatMode.symbol, label: repeatLabel,
+                        isActive: playback.repeatMode != .off, action: playback.cycleRepeat)
+                    queueModePill(symbol: "infinity", label: "ios-autoplay-radio", isActive: settings.autoplayRadio,
+                        action: { settings.autoplayRadio.toggle() })
                 }
+            }
+            .padding(.bottom, Layout.spacing)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { queueHeaderHeight = $0 }
+            .offset(y: queueHeaderOffset)
+        }
+        .clipped()
+        .mask(alignment: .bottom) {
+            VStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Layout.queueFade)
+            }
         }
     }
 

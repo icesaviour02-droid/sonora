@@ -89,6 +89,131 @@ extension View {
     }
 }
 
+/// Keeps native large and inline navigation titles in sync with the saved interface face.
+/// The system still owns collapse, back navigation, localization and accessibility sizing.
+private struct NavigationTitleTypography: ViewModifier {
+    @Environment(\.appTypeface) private var typeface
+    @Environment(\.dynamicTypeSize) private var textSize
+
+    func body(content: Content) -> some View {
+        content.background {
+            NavigationTypefaceBridge(typeface: typeface, textSize: textSize)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+/// Updates the containing navigation bar, including its scroll-edge and compact appearances.
+/// Per-screen attachment also covers sheets and newly pushed collection detail pages.
+private struct NavigationTypefaceBridge: UIViewControllerRepresentable {
+    let typeface: String
+    let textSize: DynamicTypeSize
+
+    func makeUIViewController(context: Context) -> Controller { Controller() }
+
+    func updateUIViewController(_ controller: Controller, context: Context) {
+        controller.typeface = typeface
+        controller.applyTypeface()
+    }
+
+    final class Controller: UIViewController {
+        var typeface = "system"
+
+        override func loadView() {
+            view = UIView(frame: .zero)
+            view.isUserInteractionEnabled = false
+        }
+
+        override func didMove(toParent parent: UIViewController?) {
+            super.didMove(toParent: parent)
+            applyTypeface()
+        }
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            applyTypeface()
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            applyTypeface()
+        }
+
+        /// A disappearing destination must not replace the visible destination's font.
+        func applyTypeface() {
+            guard let navigationController, let owner = owningDestination(),
+                  navigationController.topViewController === owner else { return }
+            let bar = navigationController.navigationBar
+            let inline = navigationFont(style: .headline, weight: .semibold)
+            let large = navigationFont(style: .largeTitle, weight: .bold)
+            if bar.titleTextAttributes?[.font] as? UIFont == inline,
+               bar.largeTitleTextAttributes?[.font] as? UIFont == large { return }
+            var titleAttributes = bar.titleTextAttributes ?? [:]
+            var largeAttributes = bar.largeTitleTextAttributes ?? [:]
+            titleAttributes[.font] = inline
+            largeAttributes[.font] = large
+            bar.titleTextAttributes = titleAttributes
+            bar.largeTitleTextAttributes = largeAttributes
+            bar.standardAppearance = styled(bar.standardAppearance, inline: inline, large: large)
+            if let appearance = bar.scrollEdgeAppearance {
+                bar.scrollEdgeAppearance = styled(appearance, inline: inline, large: large)
+            }
+            if let appearance = bar.compactAppearance {
+                bar.compactAppearance = styled(appearance, inline: inline, large: large)
+            }
+            if let appearance = bar.compactScrollEdgeAppearance {
+                bar.compactScrollEdgeAppearance = styled(appearance, inline: inline, large: large)
+            }
+        }
+
+        private func owningDestination() -> UIViewController? {
+            var destination: UIViewController = self
+            while let parent = destination.parent, !(parent is UINavigationController) {
+                destination = parent
+            }
+            return destination.parent is UINavigationController ? destination : nil
+        }
+
+        private func styled(_ source: UINavigationBarAppearance, inline: UIFont, large: UIFont) -> UINavigationBarAppearance {
+            let appearance = source.copy() as! UINavigationBarAppearance
+            appearance.titleTextAttributes[.font] = inline
+            appearance.largeTitleTextAttributes[.font] = large
+            return appearance
+        }
+
+        private func navigationFont(style: UIFont.TextStyle, weight: UIFont.Weight) -> UIFont {
+            let baseSize = UIFont.preferredFont(forTextStyle: style,
+                compatibleWith: UITraitCollection(preferredContentSizeCategory: .large)).pointSize
+            let system = UIFont.systemFont(ofSize: baseSize, weight: weight)
+            let base: UIFont
+            if typeface == "rounded", let descriptor = system.fontDescriptor.withDesign(.rounded) {
+                base = UIFont(descriptor: descriptor, size: baseSize)
+            } else if typeface != "system", let custom = UIFont(name: typeface, size: baseSize) {
+                let descriptor = custom.fontDescriptor.withSymbolicTraits(.traitBold) ?? custom.fontDescriptor
+                base = UIFont(descriptor: descriptor, size: baseSize)
+            } else {
+                base = system
+            }
+            return UIFontMetrics(forTextStyle: style).scaledFont(for: base, compatibleWith: traitCollection)
+        }
+    }
+}
+
+extension View {
+    /// Uses the saved typeface for both native title sizes without replacing navigation chrome.
+    func appNavigationTitle(_ title: LocalizedStringKey) -> some View {
+        navigationTitle(title).modifier(NavigationTitleTypography())
+    }
+
+    /// Dynamic provider and playlist names remain verbatim rather than localization keys.
+    @_disfavoredOverload
+    func appNavigationTitle<S: StringProtocol>(_ title: S) -> some View {
+        navigationTitle(title).modifier(NavigationTitleTypography())
+    }
+}
+
 /// A registered face may share its file with other weights in a font collection.
 struct InterfaceFontFace: Identifiable {
     let id: String
@@ -204,7 +329,7 @@ struct FontSettingsView: View {
                 if let error = fonts.error { Text(error).foregroundStyle(.secondary) }
             } footer: { Text("ios-font-import-description") }
         }
-        .navigationTitle("ios-interface-font")
+        .appNavigationTitle("ios-interface-font")
         .onChange(of: settings.typefaceID, initial: true) { _, _ in recordReview() }
         .fileImporter(isPresented: $showImport, allowedContentTypes: [.font], allowsMultipleSelection: true) { result in
             switch result {

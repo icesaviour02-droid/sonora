@@ -33,6 +33,7 @@
 "ios-albums-empty-description" = "Albums you save on YouTube Music appear here.";
 "ios-animated-artwork" = "Animated Artwork Scaling";
 "ios-appearance" = "Appearance";
+"ios-artist" = "Artist";
 "ios-artists" = "Artists";
 "ios-artists-empty-description" = "Artists from your library and subscriptions appear here.";
 "ios-audio-effects-error" = "Audio processing is unavailable for this track.";
@@ -129,6 +130,7 @@
 "ios-font-rounded" = "SF Pro Rounded";
 "ios-font-system" = "System (SF Pro)";
 "ios-genres-moods" = "Genres & Moods";
+"ios-grid" = "Grid";
 "ios-guest-mode" = "Guest";
 "ios-history" = "History";
 "ios-history-empty-description" = "Songs you play appear here so you can return to them anytime.";
@@ -148,6 +150,7 @@
 "ios-library-load-error" = "Your saved library could not be opened. Try again before importing more music.";
 "ios-license" = "Sonora contributors. GPL-3.0-or-later. This is an unofficial iPhone port.";
 "ios-liked-songs" = "Liked Songs";
+"ios-list" = "List";
 "ios-listenbrainz-token" = "ListenBrainz User Token";
 "ios-loading-home" = "Loading recommendations…";
 "ios-loading-library" = "Opening your library. If it cannot be loaded, try again.";
@@ -314,5 +317,7 @@
 "ios-unknown-artist" = "Unknown artist";
 "ios-unpin" = "Unpin";
 "ios-version" = "Version";
+"ios-view-as" = "View As";
+"ios-year" = "Year";
 "ios-your-music" = "Your music, with you";
 "ios-youtube-music" = "YouTube Music";

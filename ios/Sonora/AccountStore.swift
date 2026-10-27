@@ -384,7 +384,7 @@ struct AccountSignInView: View {
                     }
                 }
             }
-            .navigationTitle("ios-account-sign-in")
+            .appNavigationTitle("ios-account-sign-in")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -412,7 +412,7 @@ struct AccountSignInView: View {
                             if let error = account.error { Text(error).foregroundStyle(.secondary) }
                         } footer: { Text("ios-account-session-description") }
                     }
-                    .navigationTitle("ios-account-import-session")
+                    .appNavigationTitle("ios-account-import-session")
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("ios-done") { showSessionImport = false; sessionHeader = "" }.disabled(account.isBusy)

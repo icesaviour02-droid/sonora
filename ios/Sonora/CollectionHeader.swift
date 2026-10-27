@@ -41,3 +41,15 @@ struct MusicCollectionHeader: View {
             .accessibilityHidden(true)
     }
 }
+
+/// Library and Downloads share the native Music category icon, text and touch hierarchy.
+struct LibraryCategoryLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: Layout.spacing) {
+            configuration.icon.foregroundStyle(.tint)
+                .appFont(.title3).frame(width: Layout.categoryIcon)
+            configuration.title.foregroundStyle(.primary).appFont(.body)
+        }
+        .frame(minHeight: Layout.control)
+    }
+}

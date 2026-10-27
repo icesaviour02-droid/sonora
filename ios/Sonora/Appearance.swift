@@ -23,13 +23,13 @@ enum AppAccent: String, CaseIterable, Identifiable {
 /// Owns the artwork request so changing tracks cancels an obsolete theme calculation.
 @MainActor @Observable
 final class AppearanceStore {
-    private(set) var artworkAccent: Color = .pink
+    private(set) var artworkAccent: Color = .red
     private var currentURL: URL?
     @ObservationIgnored private var task: Task<Void, Never>?
 
     func color(for accent: AppAccent) -> Color {
         switch accent {
-        case .music: .pink
+        case .music: .red
         case .artwork: artworkAccent
         case .blue: .blue
         case .purple: .purple
@@ -43,7 +43,7 @@ final class AppearanceStore {
         guard currentURL != original else { return }
         currentURL = original
         task?.cancel()
-        artworkAccent = .pink
+        artworkAccent = .red
         guard let url = ArtworkRendition.url(original, side: Layout.rowArtwork),
               url.scheme == "https" || url.isFileURL else { return }
         task = Task { [weak self] in

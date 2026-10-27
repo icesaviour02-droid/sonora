@@ -211,7 +211,7 @@ struct LyricsSourcesSettingsView: View {
                 .onMove { settings.lyricsSources.move(fromOffsets: $0, toOffset: $1) }
             } footer: { Text("ios-lyrics-priority-description") }
         }
-        .navigationTitle("ios-lyrics-sources")
+        .appNavigationTitle("ios-lyrics-sources")
         .toolbar { ToolbarItem(placement: .primaryAction) { EditButton() } }
     }
 }

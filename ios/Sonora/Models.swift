@@ -284,6 +284,7 @@ enum Layout {
     static let artworkRadius: CGFloat = 12
     static let spacing: CGFloat = 16
     static let compact: CGFloat = 8
+    static let categoryIcon: CGFloat = 24
     static let control: CGFloat = 44
     static let artwork: CGFloat = 296
     static let detailArtwork: CGFloat = 220
@@ -292,9 +293,11 @@ enum Layout {
     static let cardRadius: CGFloat = 12
     static let soundResponseHeight: CGFloat = 180
     static let rowArtwork: CGFloat = 48
-    static let miniArtwork: CGFloat = 40
-    static let inlineMiniArtwork: CGFloat = 30
+    static let miniArtwork: CGFloat = 32
+    static let inlineMiniArtwork: CGFloat = 28
     static let metadataFade: CGFloat = 24
+    static let historyRevealThreshold: CGFloat = 48
+    static let historyRevealReset: CGFloat = 20
     static let queueHeaderArtwork: CGFloat = 72
     static let queueModeHeight: CGFloat = 38
     static let queueFade: CGFloat = 48

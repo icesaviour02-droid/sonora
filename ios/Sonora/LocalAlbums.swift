@@ -47,7 +47,7 @@ struct LocalAlbumView: View {
                 .listStyle(.plain)
             } else { ContentUnavailableView("ios-albums", systemImage: "square.stack") }
         }
-        .navigationTitle("")
+        .appNavigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -98,7 +98,7 @@ struct LocalArtistView: View {
             }
         }
         .listStyle(.plain)
-        .navigationTitle(name)
+        .appNavigationTitle(name)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(local.isFavorite(name.lowercased(), category: .artists) ? "ios-remove-favorite" : "ios-favorite",

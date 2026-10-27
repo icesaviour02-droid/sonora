@@ -16,7 +16,7 @@ struct CreateLocalPlaylistView: View {
             if let error = local.error { Text(error).foregroundStyle(.secondary) }
         }
         .onAppear { visible = true }.onDisappear { visible = false }
-        .navigationTitle("ios-create-playlist")
+        .appNavigationTitle("ios-create-playlist")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("ios-cancel") { dismiss() } }
@@ -50,7 +50,7 @@ struct LocalSongsPicker: View {
         .environment(\.editMode, .constant(.active))
         .searchable(text: $query)
         .overlay { if tracks.isEmpty { ContentUnavailableView("ios-songs", systemImage: "music.note") } }
-        .navigationTitle("ios-add-songs")
+        .appNavigationTitle("ios-add-songs")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("ios-cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
@@ -84,7 +84,7 @@ struct AddToLocalPlaylistView: View {
             }
             if let error = local.error { Text(error).foregroundStyle(.secondary) }
         }
-        .navigationTitle("ios-add-to-playlist")
+        .appNavigationTitle("ios-add-to-playlist")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("ios-cancel") { dismiss() } } }
         .sheet(isPresented: $create) {
             NavigationStack { CreateLocalPlaylistView(trackIDs: trackIDs) { _ in dismiss() } }
@@ -157,7 +157,7 @@ struct LocalPlaylistView: View {
                 } action: { _, collapsed in showNavigationTitle = collapsed }
             } else { ContentUnavailableView("ios-playlists", systemImage: "music.note.list", description: Text("ios-local-playlist-missing")) }
         }
-        .navigationTitle(showNavigationTitle ? (playlist?.title ?? "") : "")
+        .appNavigationTitle(showNavigationTitle ? (playlist?.title ?? "") : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if editMode.isEditing {
@@ -232,7 +232,7 @@ struct YouTubePlaylistCreationView: View {
             Text("ios-private-playlist-description").foregroundStyle(.secondary)
             if let error = catalog.libraryError { Text(error).foregroundStyle(.secondary) }
         }
-        .navigationTitle("ios-create-playlist")
+        .appNavigationTitle("ios-create-playlist")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("ios-cancel") { dismiss() } }
@@ -290,6 +290,6 @@ struct LocalFavoritesView: View {
                 ContentUnavailableView("ios-local-favorites", systemImage: "star")
             }
         }
-        .navigationTitle("ios-local-favorites")
+        .appNavigationTitle("ios-local-favorites")
     }
 }

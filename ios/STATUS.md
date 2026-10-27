@@ -585,3 +585,26 @@ and must report their OSStatus/failure honestly; without a supported signing ide
 not accepted. No weaker storage fallback or signing-policy bypass has been introduced. The
 physical iPhone's iLoader-provided signature and Keychain still require phone acceptance. These
 signing experiments changed only test infrastructure, not the device build's signature path.
+
+## Candidate delivered for parallel phone testing (27 October 2026 local time)
+
+At the user's explicit request, build 13 was placed in ios/build/LATEST-VERSION while the native
+checks continue. Filename: Sonora-0.3.0-build13-e6868506.ipa; source e68685060fa4363a13283511e8bbd448366e554c;
+8,100,138 bytes; SHA256 b339918ad2fe28aaa83c468c4e3d04a01e037e3d23b9447e3f3cd248cb8355d7.
+Build/archive/arm64 iPhoneOS checks passed. Functional run 40387301121 is pending; no native pass
+is claimed for that final revision. The user is sideloading with iLoader in parallel. Build 12
+and its metadata remain under Previous-Versions. BUILD-INFO.json and VALIDATION.md explicitly
+label native verification pending. No accessible physical iPhone was detected from this host.
+
+
+## 27 October: reference and font follow-up (build 14 source)
+
+- The requested 04:30 IST automation was not created before that time passed. The user resumed work after 07:00 IST; implementation resumed directly. No new automation is needed. Prior run 40387301121 had already finished; it was not canceled.
+- All relocated WhatsApp screenshots and the 29-second video are present under ios/References. Contact sheets for reference study are ignored files under ios/build/reference-study, not app screenshots. No Impeccable skill or browser automation was used.
+- All 35 native navigation title declarations now use shared typography integration for large/inline titles. Fonts update on attachment, appearance and settings changes; native navigation materials and title collapse remain system-owned. Font behavior needs native runtime acceptance.
+- Songs merges local/liked tracks by stable ID, sorts titles and provides native alphabetical section indexes. Artists uses matching alphabetical grouping, circular artwork and native index. Downloaded songs defaults to title order with section indexes for title/artist sort.
+- Queue current artwork/title and mode controls share the queue scroll position; history precedes them, with native overscroll and a threshold haptic. The header stays in the SwiftUI matched-geometry scene rather than being recreated inside another hosting controller. Native touch acceptance remains pending.
+- Albums adds indexed two-column grid/list and title/artist/year sorting, with real album track resolution for Play/Shuffle. Playlist listing adds width-filling two-column covers, list/grid selection and native creation menu. These are source implementations, not a claim of exact Apple Music parity.
+- Mini-player artwork reduced to 32 pt expanded / 28 pt collapsed. Collection Play/Shuffle use matching tinted-text capsules; Library/Downloads category typography and icons share one style. Default Music accent is red; explicit user-selected accents remain available.
+- Remaining: validate navigation font behavior and queue scrolling on iOS 27; finish playlist/album cover-derived detail theme and exact detail transitions/submenus, downloaded collection grid/index consistency, and compare the remaining interactions with supplied references. Full app functionality, physical playback and Safari auth are not certified by this change.
+- Build 13 IPA is preserved. Build 14 has not been delivered until a device artifact passes compilation/integrity checks.

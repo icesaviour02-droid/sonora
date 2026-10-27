@@ -38,6 +38,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- iPhone page titles follow the selected interface font, including collapsed navigation titles and sheets. Songs and Artists gain alphabetical section indexes, and collection grids use the available width.
+
+- Queue history scrolls above the current song with a tactile reveal. Collection transport buttons use matching capsules, and mini-player artwork uses smaller reference proportions.
+
 - The collapsed iPhone player retains the artist and fades long titles. Now Playing opens from the player pill with native zoom, and queue/lyrics changes keep artwork and metadata spatially connected.
 
 - Fresh iPhone YouTube sign-ins no longer load an older account's cached cookies. Renewed sessions are saved to Keychain, and outstanding requests cannot update a later account's session.
