@@ -38,7 +38,7 @@ final class MusicInteractionTests: XCTestCase {
     func testFullscreenPullDownCancelAndDismissFromArtworkAndBlankSpace() {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["--sonora-review-url", "sonora://review?id=jfKfPfyJRdk&title=Sonora%20Fullscreen%20Interaction&artist=Sonora&mode=artwork"]
+        app.launchArguments = ["--sonora-review-fullscreen", "--sonora-review-url", "sonora://review?id=jfKfPfyJRdk&title=Sonora%20Fullscreen%20Interaction&artist=Sonora&mode=artwork"]
         app.launch()
         XCTAssertTrue(app.buttons["player-queue"].waitForExistence(timeout: 30))
         let surface = app.otherElements["player-fullscreen"].firstMatch
@@ -56,7 +56,7 @@ final class MusicInteractionTests: XCTestCase {
         expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: mini)
         waitForExpectations(timeout: 8)
         mini.tap()
-        XCTAssertTrue(app.buttons["player-queue"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["player-queue"].waitForExistence(timeout: 8), app.debugDescription)
         // Empty space beside the cover has the same dismiss gesture.
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.35))
             .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.84)))

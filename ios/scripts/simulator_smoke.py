@@ -129,9 +129,10 @@ def run_interactions(udid, export_images=True):
     finally:
         if failed: export_crash_summaries(bundle)
         current = Path(sim("get_app_container", udid, BUNDLE, "data"))
-        drag = current / "Library/Application Support/queue-drag-review.json"
-        if drag.exists():
-            (OUTPUT / drag.name).write_bytes(drag.read_bytes())
+        for filename in ["queue-drag-review.json", "player-presentation-review.json"]:
+            evidence = current / "Library/Application Support" / filename
+            if evidence.exists():
+                (OUTPUT / filename).write_bytes(evidence.read_bytes())
         try:
             summary = subprocess.run(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)],
                 capture_output=True, text=True, timeout=30)

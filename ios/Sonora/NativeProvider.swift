@@ -644,6 +644,7 @@ final class CatalogStore {
     @ObservationIgnored private var homeTask: Task<Void, Never>?
     @ObservationIgnored private var libraryTask: Task<Void, Never>?
     @ObservationIgnored private var playlistTask: Task<Void, Never>?
+    @ObservationIgnored private var trackMutationTasks: [UUID: Task<Void, Never>] = [:]
     private(set) var isCreatingPlaylist = false
 
     func loadHome(force: Bool = false) {
@@ -717,7 +718,25 @@ final class CatalogStore {
         }
     }
 
+    /// Saves a remote song only to an editable provider playlist, canceling in-flight changes on sign-out.
+    func addTrack(_ track: MusicTrack, to playlist: CatalogPlaylist) {
+        guard playlist.editable, let videoID = track.youtubeID else { return }
+        let token = UUID()
+        trackMutationTasks[token] = Task { [weak self] in
+            defer { self?.trackMutationTasks[token] = nil }
+            do {
+                try await NativeProvider.addPlaylistTrack(playlistID: playlist.id, videoID: videoID)
+                try Task.checkCancellation()
+            } catch is CancellationError {
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.libraryError = (error as? ProviderError)?.errorDescription ?? String(localized: "ios-provider-error")
+            }
+        }
+    }
+
     func clearLibrary() {
+        trackMutationTasks.values.forEach { $0.cancel() }; trackMutationTasks.removeAll()
         playlistTask?.cancel()
         playlistTask = nil
         isCreatingPlaylist = false

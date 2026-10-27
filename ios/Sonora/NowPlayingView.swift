@@ -616,11 +616,11 @@ struct NowPlayingView: View {
                     ) {
                         catalog.toggleLike(track)
                     }
-                    if !catalog.savedPlaylists.filter(\.editable).isEmpty, let videoID = track.youtubeID {
+                    if !catalog.savedPlaylists.filter(\.editable).isEmpty {
                         Menu("ios-add-to-playlist", systemImage: "music.note.list") {
                             ForEach(catalog.savedPlaylists.filter(\.editable)) { playlist in
                                 Button(playlist.title) {
-                                    Task { try? await NativeProvider.addPlaylistTrack(playlistID: playlist.id, videoID: videoID) }
+                                    catalog.addTrack(track, to: playlist)
                                 }
                             }
                         }

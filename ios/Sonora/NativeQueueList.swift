@@ -304,7 +304,18 @@ struct NativeQueueList: UIViewRepresentable {
                 if track.youtubeID != nil { self.parent.catalog.toggleLike(track) }
                 else { self.parent.localLibrary.toggleFavorite(track.id, category: .tracks) }
             }
-            let playlist = action("ios-add-to-playlist", "music.note.list") { [weak self] in self?.parent.addToPlaylist(track) }
+            var libraryActions: [UIMenuElement] = [favoriteAction]
+            if track.youtubeID == nil {
+                libraryActions.append(action("ios-add-to-playlist", "music.note.list") { [weak self] in self?.parent.addToPlaylist(track) })
+            } else {
+                let playlists = parent.catalog.savedPlaylists.filter(\.editable)
+                if !playlists.isEmpty {
+                    libraryActions.append(UIMenu(title: String(localized: "ios-add-to-playlist"), image: UIImage(systemName: "music.note.list"),
+                        children: playlists.map { playlist in
+                            UIAction(title: playlist.title) { [weak self] _ in self?.parent.catalog.addTrack(track, to: playlist) }
+                        }))
+                }
+            }
             let next = action("ios-play-next", "text.line.first.and.arrowtriangle.forward") { [weak self] in
                 guard let self else { return }
                 if case .song(let id) = entry, let index = self.parent.playback.upcomingItems.firstIndex(where: { $0.id == id }) {
@@ -337,7 +348,7 @@ struct NativeQueueList: UIViewRepresentable {
             })
             default: break
             }
-            return UIMenu(children: [UIMenu(options: .displayInline, children: [favoriteAction, playlist]),
+            return UIMenu(children: [UIMenu(options: .displayInline, children: libraryActions),
                 UIMenu(options: .displayInline, children: [next, later]), UIMenu(options: .displayInline, children: manage)])
         }
 

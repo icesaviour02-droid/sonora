@@ -19,12 +19,14 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
         private var hero: PlayerHeroState?
         private var interaction: UIPercentDrivenInteractiveTransition?
         private var wanted = false
+        private var dismissalSucceeded = false
         private var root: AnyView = AnyView(EmptyView())
         override func loadView() { view = UIView(); view.isUserInteractionEnabled = false }
         override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); reconcile() }
 
         func update(show: Bool, root: AnyView, hero: PlayerHeroState, changed: @escaping (Bool) -> Void) {
             wanted = show; self.root = root; self.hero = hero; self.changed = changed
+            record("update")
             player?.rootView = root
             reconcile()
         }
@@ -33,16 +35,32 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
             if wanted, player == nil, presentedViewController == nil {
                 let host = Hosting(rootView: root)
                 host.modalPresentationStyle = .custom
+                host.modalPresentationCapturesStatusBarAppearance = true
                 host.transitioningDelegate = self
                 host.view.backgroundColor = .clear
                 host.view.accessibilityIdentifier = "player-fullscreen"
                 let pan = UIPanGestureRecognizer(target: self, action: #selector(drag(_:)))
                 pan.delegate = self; host.view.addGestureRecognizer(pan)
                 player = host
-                present(host, animated: true)
+                record("present")
+                present(host, animated: true) { [weak self] in self?.record("present-complete") }
             } else if !wanted, let player, !player.isBeingDismissed {
                 player.dismiss(animated: true) { [weak self] in self?.player = nil; self?.reconcile() }
             }
+        }
+
+        /// DEBUG evidence records lifecycle flags only, without account or media content.
+        private func record(_ event: String) {
+            #if DEBUG
+            guard ProcessInfo.processInfo.arguments.contains("--sonora-review-fullscreen") else { return }
+            let url = URL.applicationSupportDirectory.appendingPathComponent("player-presentation-review.json")
+            var events = ((try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [[String: Any]] ?? []
+            events.append(["event": event, "wanted": wanted, "hasPlayer": player != nil,
+                "hasPresented": presentedViewController != nil, "inWindow": viewIfLoaded?.window != nil])
+            if let data = try? JSONSerialization.data(withJSONObject: Array(events.suffix(120))) {
+                try? data.write(to: url, options: .atomic)
+            }
+            #endif
         }
 
         /// Sliders/buttons keep their touches; queue/history scrolling keeps its native vertical gesture.
@@ -77,7 +95,13 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
                 let driver = UIPercentDrivenInteractiveTransition()
                 driver.completionCurve = .easeOut
                 interaction = driver
-                player.dismiss(animated: true)
+                dismissalSucceeded = false
+                player.dismiss(animated: true) { [weak self] in
+                    guard let self, self.dismissalSucceeded else { return }
+                    self.player = nil; self.wanted = false; self.changed?(false)
+                    self.record("interactive-cleanup")
+                    self.reconcile()
+                }
                 driver.update(progress)
             case .changed: interaction?.update(progress)
             case .ended, .cancelled:
@@ -95,8 +119,9 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
             source: UIViewController) -> (any UIViewControllerAnimatedTransitioning)? { Animator(opening: true, hero: hero) }
         func animationController(forDismissed dismissed: UIViewController) -> (any UIViewControllerAnimatedTransitioning)? {
             Animator(opening: false, hero: hero) { [weak self] success in
-                guard success, let self else { return }
-                self.player = nil; self.wanted = false; self.changed?(false)
+                guard let self else { return }
+                self.dismissalSucceeded = success
+                self.record(success ? "dismiss-animation-finished" : "dismiss-canceled")
             }
         }
         func interactionControllerForDismissal(using animator: any UIViewControllerAnimatedTransitioning)
@@ -142,6 +167,9 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
             surface.layoutIfNeeded()
             let flight = hero?.beginFlight(opening: opening, in: container)
             let reduced = UIAccessibility.isReduceMotionEnabled
+            surface.layer.cornerCurve = .continuous
+            surface.layer.masksToBounds = true
+            surface.layer.cornerRadius = opening && !reduced ? Layout.playerDismissRadius : 0
             if opening {
                 if reduced { surface.alpha = 0 }
                 else { surface.transform = CGAffineTransform(translationX: 0, y: container.bounds.height) }
@@ -149,15 +177,17 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
             let animation = UIViewPropertyAnimator(duration: transitionDuration(using: context), dampingRatio: 1) {
                 if reduced { surface.alpha = self.opening ? 1 : 0 }
                 else { surface.transform = self.opening ? .identity : CGAffineTransform(translationX: 0, y: container.bounds.height) }
+                surface.layer.cornerRadius = self.opening || reduced ? 0 : Layout.playerDismissRadius
                 flight?()
             }
             animation.addCompletion { [weak self] _ in
                 let success = !context.transitionWasCancelled
                 surface.transform = .identity; surface.alpha = 1
+                surface.layer.cornerRadius = 0; surface.layer.masksToBounds = false
                 if !success && self?.opening == true { surface.removeFromSuperview() }
                 self?.hero?.finish()
-                context.completeTransition(success)
                 self?.completed(success)
+                context.completeTransition(success)
                 self?.animator = nil
             }
             animator = animation

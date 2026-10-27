@@ -282,6 +282,7 @@ enum Layout {
     static let queueBadgeSize: CGFloat = 18
     static let queuePreviewHeight: CGFloat = 100
     static let playerMargin: CGFloat = 32
+    static let playerDismissRadius: CGFloat = 32
     static let playerArtworkBleed: CGFloat = 10
     static let pausedArtworkScale: CGFloat = 0.735
     static let playerTitleSize: CGFloat = 20
