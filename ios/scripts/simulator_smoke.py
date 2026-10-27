@@ -86,7 +86,7 @@ def run_interactions(udid, export_images=True):
     try:
         subprocess.run(["xcodebuild", "test-without-building", "-xctestrun", str(test_run),
             "-destination", "id=" + udid, "-parallel-testing-enabled", "NO",
-            "-resultBundlePath", str(bundle)], check=True, timeout=360)
+            "-resultBundlePath", str(bundle)], check=True, timeout=480)
     finally:
         current = Path(sim("get_app_container", udid, BUNDLE, "data"))
         drag = current / "Library/Application Support/queue-drag-review.json"

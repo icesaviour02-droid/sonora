@@ -132,11 +132,19 @@ final class MusicInteractionTests: XCTestCase {
         let wasSelected = pinned.isSelected
         pinned.tap()
         app.buttons["library-edit-done"].tap()
-        let destination = app.buttons["library-destination-pinned"]
-        expectation(for: NSPredicate { _, _ in destination.exists != wasSelected }, evaluatedWith: app)
-        waitForExpectations(timeout: 8)
+        XCTAssertTrue(edit.waitForExistence(timeout: 8))
         edit.tap()
-        XCTAssertEqual(pinned.isSelected, !wasSelected)
+        XCTAssertEqual(pinned.isSelected, !wasSelected, "Category selection must survive leaving and reopening inline editing")
+        app.buttons["library-edit-done"].tap()
+        let destination = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == %@ OR label == %@", "library-destination-pinned", "Pinned")).firstMatch
+        if !wasSelected {
+            XCTAssertTrue(destination.waitForExistence(timeout: 8), app.debugDescription)
+        } else {
+            expectation(for: NSPredicate { _, _ in !destination.exists }, evaluatedWith: app)
+            waitForExpectations(timeout: 8)
+        }
+        edit.tap()
         pinned.tap()
         app.buttons["library-edit-done"].tap()
         app.collectionViews.firstMatch.swipeDown()
