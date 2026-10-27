@@ -12,7 +12,7 @@ struct MiniPlayer: View {
     var body: some View {
         HStack(spacing: Layout.compact) {
             Button(action: open) {
-                HStack(spacing: Layout.compact + 2) {
+                HStack(spacing: Layout.compact) {
                     ArtworkView(track: playback.current,
                         side: placement == .inline ? Layout.inlineMiniArtwork : Layout.miniArtwork,
                         cornerRadius: Layout.miniArtworkRadius)

@@ -283,6 +283,7 @@ enum Layout {
     static let accessibleArtwork: CGFloat = 200
     static let artworkRadius: CGFloat = 12
     static let spacing: CGFloat = 16
+    static let gridSpacing: CGFloat = 12
     static let compact: CGFloat = 8
     static let playerSliderTrack: CGFloat = 3
     static let sliderIdleThumb: CGFloat = 2

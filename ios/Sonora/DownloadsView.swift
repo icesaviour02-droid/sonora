@@ -35,7 +35,7 @@ struct DownloadsView: View {
             }
             if !tracks.isEmpty {
                 Section("ios-recently-downloaded") {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardArtwork), spacing: Layout.spacing)],
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: Layout.gridSpacing), GridItem(.flexible(), spacing: Layout.gridSpacing)],
                               alignment: .leading, spacing: Layout.spacing) {
                         ForEach(recentCollections) { track in
                             Button { selectedRecent = track } label: {
@@ -46,6 +46,7 @@ struct DownloadsView: View {
                     }
                     .padding(.vertical, Layout.compact)
                     .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: Layout.compact, leading: Layout.pageMargin, bottom: Layout.spacing, trailing: Layout.pageMargin))
                 }
             }
         }

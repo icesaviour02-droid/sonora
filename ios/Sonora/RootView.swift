@@ -614,7 +614,7 @@ struct LibraryView: View {
                     .listSectionSeparator(.hidden, edges: .top)
                     if !library.tracks.isEmpty || !catalog.savedPlaylists.isEmpty || !catalog.savedAlbums.isEmpty || !local.playlists.isEmpty || !catalog.likedSongs.isEmpty {
                         Section {
-                            LazyVGrid(columns: [GridItem(.flexible(), spacing: Layout.spacing), GridItem(.flexible(), spacing: Layout.spacing)],
+                            LazyVGrid(columns: [GridItem(.flexible(), spacing: Layout.gridSpacing), GridItem(.flexible(), spacing: Layout.gridSpacing)],
                                       alignment: .leading, spacing: Layout.spacing) {
                                 ForEach(catalog.savedPlaylists.prefix(4)) { playlist in
                                     NavigationLink {
@@ -783,7 +783,7 @@ struct PlaylistsCollectionView: View {
         Group {
             if grid {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: Layout.spacing), GridItem(.flexible(), spacing: Layout.spacing)],
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: Layout.gridSpacing), GridItem(.flexible(), spacing: Layout.gridSpacing)],
                         alignment: .leading, spacing: Layout.spacing) {
                         ForEach(local.playlists) { playlist in
                             NavigationLink { LocalPlaylistView(playlistID: playlist.id)
@@ -805,7 +805,7 @@ struct PlaylistsCollectionView: View {
                                     .matchedTransitionSource(id: "remote:" + playlist.id, in: coverTransition)
                             }.buttonStyle(.plain)
                         }
-                    }.padding(Layout.spacing)
+                    }.padding(Layout.pageMargin)
                     if local.playlists.isEmpty && catalog.savedPlaylists.isEmpty {
                         ContentUnavailableView("ios-playlists", systemImage: "music.note.list",
                             description: Text("ios-local-playlists-description"))
@@ -1023,14 +1023,14 @@ struct AlbumsCollectionView: View {
                         Section {
                             if grid {
                                 ForEach(Array(stride(from: 0, to: group.items.count, by: 2)), id: \.self) { start in
-                                    HStack(alignment: .top, spacing: Layout.spacing) {
+                                    HStack(alignment: .top, spacing: Layout.gridSpacing) {
                                         albumLink(group.items[start], grid: true)
                                         if start + 1 < group.items.count { albumLink(group.items[start + 1], grid: true) }
                                         else { Color.clear.frame(maxWidth: .infinity) }
                                     }
                                     .listRowSeparator(.hidden)
-                                    .listRowInsets(EdgeInsets(top: Layout.compact, leading: Layout.spacing,
-                                        bottom: Layout.compact, trailing: Layout.spacing))
+                                    .listRowInsets(EdgeInsets(top: Layout.compact, leading: Layout.pageMargin,
+                                        bottom: Layout.compact, trailing: Layout.pageMargin))
                                 }
                             } else {
                                 ForEach(group.items) { album in albumLink(album, grid: false) }

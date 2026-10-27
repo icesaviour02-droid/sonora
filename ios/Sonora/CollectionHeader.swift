@@ -94,14 +94,14 @@ struct CollectionGridRows<Item, Cell: View>: View {
 
     var body: some View {
         ForEach(Array(stride(from: 0, to: items.count, by: 2)), id: \.self) { start in
-            HStack(alignment: .top, spacing: Layout.spacing) {
+            HStack(alignment: .top, spacing: Layout.gridSpacing) {
                 cell(items[start]).frame(maxWidth: .infinity)
                 if start + 1 < items.count { cell(items[start + 1]).frame(maxWidth: .infinity) }
                 else { Color.clear.frame(maxWidth: .infinity) }
             }
             .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: Layout.compact, leading: Layout.spacing,
-                bottom: Layout.compact, trailing: Layout.spacing))
+            .listRowInsets(EdgeInsets(top: Layout.compact, leading: Layout.pageMargin,
+                bottom: Layout.compact, trailing: Layout.pageMargin))
         }
     }
 }
