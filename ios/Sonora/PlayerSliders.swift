@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// Native slider input with Music's thin idle track, a tracking thumb and a full touch target.
-struct MusicSeekSlider: UIViewRepresentable {
+@MainActor struct MusicSeekSlider: UIViewRepresentable {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let onEditingChanged: (Bool) -> Void
@@ -28,7 +28,7 @@ struct MusicSeekSlider: UIViewRepresentable {
         if !slider.scrubbing { slider.setValue(Float(value), animated: false) }
     }
 
-    final class Coordinator: NSObject {
+    @MainActor final class Coordinator: NSObject {
         var parent: MusicSeekSlider
         init(parent: MusicSeekSlider) { self.parent = parent }
         @objc func changed(_ slider: SeekControl) {
