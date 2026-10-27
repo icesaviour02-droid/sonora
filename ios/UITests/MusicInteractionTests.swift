@@ -100,6 +100,49 @@ final class MusicInteractionTests: XCTestCase {
         back.tap()
     }
 
+    func testArtworkSwipeSelectsAdjacentQueueOccurrences() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--sonora-review-url", "sonora://trackswipereview?id=jfKfPfyJRdk&title=Sonora%20Swipe%20First&artist=First%20Review%20Artist"]
+        app.launch()
+        let metadata = app.descendants(matching: .any).matching(identifier: "player-track-metadata").firstMatch
+        XCTAssertTrue(metadata.waitForExistence(timeout: 30))
+        XCTAssertTrue(metadata.label.contains("Sonora Swipe First"))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.32))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.32)))
+        expectation(for: NSPredicate { _, _ in metadata.label.contains("Sonora Swipe Second") }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.32))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.86, dy: 0.32)))
+        expectation(for: NSPredicate { _, _ in metadata.label.contains("Sonora Swipe First") }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+        XCTAssertTrue(app.buttons["player-queue"].isHittable)
+    }
+
+    func testLibraryEditingStaysInlineAndPersistsSelection() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--sonora-review-url", "sonora://libraryreview"]
+        app.launch()
+        let edit = app.buttons["library-edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 30))
+        edit.tap()
+        let pinned = app.buttons["library-category-pinned"]
+        XCTAssertTrue(pinned.waitForExistence(timeout: 8))
+        let wasSelected = pinned.isSelected
+        pinned.tap()
+        app.buttons["library-edit-done"].tap()
+        let destination = app.buttons["library-destination-pinned"]
+        expectation(for: NSPredicate { _, _ in destination.exists != wasSelected }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+        edit.tap()
+        XCTAssertEqual(pinned.isSelected, !wasSelected)
+        pinned.tap()
+        app.buttons["library-edit-done"].tap()
+        app.collectionViews.firstMatch.swipeDown()
+        XCTAssertFalse(app.searchFields.allElementsBoundByIndex.contains { $0.isHittable })
+    }
+
     func testQueueHistoryKeepsPlaybackControlsAvailable() {
         continueAfterFailure = false
         let app = XCUIApplication()

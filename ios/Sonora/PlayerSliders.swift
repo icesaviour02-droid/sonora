@@ -88,10 +88,10 @@ import UIKit
             context.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: Layout.sliderTrackingThumb, height: Layout.sliderTrackingThumb))
         }
     static func track(alpha: CGFloat, height: CGFloat = Layout.playerSliderTrack) -> UIImage {
-        let side = height
-        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { context in
+        let size = CGSize(width: height * 2 + 1, height: height)
+        return UIGraphicsImageRenderer(size: size).image { context in
             UIColor.white.withAlphaComponent(alpha).setFill()
-            context.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: side, height: side))
-        }.resizableImage(withCapInsets: UIEdgeInsets(top: 0, left: side / 3, bottom: 0, right: side / 3))
+            UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: height / 2).fill()
+        }.resizableImage(withCapInsets: UIEdgeInsets(top: 0, left: height, bottom: 0, right: height), resizingMode: .stretch)
     }
 }

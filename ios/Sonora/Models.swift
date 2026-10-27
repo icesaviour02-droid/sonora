@@ -279,6 +279,21 @@ enum AppTheme: String, CaseIterable, Codable, Identifiable {
 /// One set of layout metrics shared by the native Apple Music-style surfaces.
 enum Layout {
     static let playerMargin: CGFloat = 32
+    static let playerArtworkBleed: CGFloat = 10
+    static let pausedArtworkScale: CGFloat = 0.735
+    static let playerTitleSize: CGFloat = 20
+    static let playerArtistSize: CGFloat = 20
+    static let miniTitleSize: CGFloat = 15
+    static let miniArtistSize: CGFloat = 15
+    static let playerMetadataSpacing: CGFloat = 0
+    static let playerShadowOpacity: Double = 0.18
+    static let playerPausedShadowOpacity: Double = 0.08
+    static let playerShadowRadius: CGFloat = 14
+    static let trackSwipeThreshold: CGFloat = 0.22
+    static let volumeSymbolWidth: CGFloat = 16
+    static let volumeSymbolSize: CGFloat = 12
+    static let volumeTrackInset: CGFloat = 24
+    static let volumeExpansion: CGFloat = 8
     static let playerSpacing: CGFloat = 12
     static let accessibleArtwork: CGFloat = 200
     static let artworkRadius: CGFloat = 12

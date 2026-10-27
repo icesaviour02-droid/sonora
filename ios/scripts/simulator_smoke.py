@@ -158,7 +158,7 @@ def review_interactions_only(udid, container):
     run_interactions(udid, export_images=False)
     (OUTPUT / "review-scope.json").write_text(json.dumps({
         "scope": "interactions", "passed": True,
-        "checks": ["download_categories", "playlist_rename", "queue_editing", "player_and_lyrics_source_menu"],
+        "checks": ["download_categories_and_search_navigation", "playlist_rename", "queue_editing", "player_and_lyrics_source_menu", "queue_history_clipping", "artwork_track_swiping", "inline_library_editing"],
         "full_provider_acceptance": False,
         "provider_checks": "not repeated; inspect the latest functional report"
     }, indent=2))

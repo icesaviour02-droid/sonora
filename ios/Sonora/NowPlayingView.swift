@@ -8,6 +8,8 @@ struct MiniPlayer: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let open: () -> Void
+    @ScaledMetric(relativeTo: .subheadline) private var titleSize: CGFloat = Layout.miniTitleSize
+    @ScaledMetric(relativeTo: .subheadline) private var artistSize: CGFloat = Layout.miniArtistSize
 
     var body: some View {
         HStack(spacing: Layout.compact) {
@@ -20,14 +22,14 @@ struct MiniPlayer: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(spacing: 4) {
-                            FadingText(playback.current?.title ?? "", style: .headline, weight: .semibold)
+                            FadingText(playback.current?.title ?? "", fixedPointSize: titleSize, weight: .semibold)
                             if playback.current?.explicit == true {
                                 Image(systemName: "e.square.fill")
                                     .appFont(.caption2)
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        FadingText(playback.current?.artist ?? "", style: .subheadline, color: UIColor.label.withAlphaComponent(0.88))
+                        FadingText(playback.current?.artist ?? "", fixedPointSize: artistSize, color: UIColor.label.withAlphaComponent(0.88))
                     }
                     Spacer(minLength: 0)
                 }
@@ -94,7 +96,14 @@ struct NowPlayingView: View {
     @State private var mode: Mode = .artwork
     @State private var seekValue: Double = 0
     @State private var isSeeking = false
-    @State private var volumeTracking = false
+    @State private var trackOffset: CGFloat = 0
+    @State private var visibleTrackOffset: CGFloat = 0
+    @State private var trackDragOrigin: CGFloat = 0
+    @State private var trackDragging = false
+    @State private var trackPreview: QueuedTrack?
+    @State private var trackDirection: CGFloat = 1
+    @State private var trackGestureID = UUID()
+    @State private var trackGestureSource: UUID?
     @State private var lyrics = LyricsStore()
     @State private var chooseLocalPlaylist = false
     @State private var addQueueSongs = false
@@ -107,9 +116,9 @@ struct NowPlayingView: View {
     @State private var metadataFrame: CGRect = .zero
     @State private var metadataMode: Mode = .artwork
     @State private var contentViewport: CGRect = .zero
-    @ScaledMetric(relativeTo: .title2) private var expandedTitleSize: CGFloat = InterfaceTypography.baselineSize(.title2)
+    @ScaledMetric(relativeTo: .title3) private var expandedTitleSize: CGFloat = Layout.playerTitleSize
     @ScaledMetric(relativeTo: .body) private var compactTitleSize: CGFloat = InterfaceTypography.baselineSize(.body)
-    @ScaledMetric(relativeTo: .body) private var playerArtistSize: CGFloat = InterfaceTypography.baselineSize(.body)
+    @ScaledMetric(relativeTo: .title3) private var expandedArtistSize: CGFloat = Layout.playerArtistSize
 
     init(initialMode: String = "artwork") {
         _mode = State(initialValue: initialMode == "lyrics" ? .lyrics : (initialMode == "queue" ? .queue : .artwork))
@@ -145,7 +154,7 @@ struct NowPlayingView: View {
         .interactiveDismissDisabled(mode != .artwork)
         .sensoryFeedback(.selection, trigger: mode)
         .onAppear { loadLyricsIfNeeded() }
-        .onChange(of: playback.current?.id) { _, _ in loadLyricsIfNeeded() }
+        .onChange(of: playback.currentQueueID) { _, _ in resetTrackSwipe(); loadLyricsIfNeeded() }
         .onChange(of: settings.localFileLyrics) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: settings.lyricsSources) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: mode) { _, _ in loadLyricsIfNeeded() }
@@ -167,7 +176,7 @@ struct NowPlayingView: View {
                 if mode == .lyrics { compactTrackHeader(presentation: .lyrics).transition(.opacity) }
                 Group {
                     switch mode {
-                    case .artwork: artworkStage(side: artworkSide)
+                    case .artwork: artworkStage(side: artworkSide).simultaneousGesture(trackSwipeGesture)
                     case .lyrics: lyricsStage.transition(.opacity)
                     case .queue: queueStage.transition(.opacity)
                     }
@@ -189,33 +198,47 @@ struct NowPlayingView: View {
         .overlay(alignment: .topLeading) {
             ZStack(alignment: .topLeading) {
             if !artworkFrame.isEmpty {
-                // Keep the rendition and view identity unchanged throughout mode changes.
-                let renderSide = max(Layout.artwork, artworkSide)
-                ArtworkView(track: playback.current, side: renderSide, cornerRadius: 0)
-                    .scaleEffect(artworkFrame.width / renderSide, anchor: .topLeading)
-                    .frame(width: artworkFrame.width, height: artworkFrame.height, alignment: .topLeading)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: mode == .artwork ? Layout.artworkRadius : Layout.compact))
-                    .shadow(color: .black.opacity(mode == .artwork ? 0.3 : 0), radius: Layout.spacing, y: Layout.compact)
-                    .position(x: artworkFrame.midX, y: artworkFrame.midY)
-                    .allowsHitTesting(false).accessibilityHidden(true)
-            }
-
-                if !metadataFrame.isEmpty {
-                    AnimatedPlayerMetadata(title: playback.current?.title ?? "", artist: playback.current?.artist ?? "",
-                        titleSize: mode == .artwork ? expandedTitleSize : compactTitleSize,
-                        artistSize: playerArtistSize, spacing: mode == .artwork ? Layout.compact : 2,
-                        expandedAccessibility: mode == .artwork && textSize.isAccessibilitySize)
-                        .frame(width: metadataFrame.width, height: metadataFrame.height, alignment: .leading)
-                        .position(x: metadataFrame.midX, y: metadataFrame.midY)
-                        .allowsHitTesting(false)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(Text(playback.current?.title ?? "") + Text(", ") + Text(playback.current?.artist ?? ""))
-                        .accessibilityHidden(mode != .artwork)
+                playerCover(playback.current, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
+                    .modifier(PlayerTrackTranslation(offset: mode == .artwork ? trackOffset : 0))
+                if mode == .artwork, let preview = trackPreview {
+                    playerCover(preview.track, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
+                        .offset(x: trackOffset + trackDirection * trackPageWidth)
                 }
+            }
+            if !metadataFrame.isEmpty {
+                ZStack(alignment: .topLeading) {
+                playerMetadata(playback.current, presentation: mode)
+                    .frame(width: metadataFrame.width, height: metadataFrame.height, alignment: .topLeading)
+                    .position(x: metadataFrame.midX, y: metadataFrame.midY)
+                    .offset(x: mode == .artwork ? trackOffset : 0)
+                    .allowsHitTesting(false)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(playback.current?.title ?? "") + Text(", ") + Text(playback.current?.artist ?? ""))
+                    .accessibilityIdentifier("player-track-metadata")
+                    .accessibilityHidden(mode != .artwork)
+                if mode == .artwork, let preview = trackPreview {
+                    playerMetadata(preview.track, presentation: .artwork)
+                        .frame(width: metadataFrame.width, height: metadataFrame.height, alignment: .topLeading)
+                        .position(x: metadataFrame.midX, y: metadataFrame.midY)
+                        .offset(x: trackOffset + trackDirection * trackPageWidth)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .mask {
+                    LinearGradient(stops: [.init(color: .black, location: 0),
+                        .init(color: .black, location: max(0, 1 - Layout.metadataFade / metadataFrame.width)),
+                        .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: metadataFrame.width, height: metadataFrame.height)
+                        .position(x: metadataFrame.midX, y: metadataFrame.midY)
+                }
+            }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .mask(alignment: .topLeading) { playerOverlayMask }
+        }
+        .onPreferenceChange(PlayerTrackPosition.self) { position in
+            if abs(visibleTrackOffset - position) > 0.25 { visibleTrackOffset = position }
         }
         .onPreferenceChange(PlayerMetadataFrame.self) { target in
             guard !target.isEmpty else { return }
@@ -230,11 +253,12 @@ struct NowPlayingView: View {
         }
         .onPreferenceChange(PlayerArtworkFrame.self) { target in
             guard !target.isEmpty else { return }
-            let animate = !artworkFrame.isEmpty && (artworkMode != mode || artworkWasPlaying != playback.isPlaying)
+            let modeChanged = artworkMode != mode
+            let animate = !artworkFrame.isEmpty && (modeChanged || artworkWasPlaying != playback.isPlaying)
             artworkMode = mode
             artworkWasPlaying = playback.isPlaying
             if animate && !reduceMotion {
-                withAnimation(PlayerMotion.mode) { artworkFrame = target }
+                withAnimation(modeChanged ? PlayerMotion.mode : PlayerMotion.artworkScale) { artworkFrame = target }
             } else {
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
@@ -253,7 +277,7 @@ struct NowPlayingView: View {
                     startPoint: .top, endPoint: .bottom)
                     .frame(height: Layout.queueFade)
             }
-            .frame(width: contentViewport.width, height: height)
+            .frame(width: contentViewport.width + (mode == .artwork ? Layout.playerMargin * 2 : 0), height: height)
             .position(x: contentViewport.midX, y: contentViewport.minY + height / 2)
         } else { Rectangle() }
     }
@@ -363,11 +387,12 @@ struct NowPlayingView: View {
 
     private func artworkStage(side: CGFloat) -> some View {
         GeometryReader { geometry in
-            let boundedSide = min(side, max(1, geometry.size.height - trackHeaderHeight - Layout.spacing))
+            let boundedSide = min(side + Layout.playerArtworkBleed * 2, max(1, geometry.size.height - trackHeaderHeight - Layout.spacing))
             VStack(spacing: Layout.spacing) {
                 ZStack {
-                    artworkTarget(side: boundedSide * ((playback.isPlaying || !settings.animatedArtwork) ? 1 : 0.82), presentation: .artwork)
+                    artworkTarget(side: boundedSide * ((playback.isPlaying || !settings.animatedArtwork) ? 1 : Layout.pausedArtworkScale), presentation: .artwork)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle()).accessibilityIdentifier("player-artwork-swipe")
                 trackHeaderRow
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                         if height > 0 { trackHeaderHeight = height }
@@ -387,7 +412,6 @@ struct NowPlayingView: View {
             } else {
                 HStack(spacing: Layout.compact) {
                     trackTitles
-                    Spacer(minLength: Layout.compact)
                     favoriteControl
                     overflowMenu
                 }
@@ -396,16 +420,82 @@ struct NowPlayingView: View {
     }
 
     private var trackTitles: some View {
-        VStack(alignment: .leading, spacing: Layout.compact) {
-            Text(playback.current?.title ?? "")
-                .appFont(.title2, weight: .semibold).foregroundStyle(.white)
-                .lineLimit(textSize.isAccessibilitySize ? 3 : 1)
-            Text(playback.current?.artist ?? "")
-                .appFont(.body).foregroundStyle(.white.opacity(0.75))
-                .lineLimit(textSize.isAccessibilitySize ? 2 : 1)
-        }
-        .opacity(0).accessibilityHidden(true)
-        .background { metadataTarget(presentation: .artwork) }
+        playerMetadata(playback.current, presentation: .artwork)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hidden().accessibilityHidden(true)
+            .background { metadataTarget(presentation: .artwork) }
+    }
+
+    /// Visible labels and their geometry targets use identical UIKit font metrics.
+    private func playerMetadata(_ track: MusicTrack?, presentation: Mode) -> some View {
+        AnimatedPlayerMetadata(title: track?.title ?? "", artist: track?.artist ?? "",
+            titleSize: presentation == .artwork ? expandedTitleSize : compactTitleSize,
+            artistSize: presentation == .artwork ? expandedArtistSize : compactTitleSize,
+            spacing: Layout.playerMetadataSpacing,
+            expandedAccessibility: presentation == .artwork && textSize.isAccessibilitySize)
+    }
+
+    /// Shadow belongs to the rounded cover and scales with play/pause, without a rectangular backing layer.
+    private func playerCover(_ track: MusicTrack?, renderSide: CGFloat) -> some View {
+        ArtworkView(track: track, side: renderSide, cornerRadius: 0)
+            .scaleEffect(artworkFrame.width / renderSide, anchor: .topLeading)
+            .frame(width: artworkFrame.width, height: artworkFrame.height, alignment: .topLeading)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: mode == .artwork ? Layout.artworkRadius : Layout.compact))
+            .shadow(color: .black.opacity(mode != .artwork ? 0 :
+                (playback.isPlaying ? Layout.playerShadowOpacity : Layout.playerPausedShadowOpacity)),
+                radius: Layout.playerShadowRadius, y: Layout.compact / 2)
+            .animation(reduceMotion ? nil : PlayerMotion.artworkScale, value: playback.isPlaying)
+            .position(x: artworkFrame.midX, y: artworkFrame.midY)
+            .allowsHitTesting(false).accessibilityHidden(true)
+    }
+
+    private var trackPageWidth: CGFloat { max(Layout.control, contentViewport.width + Layout.playerMargin * 2) }
+
+    /// Artwork and both metadata lines follow the same horizontal drag; previews are real queue occurrences.
+    private var trackSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: Layout.compact)
+            .onChanged { gesture in
+                guard mode == .artwork, abs(gesture.translation.width) > abs(gesture.translation.height) else { return }
+                if !trackDragging {
+                    trackGestureID = UUID(); trackGestureSource = playback.currentQueueID
+                    trackDragOrigin = visibleTrackOffset; trackDragging = true
+                }
+                let distance = trackDragOrigin + gesture.translation.width
+                let direction: CGFloat = distance < 0 ? 1 : -1
+                trackDirection = direction
+                trackPreview = playback.adjacentQueueItem(offset: Int(direction))
+                var transaction = Transaction(); transaction.disablesAnimations = true
+                withTransaction(transaction) { trackOffset = trackPreview == nil ? distance * 0.18 : distance }
+            }
+            .onEnded { gesture in
+                guard trackDragging else { return }
+                trackDragging = false
+                let token = trackGestureID
+                let destination = trackPreview
+                let projected = trackDragOrigin + gesture.predictedEndTranslation.width
+                let commit = destination != nil && trackGestureSource == playback.currentQueueID &&
+                    ((abs(trackOffset) > trackPageWidth * Layout.trackSwipeThreshold) ||
+                     (abs(projected) > trackPageWidth * 0.5 && projected * trackOffset > 0))
+                withAnimation(reduceMotion ? nil : PlayerMotion.trackSwipe, completionCriteria: .logicallyComplete) {
+                    trackOffset = commit ? -trackDirection * trackPageWidth : 0
+                } completion: {
+                    guard trackGestureID == token else { return }
+                    var transaction = Transaction(); transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        if commit, let destination, trackGestureSource == playback.currentQueueID {
+                            playback.selectQueueItem(destination.id, autoplay: playback.isPlaying || playback.isLoading)
+                        }
+                        resetTrackSwipe()
+                    }
+                }
+            }
+    }
+
+    private func resetTrackSwipe() {
+        trackGestureID = UUID(); trackOffset = 0; visibleTrackOffset = 0
+        trackPreview = nil; trackDragging = false; trackDragOrigin = 0
     }
 
     @ViewBuilder
@@ -417,10 +507,9 @@ struct NowPlayingView: View {
                 else { localLibrary.toggleFavorite(current.id, category: .tracks) }
             } label: {
                 Image(systemName: favorite ? "star.fill" : "star")
-                    .appFont(.body, weight: .semibold)
+                    .appFont(.title2, weight: .regular)
                     .foregroundStyle(.white.opacity(0.88))
                     .frame(width: Layout.control, height: Layout.control)
-                    .background(mode == .artwork ? .white.opacity(0.14) : .clear, in: Circle())
             }
             .buttonStyle(.plain)
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -436,12 +525,11 @@ struct NowPlayingView: View {
             } label: {
                 HStack(spacing: Layout.spacing - Layout.compact / 2) {
                     artworkTarget(side: Layout.queueHeaderArtwork, presentation: presentation, measuring: measuring)
-                    VStack(alignment: .leading, spacing: 2) {
-                        FadingText(playback.current?.title ?? "", style: .body, weight: .semibold)
-                        FadingText(playback.current?.artist ?? "", style: .body, color: .secondaryLabel)
-                    }
-                    .opacity(0).accessibilityHidden(true)
-                    .background { if measuring { metadataTarget(presentation: presentation) } }
+                    playerMetadata(playback.current, presentation: presentation)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .hidden().accessibilityHidden(true)
+                        .background { if measuring { metadataTarget(presentation: presentation) } }
                 }.contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -538,7 +626,7 @@ struct NowPlayingView: View {
                 .appFont(.body, weight: .semibold)
                 .foregroundStyle(.white.opacity(0.88))
                 .frame(width: Layout.control, height: Layout.control)
-                .background(mode == .artwork ? .white.opacity(0.14) : .clear, in: Circle())
+
         }
         .buttonStyle(.plain)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -743,22 +831,8 @@ struct NowPlayingView: View {
     }
 
     private var volumeSection: some View {
-        HStack(spacing: Layout.compact + 2) {
-            Image(systemName: "speaker.fill")
-                .appFont(.caption)
-                .foregroundStyle(.white.opacity(volumeTracking ? 1 : 0.62))
-                .offset(x: volumeTracking ? -Layout.compact : 0)
-            SystemVolumeSlider { active in
-                withAnimation(reduceMotion ? nil : PlayerMotion.press) { volumeTracking = active }
-            }
-                .frame(height: Layout.control)
-                .padding(.vertical, -(Layout.control - Layout.volumeControlHeight) / 2)
-                .scaleEffect(x: volumeTracking ? 1.05 : 1, y: 1)
-            Image(systemName: "speaker.wave.3.fill")
-                .appFont(.caption)
-                .foregroundStyle(.white.opacity(volumeTracking ? 1 : 0.62))
-                .offset(x: volumeTracking ? Layout.compact : 0)
-        }
+        Color.clear.frame(height: Layout.volumeControlHeight)
+            .overlay { SystemVolumeSlider().frame(height: Layout.control) }
     }
 
     private var bottomModeBar: some View {
@@ -819,6 +893,7 @@ struct NowPlayingView: View {
 
     /// Each opening begins at the current song; a previous history scroll cannot move the cover target.
     private func changeMode(_ next: Mode) {
+        resetTrackSwipe()
         withAnimation(reduceMotion ? nil : PlayerMotion.mode) {
             if next == .queue && mode != .queue { queueHeaderOffset = 0 }
             mode = next
@@ -840,66 +915,10 @@ struct NowPlayingView: View {
     }
 }
 
-/// Native hardware volume slider hosted inside the expanded Apple Music Now Playing screen.
+/// Hosts the real hardware-volume control with symbols aligned to its public track rectangle.
 private struct SystemVolumeSlider: UIViewRepresentable {
-    let editingChanged: (Bool) -> Void
-    func makeCoordinator() -> Coordinator { Coordinator(editingChanged: editingChanged) }
-
-    func makeUIView(context: Context) -> MPVolumeView {
-        let view = MPVolumeView(frame: .zero)
-        view.tintColor = .white
-        view.showsRouteButton = false
-        context.coordinator.view = view
-        context.coordinator.apply(active: false)
-        let touch = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.touchChanged(_:)))
-        touch.minimumPressDuration = 0
-        touch.cancelsTouchesInView = false
-        touch.delaysTouchesBegan = false
-        touch.delaysTouchesEnded = false
-        touch.delegate = context.coordinator
-        view.addGestureRecognizer(touch)
-        return view
-    }
-
-    func updateUIView(_ view: MPVolumeView, context: Context) { context.coordinator.editingChanged = editingChanged }
-
-    @MainActor final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        weak var view: MPVolumeView?
-        var editingChanged: (Bool) -> Void
-        private var active = false
-        init(editingChanged: @escaping (Bool) -> Void) { self.editingChanged = editingChanged }
-
-        @objc func touchChanged(_ gesture: UILongPressGestureRecognizer) {
-            let next = gesture.state == .began || gesture.state == .changed
-            guard active != next else { return }
-            active = next
-            apply(active: next)
-            editingChanged(next)
-        }
-
-        /// Observing a touch never cancels the actual system volume slider's tracking.
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
-
-        func apply(active: Bool) {
-            guard let view else { return }
-            let height = active ? Layout.volumeActiveTrack : Layout.volumeIdleTrack
-            view.layoutIfNeeded()
-            let states: [UIControl.State] = [.normal, .highlighted]
-            for state in states {
-                view.setVolumeThumbImage(PlayerSliderImages.idleThumb, for: state)
-                view.setMinimumVolumeSliderImage(PlayerSliderImages.track(alpha: active ? 1 : 0.6, height: height), for: state)
-                view.setMaximumVolumeSliderImage(PlayerSliderImages.track(alpha: 0.22, height: height), for: state)
-            }
-            view.setNeedsLayout()
-            if UIAccessibility.isReduceMotionEnabled { view.layoutIfNeeded() }
-            else {
-                UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
-                    view.layoutIfNeeded()
-                }
-            }
-        }
-    }
+    func makeUIView(context: Context) -> MusicVolumeHost { MusicVolumeHost() }
+    func updateUIView(_ view: MusicVolumeHost, context: Context) {}
 }
 
 /// Native route picker hands AirPlay selection and connection state to iOS.

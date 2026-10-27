@@ -31,24 +31,33 @@ enum LibraryCategory: String, CaseIterable, Identifiable {
     }
 }
 
-/// Category visibility is persisted without deleting any library data or changing playback.
-struct LibrarySectionsEditor: View {
-    @Binding var visible: String
-    @Environment(\.dismiss) private var dismiss
+/// Inline check circles share the Library's row identity while native edit mode supplies reorder handles.
+struct LibraryCategoryEditingRow: View {
+    let category: LibraryCategory
+    let selected: Bool
+    let toggle: () -> Void
     var body: some View {
-        NavigationStack {
-            List {
-                ForEach(LibraryCategory.allCases) { category in
-                    Toggle(isOn: Binding(get: { visible.split(separator: ",").contains(Substring(category.rawValue)) }, set: { enabled in
-                        var values = Set(visible.split(separator: ",").map(String.init))
-                        if enabled { values.insert(category.rawValue) } else { values.remove(category.rawValue) }
-                        visible = LibraryCategory.allCases.filter { values.contains($0.rawValue) }.map(\.rawValue).joined(separator: ",")
-                    })) { Label(category.label, systemImage: category.symbol) }
-                }
+        Button(action: toggle) {
+            HStack(spacing: Layout.compact) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                    .appFont(.body).frame(width: Layout.categoryIcon)
+                Label(category.label, systemImage: category.symbol)
+                    .labelStyle(LibraryCategoryLabelStyle())
             }
-            .appNavigationTitle("ios-edit-library")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("ios-done") { dismiss() } } }
         }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("library-category-" + category.rawValue)
+    }
+}
+
+extension LibraryCategory {
+    /// Retain saved order and append new categories without dropping a valid existing selection.
+    static func ordered(_ value: String) -> [LibraryCategory] {
+        var seen: Set<LibraryCategory> = []
+        return (value.split(separator: ",").compactMap { LibraryCategory(rawValue: String($0)) } + allCases)
+            .filter { seen.insert($0).inserted }
     }
 }
 

@@ -144,6 +144,11 @@ struct RootView: View {
             account.reviewSessionStorage()
             return
         }
+        if url.host == "libraryreview" {
+            selectedTab = .library
+            library.reviewDownloads(downloads)
+            return
+        }
         if url.host == "downloadsreview" {
             selectedTab = .downloads
             library.reviewDownloads(downloads)
@@ -228,6 +233,16 @@ struct RootView: View {
                 }
             )
             #if DEBUG
+            if url.host == "trackswipereview" {
+                playback.prepareReview(track)
+                var second = track
+                second.title = "Sonora Swipe Second"
+                second.artist = "Second Review Artist"
+                playback.addToQueue(second)
+                playerMode = "artwork"
+                showPlayer = true
+                return
+            }
             if url.host == "queuereview" {
                 playback.reviewQueue(track)
                 if ProcessInfo.processInfo.arguments.contains("--sonora-review-history") {
@@ -591,6 +606,7 @@ struct LibraryView: View {
     @Environment(SettingsStore.self) private var settings
     @Environment(LocalLibraryStore.self) private var local
     @Environment(AccountStore.self) private var account
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let importAction: () -> Void
     let openSettings: () -> Void
 
@@ -600,13 +616,30 @@ struct LibraryView: View {
     @State private var selectedLocal: LocalTarget?
     @AppStorage("sonora.library.categories") private var visibleCategories = LibraryCategory.defaults
 
-    @State private var query = ""
+    @AppStorage("sonora.library.category-order") private var categoryOrder = LibraryCategory.allCases.map(\.rawValue).joined(separator: ",")
+
+    private var orderedCategories: [LibraryCategory] { LibraryCategory.ordered(categoryOrder) }
+    private var shownCategories: [LibraryCategory] {
+        editCategories ? orderedCategories : orderedCategories.filter { categoryEnabled($0) }
+    }
+    private func categoryEnabled(_ category: LibraryCategory) -> Bool {
+        visibleCategories.split(separator: ",").contains(Substring(category.rawValue))
+    }
+    private func toggleCategory(_ category: LibraryCategory) {
+        var selected = Set(visibleCategories.split(separator: ",").map(String.init))
+        if selected.contains(category.rawValue) { selected.remove(category.rawValue) }
+        else { selected.insert(category.rawValue) }
+        visibleCategories = orderedCategories.filter { selected.contains($0.rawValue) }.map(\.rawValue).joined(separator: ",")
+    }
+    private func moveCategories(from source: IndexSet, to destination: Int) {
+        var categories = orderedCategories
+        categories.move(fromOffsets: source, toOffset: destination)
+        categoryOrder = categories.map(\.rawValue).joined(separator: ",")
+    }
 
     var body: some View {
         Group {
-            if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                MusicPageSearchResults(query: query)
-            } else if !library.isLoaded {
+            if !library.isLoaded {
                 ContentUnavailableView {
                     Label("ios-library", systemImage: "music.note")
                 } description: {
@@ -618,14 +651,23 @@ struct LibraryView: View {
             } else {
                 List {
                     Section {
-                        ForEach(LibraryCategory.allCases.filter { visibleCategories.split(separator: ",").contains(Substring($0.rawValue)) }) { category in
-                            NavigationLink { categoryDestination(category) } label: {
-                                Label(category.label, systemImage: category.symbol)
+                        ForEach(shownCategories) { category in
+                            Group {
+                                if editCategories {
+                                    LibraryCategoryEditingRow(category: category, selected: categoryEnabled(category)) {
+                                        toggleCategory(category)
+                                    }
+                                } else {
+                                    NavigationLink { categoryDestination(category) } label: {
+                                        Label(category.label, systemImage: category.symbol)
+                                    }.accessibilityIdentifier("library-destination-" + category.rawValue)
+                                }
                             }.libraryCategoryRow()
                         }
+                        .onMove(perform: moveCategories)
                     }
                     .listSectionSeparator(.hidden, edges: .top)
-                    if !library.tracks.isEmpty || !catalog.savedPlaylists.isEmpty || !catalog.savedAlbums.isEmpty || !local.playlists.isEmpty || !catalog.likedSongs.isEmpty {
+                    if !editCategories && (!library.tracks.isEmpty || !catalog.savedPlaylists.isEmpty || !catalog.savedAlbums.isEmpty || !local.playlists.isEmpty || !catalog.likedSongs.isEmpty) {
                         Section {
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: Layout.gridSpacing), GridItem(.flexible(), spacing: Layout.gridSpacing)],
                                       alignment: .leading, spacing: Layout.spacing) {
@@ -683,13 +725,13 @@ struct LibraryView: View {
                             Text("ios-recently-added").appFont(.title2, weight: .bold)
                                 .foregroundStyle(.primary).textCase(nil).padding(.top, Layout.spacing)
                         }
-                    } else if !catalog.likedSongs.isEmpty {
+                    } else if !editCategories && !catalog.likedSongs.isEmpty {
                         Section("ios-liked-songs") {
                             ForEach(catalog.likedSongs.prefix(20)) { track in
                                 TrackRow(track: track) { playback.play(track, in: catalog.likedSongs) }
                             }
                         }
-                    } else {
+                    } else if !editCategories {
                         Section {
                             VStack(spacing: Layout.compact) {
                                 Image(systemName: "music.note")
@@ -711,6 +753,7 @@ struct LibraryView: View {
                     }
                 }
                 .listStyle(.plain)
+                .environment(\.editMode, .constant(editCategories ? .active : .inactive))
                 .environment(\.defaultMinListRowHeight, Layout.libraryRowHeight)
                 .contentMargins(.top, 0, for: .scrollContent)
                 .refreshable {
@@ -720,7 +763,6 @@ struct LibraryView: View {
         }
         .appNavigationTitle("ios-library", inlineLarge: true)
         .toolbarTitleDisplayMode(.inlineLarge)
-        .collectionSearch(text: $query)
         .navigationDestination(item: $selectedLocal) { target in
             switch target {
             case .album(let id): LocalAlbumView(albumID: id)
@@ -730,32 +772,45 @@ struct LibraryView: View {
         .sheet(isPresented: $showCreatePlaylist) {
             NavigationStack { CreateLocalPlaylistView(trackIDs: []) { selectedLocal = .playlist($0) } }
         }
-        .sheet(isPresented: $editCategories) { LibrarySectionsEditor(visible: $visibleCategories) }
+        .animation(reduceMotion ? nil : PlayerMotion.libraryEdit, value: editCategories)
+        .sensoryFeedback(.selection, trigger: editCategories)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Menu {
-                    Button("ios-create-playlist", systemImage: "music.note.list") { showCreatePlaylist = true }
-                        .disabled(local.isBusy || !local.isLoaded)
-                    Button("ios-import", systemImage: "square.and.arrow.down", action: importAction)
-                        .disabled(library.isImporting || !library.isLoaded)
-                } label: { Image(systemName: "text.badge.plus") }
-                    .accessibilityLabel(Text("ios-add"))
-                Button { editCategories = true } label: { Image(systemName: "checklist") }
-                    .accessibilityLabel(Text("ios-edit-library"))
-            }
-            ToolbarSpacer(.fixed, placement: .topBarTrailing)
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: openSettings) {
-                    Group {
-                        if let name = account.name, !name.isEmpty {
-                            Text(name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined())
-                                .appFont(.body, weight: .semibold)
-                        } else { Image(systemName: "person.crop.circle").appFont(.title2) }
+            if editCategories {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { editCategories = false } label: {
+                        Image(systemName: "checkmark").appFont(.body, weight: .semibold)
                     }
-                    .frame(width: Layout.control, height: Layout.control)
-                    .background(.quaternary, in: Circle())
-                }.buttonStyle(.plain).accessibilityLabel(Text("ios-settings"))
-            }.sharedBackgroundVisibility(.hidden)
+                    .buttonStyle(.glassProminent).buttonBorderShape(.circle)
+                    .accessibilityLabel(Text("ios-done"))
+                    .accessibilityIdentifier("library-edit-done")
+                }
+            } else {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Menu {
+                        Button("ios-create-playlist", systemImage: "music.note.list") { showCreatePlaylist = true }
+                            .disabled(local.isBusy || !local.isLoaded)
+                        Button("ios-import", systemImage: "square.and.arrow.down", action: importAction)
+                            .disabled(library.isImporting || !library.isLoaded)
+                    } label: { Image(systemName: "text.badge.plus") }
+                        .accessibilityLabel(Text("ios-add"))
+                    Button { editCategories = true } label: { Image(systemName: "checklist") }
+                        .accessibilityLabel(Text("ios-edit-library"))
+                        .accessibilityIdentifier("library-edit")
+                }
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: openSettings) {
+                        Group {
+                            if let name = account.name, !name.isEmpty {
+                                Text(name.split(separator: " ").prefix(2).compactMap { $0.first.map(String.init) }.joined())
+                                    .appFont(.body, weight: .semibold)
+                            } else { Image(systemName: "person.crop.circle").appFont(.title2) }
+                        }
+                        .frame(width: Layout.control, height: Layout.control)
+                        .background(.quaternary, in: Circle())
+                    }.buttonStyle(.plain).accessibilityLabel(Text("ios-settings"))
+                }.sharedBackgroundVisibility(.hidden)
+            }
         }
         .overlay(alignment: .bottom) {
             if library.isImporting {
@@ -1170,6 +1225,7 @@ struct SongsCollectionView: View {
                             shuffleAction: { playback.playShuffled(allSongs) }
                         )
                     }
+                    .listSectionSeparator(.hidden)
                     if visibleSongs.isEmpty && !query.isEmpty { ContentUnavailableView.search(text: query) }
                     ForEach(LibraryAlphabet.groups(visibleSongs, title: { $0.title })) { group in
                         Section {
@@ -1291,6 +1347,8 @@ struct CollectionPlayShuffleHeader: View {
             transport("ios-shuffle", symbol: "shuffle", action: shuffleAction)
         }
         .padding(.vertical, Layout.compact / 2)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 
     private func transport(_ title: LocalizedStringKey, symbol: String, action: @escaping () -> Void) -> some View {
@@ -1788,39 +1846,22 @@ struct GenreDetailView: View {
     }
 }
 
-/// Apple Music-style Search tab with YouTube Music & Library scopes, filter pills (All, Songs, Albums, Artists, Playlists), suggestions, and Genres grid.
+/// Provider search contains only services implemented by the iPhone target.
 struct SearchView: View {
-    private enum Scope: Hashable { case youtube, library }
     private enum Filter: Hashable { case all, songs, albums, artists, playlists }
-
-    @Environment(LibraryStore.self) private var library
     @Environment(PlaybackController.self) private var playback
     @Environment(YouTubeSearch.self) private var youtube
     @Environment(CatalogStore.self) private var catalog
-
-    @State private var scope = Scope.youtube
     @State private var filter = Filter.all
-
-    private var matches: [MusicTrack] {
-        let term = youtube.query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !term.isEmpty else { return [] }
-        return library.tracks.filter {
-            $0.title.localizedStandardContains(term) || $0.artist.localizedStandardContains(term)
-        }
-    }
 
     var body: some View {
         @Bindable var youtube = youtube
         VStack(spacing: 0) {
-            Picker("ios-search-in", selection: $scope) {
-                Text("ios-youtube-music").tag(Scope.youtube)
-                Text("ios-library").tag(Scope.library)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, Layout.spacing)
-            .padding(.bottom, Layout.compact)
-
-            if scope == .youtube && youtube.hasSearched {
+            Label("ios-youtube-music", systemImage: "play.rectangle.fill")
+                .appFont(.subheadline).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Layout.spacing).padding(.bottom, Layout.compact)
+            if youtube.hasSearched {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Layout.compact) {
                         filterPill("ios-filter-all", value: .all)
@@ -1829,34 +1870,17 @@ struct SearchView: View {
                         filterPill("ios-artists", value: .artists)
                         filterPill("ios-playlists", value: .playlists)
                     }
-                    .padding(.horizontal, Layout.spacing)
-                    .padding(.bottom, Layout.compact)
+                    .padding(.horizontal, Layout.spacing).padding(.bottom, Layout.compact)
                 }
             }
-
-            Group {
-                if scope == .youtube {
-                    providerResults
-                } else if youtube.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    ContentUnavailableView("ios-search-library", systemImage: "magnifyingglass", description: Text("ios-search-description"))
-                        .modifier(ScrollableEmptyState())
-                } else if matches.isEmpty {
-                    ContentUnavailableView.search(text: youtube.query)
-                        .modifier(ScrollableEmptyState())
-                } else {
-                    List(matches) { track in
-                        TrackRow(track: track) { playback.play(track, in: matches) }
-                    }
-                    .listStyle(.plain)
-                }
-            }
+            providerResults
         }
         .appNavigationTitle("ios-search")
         .searchable(text: $youtube.query, placement: .navigationBarDrawer, prompt: "ios-search-prompt")
-        .onSubmit(of: .search) { if scope == .youtube { youtube.submit(youtube.query) } }
+        .onSubmit(of: .search) { youtube.submit(youtube.query) }
         .onChange(of: youtube.query) { _, value in
             if value.isEmpty { youtube.clear() }
-            else if scope == .youtube && !youtube.hasSearched { youtube.updateSuggestions(value) }
+            else if !youtube.hasSearched { youtube.updateSuggestions(value) }
         }
     }
 

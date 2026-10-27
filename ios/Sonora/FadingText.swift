@@ -10,17 +10,18 @@ struct FadingText: UIViewRepresentable {
     let color: UIColor
     private let fixedPointSize: CGFloat?
     private let lines: Int
+    private let fadeTail: Bool
 
     init(_ text: String, style: Font.TextStyle, weight: UIFont.Weight = .regular, color: UIColor = .label) {
         self.text = text; self.weight = weight; self.color = color
-        self.fixedPointSize = nil; self.lines = 1
+        self.fixedPointSize = nil; self.lines = 1; self.fadeTail = true
         _pointSize = ScaledMetric(wrappedValue: InterfaceTypography.baselineSize(style), relativeTo: style)
     }
 
     /// Already-scaled values allow the player to interpolate text size with its cover geometry.
-    init(_ text: String, fixedPointSize: CGFloat, weight: UIFont.Weight = .regular, color: UIColor = .label, lines: Int = 1) {
+    init(_ text: String, fixedPointSize: CGFloat, weight: UIFont.Weight = .regular, color: UIColor = .label, lines: Int = 1, fadeTail: Bool = true) {
         self.text = text; self.weight = weight; self.color = color
-        self.fixedPointSize = fixedPointSize; self.lines = lines
+        self.fixedPointSize = fixedPointSize; self.lines = lines; self.fadeTail = fadeTail
         _pointSize = ScaledMetric(wrappedValue: fixedPointSize, relativeTo: .body)
     }
 
@@ -35,6 +36,7 @@ struct FadingText: UIViewRepresentable {
 
     func updateUIView(_ label: TailFadingLabel, context: Context) {
         let pointSize = fixedPointSize ?? self.pointSize
+        label.fadesOverflow = fadeTail
         label.numberOfLines = lines
         label.lineBreakMode = lines == 1 ? .byClipping : .byWordWrapping
         let system = UIFont.systemFont(ofSize: pointSize, weight: weight)
@@ -64,10 +66,11 @@ struct FadingText: UIViewRepresentable {
 /// A GPU alpha mask follows native layout and the reading direction; short text never fades.
 final class TailFadingLabel: UILabel {
     private let fade = CAGradientLayer()
+    var fadesOverflow = true
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        guard numberOfLines == 1, bounds.width > 0, intrinsicContentSize.width > bounds.width else { layer.mask = nil; return }
+        guard fadesOverflow, numberOfLines == 1, bounds.width > 0, intrinsicContentSize.width > bounds.width else { layer.mask = nil; return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         fade.frame = bounds
@@ -84,6 +87,9 @@ final class TailFadingLabel: UILabel {
 /// Player changes retarget a non-bouncy spring instead of waiting for a prescribed sequence.
 enum PlayerMotion {
     static let mode = Animation.spring(response: 0.4, dampingFraction: 1)
+    static let artworkScale = Animation.spring(response: 0.48, dampingFraction: 1)
+    static let libraryEdit = Animation.spring(response: 0.32, dampingFraction: 1)
+    static let trackSwipe = Animation.spring(response: 0.32, dampingFraction: 1)
     static let press = Animation.spring(response: 0.2, dampingFraction: 1)
 }
 

@@ -646,6 +646,15 @@ final class PlaybackController {
         }
     }
 
+    /// Preview a real queue occurrence for a horizontal swipe, respecting repeat-all boundaries.
+    func adjacentQueueItem(offset: Int) -> QueuedTrack? {
+        guard abs(offset) == 1, let index = currentQueueIndex, queueItems.count > 1 else { return nil }
+        let destination = index + offset
+        if queueItems.indices.contains(destination) { return queueItems[destination] }
+        guard repeatMode == .all else { return nil }
+        return destination < 0 ? queueItems.last : queueItems.first
+    }
+
     func previous() {
         guard let index = currentQueueIndex else { return }
         if elapsed > 3 || index == 0 { seek(to: 0) }
