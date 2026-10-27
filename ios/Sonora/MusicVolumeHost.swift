@@ -15,7 +15,7 @@ final class MusicVolumeHost: UIView, UIGestureRecognizerDelegate {
         volume.tintColor = .white
         addSubview(volume)
         for symbol in [quiet, loud] {
-            symbol.contentMode = .scaleAspectFit
+            symbol.contentMode = .center
             symbol.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: Layout.volumeSymbolSize)
             symbol.isAccessibilityElement = false
             symbol.isUserInteractionEnabled = false
