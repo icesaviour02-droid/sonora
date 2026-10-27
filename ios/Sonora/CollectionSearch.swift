@@ -4,6 +4,7 @@ import SwiftUI
 extension View {
     func collectionSearch(text: Binding<String>) -> some View {
         searchable(text: text, placement: .navigationBarDrawer, prompt: Text("ios-search"))
+            .searchPresentationToolbarBehavior(.avoidHidingContent)
             .scrollDismissesKeyboard(.interactively)
     }
 }
