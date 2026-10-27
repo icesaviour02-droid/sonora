@@ -45,7 +45,8 @@ extension View {
     func libraryCategoryRow() -> some View {
         labelStyle(LibraryCategoryLabelStyle())
             .listRowInsets(EdgeInsets(top: 0, leading: Layout.pageMargin, bottom: 0, trailing: Layout.pageMargin))
-            .listRowSeparator(.hidden, edges: .top)
+            .listRowSeparator(.visible, edges: .bottom)
+            .listRowSeparatorTint(Color(uiColor: .separator))
     }
 }
 

@@ -129,7 +129,7 @@ def run_interactions(udid, export_images=True):
     finally:
         if failed: export_crash_summaries(bundle)
         current = Path(sim("get_app_container", udid, BUNDLE, "data"))
-        for filename in ["queue-drag-review.json", "player-presentation-review.json"]:
+        for filename in ["queue-drag-review.json", "player-presentation-review.json", "queue-context-preview-review.json"]:
             evidence = current / "Library/Application Support" / filename
             if evidence.exists():
                 (OUTPUT / filename).write_bytes(evidence.read_bytes())
@@ -197,9 +197,11 @@ def review_interactions_only(udid, container):
     """Rerun native touch regressions without screenshots or repeated provider acceptance."""
     generate_review_media(container)
     run_interactions(udid, export_images=False)
+    previews = json.loads((OUTPUT / "queue-context-preview-review.json").read_text())
+    assert {item["kind"] for item in previews} >= {"queue", "history"}, "Missing selected-row native preview evidence"
     (OUTPUT / "review-scope.json").write_text(json.dumps({
         "scope": "interactions", "passed": True,
-        "checks": ["download_categories_and_search_navigation", "playlist_rename", "queue_editing", "player_and_lyrics_source_menu", "queue_history_clipping", "artwork_track_swiping", "inline_library_editing", "tap_drag_native_audio_seeking", "fullscreen_drag_cancel_dismiss", "queue_history_context_menus"],
+        "checks": ["download_categories_and_search_navigation", "playlist_rename", "queue_editing", "player_and_lyrics_source_menu", "queue_history_clipping", "artwork_track_swiping", "inline_library_editing", "tap_drag_native_audio_seeking", "fullscreen_drag_cancel_dismiss", "queue_history_context_menus", "collection_cover_navigation_and_toolbars"],
         "full_provider_acceptance": False,
         "provider_checks": "not repeated; inspect the latest functional report"
     }, indent=2))

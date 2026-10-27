@@ -19,8 +19,6 @@ struct MiniPlayer: View {
                     ArtworkView(track: playback.current,
                         side: placement == .inline ? Layout.inlineMiniArtwork : Layout.miniArtwork,
                         cornerRadius: Layout.miniArtworkRadius)
-                        .background { if let hero { PlayerHeroAnchor(hero: hero, role: .mini) } }
-                        .opacity(hero?.coversHidden == true ? 0 : 1)
                         .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 0) {
@@ -65,6 +63,7 @@ struct MiniPlayer: View {
         }
         .padding(.leading, Layout.spacing)
         .padding(.trailing, placement == .inline ? Layout.compact : Layout.spacing)
+        .background { if let hero { PlayerHeroAnchor(hero: hero) } }
         .gesture(
             DragGesture(minimumDistance: 14)
                 .onEnded { value in
@@ -154,7 +153,6 @@ struct NowPlayingView: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
-        .onChange(of: playback.currentArtwork) { _, image in hero?.improveImage(image) }
         .preferredColorScheme(.dark)
         .sensoryFeedback(.selection, trigger: mode)
         .onAppear { loadLyricsIfNeeded() }
@@ -205,7 +203,7 @@ struct NowPlayingView: View {
         .overlay(alignment: .topLeading) {
             ZStack(alignment: .topLeading) {
             if !artworkFrame.isEmpty {
-                playerCover(playback.current, anchorsHero: true, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
+                playerCover(playback.current, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
                     .modifier(PlayerTrackTranslation(offset: mode == .artwork ? trackOffset : 0))
                 if mode == .artwork, let preview = trackPreview {
                     playerCover(preview.track, renderSide: max(Layout.artwork, artworkSide + Layout.playerArtworkBleed * 2))
@@ -241,7 +239,7 @@ struct NowPlayingView: View {
                 }
             }
                 if !controlsFrame.isEmpty {
-                    HStack(spacing: Layout.compact) { favoriteControl; overflowMenu }
+                    HStack(spacing: Layout.playerActionSpacing) { favoriteControl; overflowMenu }
                         .frame(width: controlsFrame.width, height: controlsFrame.height)
                         .background { PlayerDismissExclusion() }
                         .position(x: controlsFrame.midX, y: controlsFrame.midY)
@@ -369,7 +367,7 @@ struct NowPlayingView: View {
             } label: {
                 Capsule()
                     .fill(.white.opacity(0.38))
-                    .frame(width: 40, height: 5)
+                    .frame(width: Layout.playerGrabberWidth, height: Layout.playerGrabberThickness)
                     .frame(width: Layout.control * 1.5, height: Layout.control)
                     .contentShape(Rectangle())
             }
@@ -379,6 +377,7 @@ struct NowPlayingView: View {
             Spacer()
         }
         .frame(height: Layout.grabberHeight)
+        .offset(y: -Layout.playerGrabberLift)
     }
 
     private func errorBanner(_ message: String) -> some View {
@@ -444,7 +443,7 @@ struct NowPlayingView: View {
 
     /// Layout placeholders never swap with the real controls; one persistent interactive row moves above them.
     private func trackActions(presentation: Mode, measuring: Bool = true) -> some View {
-        HStack(spacing: Layout.compact) { favoriteGlyph; overflowGlyph }
+        HStack(spacing: Layout.playerActionSpacing) { favoriteGlyph; overflowGlyph }
             .hidden().accessibilityHidden(true)
             .background {
                 if measuring {
@@ -454,6 +453,7 @@ struct NowPlayingView: View {
                     }
                 }
             }
+            .offset(x: Layout.playerActionOffset)
     }
 
     private var actionsVisible: Bool {
@@ -479,7 +479,7 @@ struct NowPlayingView: View {
     }
 
     /// Shadow belongs to the rounded cover and scales with play/pause, without a rectangular backing layer.
-    private func playerCover(_ track: MusicTrack?, anchorsHero: Bool = false, renderSide: CGFloat) -> some View {
+    private func playerCover(_ track: MusicTrack?, renderSide: CGFloat) -> some View {
         ArtworkView(track: track, side: renderSide, cornerRadius: 0)
             .scaleEffect(artworkFrame.width / renderSide, anchor: .topLeading)
             .frame(width: artworkFrame.width, height: artworkFrame.height, alignment: .topLeading)
@@ -489,8 +489,6 @@ struct NowPlayingView: View {
                 (playback.isPlaying ? Layout.playerShadowOpacity : Layout.playerPausedShadowOpacity)),
                 radius: Layout.playerShadowRadius, y: Layout.compact / 2)
             .animation(reduceMotion ? nil : PlayerMotion.artworkScale, value: playback.isPlaying)
-            .background { if anchorsHero, let hero { PlayerHeroAnchor(hero: hero, role: .expanded) } }
-            .opacity(anchorsHero && hero?.coversHidden == true ? 0 : 1)
             .position(x: artworkFrame.midX, y: artworkFrame.midY)
             .allowsHitTesting(false).accessibilityHidden(true)
     }
@@ -552,7 +550,7 @@ struct NowPlayingView: View {
             .frame(width: Layout.control, height: Layout.control)
     }
     private var overflowGlyph: some View {
-        Image(systemName: "ellipsis").appFont(.body, weight: .semibold)
+        Image(systemName: "ellipsis").font(.system(size: Layout.playerOverflowSize, weight: .semibold))
             .foregroundStyle(.white.opacity(0.88)).frame(width: Layout.control, height: Layout.control)
     }
 
@@ -802,6 +800,7 @@ struct NowPlayingView: View {
             .disabled(playback.duration <= 0)
             .accessibilityLabel(Text("ios-playback-position"))
             .accessibilityIdentifier("player-seek")
+            .offset(y: Layout.playerSeekOffset)
             .overlay(alignment: .bottomLeading) {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--sonora-review-seek") {
@@ -826,23 +825,16 @@ struct NowPlayingView: View {
                 Text("-" + time(max(0, playback.duration - (isSeeking ? seekValue : playback.elapsed))))
             }
             .appFont(.caption).monospacedDigit()
+            .offset(y: -Layout.playerTimeLabelLift)
             .foregroundStyle(.white.opacity(0.68))
             .accessibilityHidden(true)
         }
     }
 
+    /// Keep technical codec details in audio settings; the player badge describes actual offline availability.
     private var qualityBadgeText: String? {
-        var parts: [String] = []
-        if let badge = playback.streamBadge, !badge.isEmpty {
-            parts.append(badge)
-        }
-        if settings.equalizerEnabled {
-            parts.append("EQ")
-        }
-        if settings.sleepTimer != .off {
-            parts.append("ZZZ")
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        guard let current = playback.current, current.youtubeID == nil || downloads.fileURL(for: current.id) != nil else { return nil }
+        return String(localized: "ios-downloaded")
     }
 
     private var transportControls: some View {
@@ -868,7 +860,7 @@ struct NowPlayingView: View {
                     } else {
                         Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
                             .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
-                            .font(.system(size: 40, weight: .bold))
+                            .font(.system(size: Layout.playerPlaySymbol, weight: .bold))
                             .foregroundStyle(.white)
                     }
                 }
@@ -890,8 +882,9 @@ struct NowPlayingView: View {
             .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text("ios-next"))
         }
-        .padding(.horizontal, Layout.spacing)
+        .padding(.horizontal, Layout.playerTransportInset)
         .frame(height: mode == .artwork ? Layout.artworkTransportHeight : Layout.transportHeight)
+        .offset(y: -Layout.playerTransportLift)
     }
 
     private var volumeSection: some View {
@@ -947,7 +940,8 @@ struct NowPlayingView: View {
             .accessibilityIdentifier("player-queue")
             .accessibilityAddTraits(mode == .queue ? .isSelected : [])
         }
-        .padding(.horizontal, Layout.spacing)
+        .padding(.horizontal, Layout.playerFooterInset)
+        .offset(y: Layout.playerFooterOffset)
     }
 
     /// The badge follows the enabled queue mode; unsupported Apple-only crossfade controls are not faked.

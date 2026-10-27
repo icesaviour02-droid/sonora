@@ -47,6 +47,7 @@ struct LocalAlbumView: View {
                     }
                 }
                 .listStyle(.plain)
+                .accessibilityIdentifier("album-track-list")
                 .collectionArtworkTheme(album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL)
             } else { ContentUnavailableView("ios-albums", systemImage: "square.stack") }
         }
@@ -54,7 +55,7 @@ struct LocalAlbumView: View {
         .collectionSearch(text: $query)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(id: "library-collection-options", placement: .topBarTrailing) {
                 Menu {
                     if let album {
                         Button(local.isFavorite(album.id, category: .albums) ? "ios-remove-favorite" : "ios-favorite",
@@ -81,6 +82,7 @@ struct LocalArtistView: View {
     let name: String
     private var tracks: [MusicTrack] { library.tracks.filter { $0.artist.lowercased() == name.lowercased() } }
 
+    @Namespace private var coverTransition
     @State private var query = ""
 
     var body: some View {
@@ -94,8 +96,8 @@ struct LocalArtistView: View {
             }
             Section("ios-albums") {
                 ForEach(LocalAlbum.collect(tracks).filter { MusicSearch.matches(query, $0.title, $0.artist) }) { album in
-                    NavigationLink { LocalAlbumView(albumID: album.id) } label: {
-                        HStack(spacing: Layout.spacing) { ArtworkView(track: album.tracks.first, side: Layout.rowArtwork); Text(album.title) }
+                    NavigationLink { LocalAlbumView(albumID: album.id).collectionCoverTransition(id: album.id, in: coverTransition) } label: {
+                        HStack(spacing: Layout.spacing) { ArtworkView(track: album.tracks.first, side: Layout.rowArtwork).matchedTransitionSource(id: album.id, in: coverTransition); Text(album.title) }
                     }
                 }
             }
@@ -107,7 +109,7 @@ struct LocalArtistView: View {
         .appNavigationTitle(name)
         .collectionSearch(text: $query)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(id: "library-collection-options", placement: .topBarTrailing) {
                 Button(local.isFavorite(name.lowercased(), category: .artists) ? "ios-remove-favorite" : "ios-favorite",
                        systemImage: local.isFavorite(name.lowercased(), category: .artists) ? "star.fill" : "star") {
                     local.toggleFavorite(name.lowercased(), category: .artists)

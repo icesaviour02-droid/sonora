@@ -119,6 +119,36 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Sonora Touch Playlist"].firstMatch.waitForExistence(timeout: 10))
     }
 
+    func testCollectionCoversOpenAndReturnWithNativeToolbarActions() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--sonora-review-url", "sonora://collectionreview"]
+        app.launch()
+        let recentAlbum = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "library-recent-album-")).firstMatch
+        XCTAssertTrue(recentAlbum.waitForExistence(timeout: 30), app.debugDescription)
+        let library = app.collectionViews["library-main-list"]
+        if !recentAlbum.isHittable { library.swipeUp() }
+        recentAlbum.tap()
+        XCTAssertTrue(app.collectionViews["album-track-list"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Sonora Review Tone"].firstMatch.exists)
+        navigateBack(in: app)
+        let recentPlaylist = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "library-recent-playlist-")).firstMatch
+        XCTAssertTrue(recentPlaylist.waitForExistence(timeout: 10))
+        if !recentPlaylist.isHittable { library.swipeUp() }
+        recentPlaylist.tap()
+        XCTAssertTrue(app.collectionViews["playlist-track-list"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["playlist-more"].isHittable)
+        app.buttons["playlist-more"].tap()
+        XCTAssertTrue(app.buttons["Rename Playlist"].waitForExistence(timeout: 8))
+        // Close the menu by touching outside its surface, then use the native back control.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.55)).tap()
+        navigateBack(in: app)
+        XCTAssertTrue(app.buttons["library-edit"].waitForExistence(timeout: 8))
+        app.buttons["library-edit"].tap()
+        XCTAssertTrue(app.buttons["library-edit-done"].waitForExistence(timeout: 8))
+        app.buttons["library-edit-done"].tap()
+    }
+
     func testDownloadedCategoriesUseSavedMusic() {
         continueAfterFailure = false
         let app = XCUIApplication()

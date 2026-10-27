@@ -58,7 +58,6 @@ struct RootView: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .modifier(PlayerAccessory(hero: playerHero, open: {
-            playerHero.prepareOpening(image: playback.currentArtwork)
             showPlayer = true
         }))
         .preferredColorScheme(settings.theme.colorScheme)
@@ -147,6 +146,11 @@ struct RootView: View {
         }
         if url.host == "seekreview" {
             library.reviewSeekSurface(playback) { playerMode = "artwork"; showPlayer = true }
+            return
+        }
+        if url.host == "collectionreview" {
+            selectedTab = .library
+            library.reviewCollectionSurface(localLibrary)
             return
         }
         if url.host == "libraryreview" {
@@ -532,6 +536,10 @@ struct SquareCard: View {
     var side: CGFloat = Layout.cardArtwork
     var circular = false
     var fillsColumn = false
+    var coverOrigin: CollectionArtworkSource? = nil
+    func coverSource(id: String, in namespace: Namespace.ID) -> Self {
+        var card = self; card.coverOrigin = CollectionArtworkSource(id: id, namespace: namespace); return card
+    }
 
     var body: some View {
         VStack(alignment: circular ? .center : .leading, spacing: Layout.compact / 2) {
@@ -552,6 +560,8 @@ struct SquareCard: View {
                     ? AnyShape(Circle())
                     : AnyShape(RoundedRectangle(cornerRadius: Layout.cardRadius))
             )
+
+            .collectionCoverSource(coverOrigin)
 
             Text(title)
                 .appFont(.callout)
@@ -615,6 +625,7 @@ struct LibraryView: View {
     let importAction: () -> Void
     let openSettings: () -> Void
 
+    @Namespace private var coverTransition
     @State private var showCreatePlaylist = false
     @State private var editCategories = false
     private enum LocalTarget: Hashable { case album(String), playlist(String) }
@@ -679,24 +690,30 @@ struct LibraryView: View {
                                     NavigationLink {
                                         PlaylistDetailView(playlistID: playlist.id, fallbackTitle: playlist.title,
                                             fallbackAuthor: playlist.author, fallbackArtwork: playlist.artworkURL)
+                                            .collectionCoverTransition(id: "recent-remote-playlist:" + playlist.id, in: coverTransition)
                                     } label: {
                                         SquareCard(title: playlist.title, subtitle: String(localized: "ios-playlist-kind"),
                                             artworkURL: playlist.artworkURL, fillsColumn: true)
+                                            .coverSource(id: "recent-remote-playlist:" + playlist.id, in: coverTransition)
                                     }.buttonStyle(.plain)
                                 }
                                 ForEach(local.playlists.prefix(4)) { playlist in
-                                    NavigationLink { LocalPlaylistView(playlistID: playlist.id) } label: {
+                                    NavigationLink { LocalPlaylistView(playlistID: playlist.id)
+                                        .collectionCoverTransition(id: "recent-local-playlist:" + playlist.id, in: coverTransition) } label: {
                                         SquareCard(title: playlist.title, subtitle: String(localized: "ios-playlist-kind"),
                                             artworkURL: playlist.tracks(in: library.tracks).first { $0.displayArtworkURL != nil }?.displayArtworkURL,
                                             fillsColumn: true)
-                                    }.buttonStyle(.plain)
+                                            .coverSource(id: "recent-local-playlist:" + playlist.id, in: coverTransition)
+                                    }.buttonStyle(.plain).accessibilityIdentifier("library-recent-playlist-" + playlist.id)
                                 }
                                 ForEach(catalog.savedAlbums.prefix(4)) { album in
                                     NavigationLink {
                                         AlbumDetailView(browseID: album.id, fallbackTitle: album.title,
                                             fallbackArtist: album.artist, fallbackArtwork: album.artworkURL)
+                                            .collectionCoverTransition(id: "recent-remote-album:" + album.id, in: coverTransition)
                                     } label: {
                                         SquareCard(title: album.title, subtitle: album.artist, artworkURL: album.artworkURL, fillsColumn: true)
+                                            .coverSource(id: "recent-remote-album:" + album.id, in: coverTransition)
                                     }.buttonStyle(.plain)
                                 }
                                 ForEach(catalog.likedSongs.prefix(8)) { track in
@@ -711,7 +728,8 @@ struct LibraryView: View {
                                     Button { selectedLocal = .album(album.id) } label: {
                                         SquareCard(title: album.title, subtitle: album.artist,
                                             artworkURL: album.tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL, fillsColumn: true)
-                                    }.buttonStyle(.plain)
+                                            .coverSource(id: "recent-local-album:" + album.id, in: coverTransition)
+                                    }.buttonStyle(.plain).accessibilityIdentifier("library-recent-album-" + album.title)
                                 }
                                 ForEach(library.tracks.filter { ($0.albumTitle ?? "").isEmpty }.prefix(8)) { track in
                                     Button { playback.play(track, in: library.tracks) } label: {
@@ -770,8 +788,8 @@ struct LibraryView: View {
         .toolbarTitleDisplayMode(.inlineLarge)
         .navigationDestination(item: $selectedLocal) { target in
             switch target {
-            case .album(let id): LocalAlbumView(albumID: id)
-            case .playlist(let id): LocalPlaylistView(playlistID: id)
+            case .album(let id): LocalAlbumView(albumID: id).collectionCoverTransition(id: "recent-local-album:" + id, in: coverTransition)
+            case .playlist(let id): LocalPlaylistView(playlistID: id).collectionCoverTransition(id: "recent-local-playlist:" + id, in: coverTransition)
             }
         }
         .sheet(isPresented: $showCreatePlaylist) {
@@ -790,7 +808,7 @@ struct LibraryView: View {
                     .accessibilityIdentifier("library-edit-done")
                 }
             } else {
-                ToolbarItemGroup(placement: .topBarTrailing) {
+                ToolbarItem(id: "library-add-action", placement: .topBarTrailing) {
                     Menu {
                         Button("ios-create-playlist", systemImage: "music.note.list") { showCreatePlaylist = true }
                             .disabled(local.isBusy || !local.isLoaded)
@@ -798,6 +816,8 @@ struct LibraryView: View {
                             .disabled(library.isImporting || !library.isLoaded)
                     } label: { Image(systemName: "text.badge.plus") }
                         .accessibilityLabel(Text("ios-add"))
+                }
+                ToolbarItem(id: "library-collection-options", placement: .topBarTrailing) {
                     Button { editCategories = true } label: { Image(systemName: "checklist") }
                         .accessibilityLabel(Text("ios-edit-library"))
                         .accessibilityIdentifier("library-edit")
@@ -867,7 +887,7 @@ struct PlaylistsCollectionView: View {
                                 SquareCard(title: playlist.title, subtitle: String(localized: "ios-on-my-iphone"),
                                     artworkURL: playlist.tracks(in: library.tracks).first { $0.displayArtworkURL != nil }?.displayArtworkURL,
                                     fillsColumn: true)
-                                    .matchedTransitionSource(id: "local:" + playlist.id, in: coverTransition)
+                                    .coverSource(id: "local:" + playlist.id, in: coverTransition)
                             }.buttonStyle(.plain)
                         }
                         ForEach(catalog.savedPlaylists.filter { MusicSearch.matches(query, $0.title, $0.author) }) { playlist in
@@ -878,7 +898,7 @@ struct PlaylistsCollectionView: View {
                             } label: {
                                 SquareCard(title: playlist.title, subtitle: playlist.author,
                                     artworkURL: playlist.artworkURL, fillsColumn: true)
-                                    .matchedTransitionSource(id: "remote:" + playlist.id, in: coverTransition)
+                                    .coverSource(id: "remote:" + playlist.id, in: coverTransition)
                             }.buttonStyle(.plain)
                         }
                     }.padding(Layout.pageMargin)
@@ -897,13 +917,15 @@ struct PlaylistsCollectionView: View {
         .appNavigationTitle("ios-playlists")
         .collectionSearch(text: $query)
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarItem(id: "library-add-action", placement: .topBarTrailing) {
                 Menu {
                     Button("ios-on-my-iphone", systemImage: "iphone") { createLocal = true }
                         .disabled(local.isBusy || !local.isLoaded)
                     if account.name != nil { Button("ios-youtube-music", systemImage: "play.rectangle") { createYouTube = true } }
                 } label: { Image(systemName: "plus") }
                     .accessibilityLabel(Text("ios-create-playlist"))
+            }
+            ToolbarItem(id: "library-collection-options", placement: .topBarTrailing) {
                 Menu {
                     Picker("ios-view-as", selection: $grid) {
                         Label("ios-grid", systemImage: "square.grid.2x2").tag(true)
@@ -929,7 +951,7 @@ struct PlaylistsCollectionView: View {
                     NavigationLink { LocalPlaylistView(playlistID: playlist.id)
                                 .collectionCoverTransition(id: "local:" + playlist.id, in: coverTransition) } label: {
                         LocalPlaylistLabel(playlist: playlist, tracks: playlist.tracks(in: library.tracks))
-                            .matchedTransitionSource(id: "local:" + playlist.id, in: coverTransition)
+                            .coverSource(id: "local:" + playlist.id, in: coverTransition)
                     }
                 }
             } header: { Text("ios-on-my-iphone") } footer: { Text("ios-local-playlists-description") }
@@ -945,11 +967,12 @@ struct PlaylistsCollectionView: View {
                         } label: {
                             HStack(spacing: Layout.spacing) {
                                 ArtworkView(url: playlist.artworkURL, side: Layout.rowArtwork)
+                                    .matchedTransitionSource(id: "remote:" + playlist.id, in: coverTransition)
                                 VStack(alignment: .leading, spacing: Layout.compact / 2) {
                                     Text(playlist.title).appFont(.body, weight: .medium).lineLimit(2)
                                     Text(playlist.author).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                                 }
-                            }.matchedTransitionSource(id: "remote:" + playlist.id, in: coverTransition)
+                            }
                         }
                     }
                 }
@@ -1127,7 +1150,7 @@ struct AlbumsCollectionView: View {
         }
         .appNavigationTitle("ios-albums")
         .collectionSearch(text: $query)
-        .toolbar { ToolbarItem(placement: .primaryAction) {
+        .toolbar { ToolbarItem(id: "library-collection-options", placement: .topBarTrailing) {
             Menu {
                 Picker("ios-view-as", selection: $grid) {
                     Label("ios-grid", systemImage: "square.grid.2x2").tag(true)
@@ -1154,10 +1177,10 @@ struct AlbumsCollectionView: View {
         } label: {
             if grid {
                 SquareCard(title: album.title, subtitle: album.artist, artworkURL: album.artwork, fillsColumn: true)
-                    .matchedTransitionSource(id: album.id, in: coverTransition)
+                    .coverSource(id: album.id, in: coverTransition)
             } else {
                 DownloadedCollectionLabel(title: album.title, subtitle: album.artist, artwork: album.artwork)
-                    .matchedTransitionSource(id: album.id, in: coverTransition)
+                    .coverSource(id: album.id, in: coverTransition)
             }
         }
         .buttonStyle(.plain)
@@ -1415,7 +1438,7 @@ struct AlbumDetailView: View {
         .collectionSearch(text: $query)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(id: "library-collection-options", placement: .topBarTrailing) {
                 Menu {
                     Button("ios-download", systemImage: "arrow.down.circle") {
                         downloads.enqueueAll(tracks)
@@ -1524,7 +1547,7 @@ struct PlaylistDetailView: View {
         .collectionSearch(text: $query)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(id: "library-collection-options", placement: .topBarTrailing) {
                 Menu {
                     Button("ios-download", systemImage: "arrow.down.circle") {
                         downloads.enqueuePlaylist(id: playlistID, title: detail?.title ?? fallbackTitle,
@@ -1620,6 +1643,7 @@ struct ArtistDetailView: View {
         detail?.top_songs.map(\.track) ?? []
     }
 
+    @Namespace private var coverTransition
     @State private var query = ""
 
     var body: some View {
@@ -1752,13 +1776,13 @@ struct ArtistDetailView: View {
                                 fallbackTitle: album.title,
                                 fallbackArtist: album.artist,
                                 fallbackArtwork: album.artworkURL
-                            )
+                            ).collectionCoverTransition(id: album.id, in: coverTransition)
                         } label: {
                             SquareCard(
                                 title: album.title,
                                 subtitle: album.year.map(String.init) ?? album.artist,
                                 artworkURL: album.artworkURL
-                            )
+                            ).coverSource(id: album.id, in: coverTransition)
                         }
                         .buttonStyle(.plain)
                     }

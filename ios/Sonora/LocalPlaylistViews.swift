@@ -95,11 +95,15 @@ struct AddToLocalPlaylistView: View {
 struct LocalPlaylistLabel: View {
     let playlist: LocalPlaylist
     let tracks: [MusicTrack]
+    var coverOrigin: CollectionArtworkSource? = nil
+    func coverSource(id: String, in namespace: Namespace.ID) -> Self {
+        var row = self; row.coverOrigin = CollectionArtworkSource(id: id, namespace: namespace); return row
+    }
 
     var body: some View {
         HStack(spacing: Layout.spacing) {
             ArtworkView(track: tracks.first { $0.displayArtworkURL != nil } ?? tracks.first, side: Layout.rowArtwork).placeholderSymbol("music.note.list")
-                .accessibilityHidden(true)
+                .accessibilityHidden(true).collectionCoverSource(coverOrigin)
             VStack(alignment: .leading, spacing: Layout.compact / 2) {
                 Text(playlist.title).appFont(.body, weight: .medium).foregroundStyle(.primary).lineLimit(2)
                 Text("ios-on-my-iphone").appFont(.subheadline).foregroundStyle(.secondary)
@@ -154,6 +158,7 @@ struct LocalPlaylistView: View {
                     if let error = local.error { Text(error).foregroundStyle(.secondary) }
                 }
                 .listStyle(.plain)
+                .accessibilityIdentifier("playlist-track-list")
                 .collectionArtworkTheme(tracks.first { $0.displayArtworkURL != nil }?.displayArtworkURL)
                 .environment(\.editMode, $editMode)
                 .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -168,7 +173,7 @@ struct LocalPlaylistView: View {
             if editMode.isEditing {
                 ToolbarItem(placement: .confirmationAction) { Button("ios-done") { editMode = .inactive } }
             }
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(id: "library-collection-options", placement: .topBarTrailing) {
                 Menu {
                     Button("ios-edit-playlist", systemImage: "pencil") { editMode = .active }
                         .disabled(playlist?.track_ids.isEmpty ?? true)

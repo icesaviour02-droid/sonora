@@ -49,7 +49,11 @@ final class MusicVolumeHost: UIView, UIGestureRecognizerDelegate {
         let scale = max(1, window?.screen.scale ?? traitCollection.displayScale)
         // MPVolumeView documents its slider as UISlider. Read the public track rectangle rather
         // than assuming the drawing rectangle and UISlider's own baseline are identical.
-        let nativeSlider = volume.subviews.compactMap { $0 as? UISlider }.first
+        func findSlider(_ view: UIView) -> UISlider? {
+            if let slider = view as? UISlider { return slider }
+            return view.subviews.lazy.compactMap { findSlider($0) }.first
+        }
+        let nativeSlider = findSlider(volume)
         let actualTrack = nativeSlider.map { $0.convert($0.trackRect(forBounds: $0.bounds), to: volume) }
         let center = actualTrack?.midY ?? (track.isEmpty ? Layout.control / 2 : track.midY)
         volume.frame.origin.y = ((bounds.midY - center) * scale).rounded() / max(1, scale)

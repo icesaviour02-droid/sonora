@@ -50,6 +50,9 @@ struct NativeQueueList: UIViewRepresentable {
         private var lastHeaderHeight: CGFloat?
         private var historyRevealed = false
         private var hasHistory = false
+        private var contextMenuVisible = false
+        private var previewEntry: Entry?
+        private weak var previewCell: UICollectionViewCell?
         private let historyMasks = NSMapTable<UICollectionViewCell, CALayer>(keyOptions: .weakMemory, valueOptions: .strongMemory)
         private let historyFeedback = UIImpactFeedbackGenerator(style: .soft)
 
@@ -116,7 +119,7 @@ struct NativeQueueList: UIViewRepresentable {
 
         /// The same identifiers drive native animations and persisted queue occurrences.
         func refresh() {
-            guard let collection, dataSource != nil, !collection.hasActiveDrag, !collection.hasActiveDrop else { return }
+            guard let collection, dataSource != nil, !collection.hasActiveDrag, !collection.hasActiveDrop, !contextMenuVisible else { return }
             let upcoming = parent.playback.upcomingItems
             let history = Array(parent.history.filter { $0.id != parent.playback.current?.id }.reversed())
             let historyChanged = hasHistory != !history.isEmpty
@@ -218,13 +221,13 @@ struct NativeQueueList: UIViewRepresentable {
         /// History rows stop below their pinned heading instead of showing through or above History/Clear.
         private func clipUnderHistoryHeader(_ view: UICollectionView) {
             // UIKit owns lifted cells and transient layouts during a native reorder.
-            guard !view.hasActiveDrag, !view.hasActiveDrop else { return }
+            guard !view.hasActiveDrag, !view.hasActiveDrop, !contextMenuVisible else { return }
             let heading = hasHistory ? view.visibleSupplementaryViews(ofKind: UICollectionView.elementKindSectionHeader).first : nil
             let bottom = max(0, (heading?.frame.maxY ?? view.bounds.minY) - view.bounds.minY)
             parent.historyHeaderBottom(bottom)
             let cutoff = view.bounds.minY + bottom
             for index in view.indexPathsForVisibleItems {
-                guard let cell = view.cellForItem(at: index) else { continue }
+                guard let cell = view.cellForItem(at: index), cell !== previewCell else { continue }
                 let ownMask = historyMasks.object(forKey: cell)
                 if bottom <= 0 || cell.frame.minY >= cutoff {
                     if let ownMask, cell.layer.mask === ownMask { cell.layer.mask = nil }
@@ -275,22 +278,77 @@ struct NativeQueueList: UIViewRepresentable {
             return UISwipeActionsConfiguration(actions: [action])
         }
 
-        /// Native context menus supply the system lift, backdrop, cancel animation and row preview.
-        func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemAt indexPath: IndexPath,
+        /// The current collection-view API preserves the selected occurrence across native lift/dismiss previews.
+        func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath],
             point: CGPoint) -> UIContextMenuConfiguration? {
-            guard let entry = dataSource.itemIdentifier(for: indexPath), let track = tracks[entry] else { return nil }
+            guard indexPaths.count == 1, let indexPath = indexPaths.first,
+                  let entry = dataSource.itemIdentifier(for: indexPath), let track = tracks[entry] else { return nil }
             switch entry { case .song, .past: break; default: return nil }
+            previewEntry = entry
             return UIContextMenuConfiguration(identifier: nil, previewProvider: { [weak self] in
                 guard let self else { return nil }
-                let host = UIHostingController(rootView: QueueSongLabel(track: track)
-                    .padding(Layout.spacing).background(.regularMaterial)
+                let host = UIHostingController(rootView: QueueContextPreview(track: track)
                     .environment(\.appTypeface, self.parent.typeface).environment(self.parent.settings)
                     .preferredColorScheme(.dark))
-                host.preferredContentSize = CGSize(width: max(Layout.collectionArtwork, collectionView.bounds.width),
+                host.preferredContentSize = CGSize(width: min(Layout.contextPreviewWidth, collectionView.bounds.width),
                     height: Layout.queuePreviewHeight)
                 host.view.backgroundColor = .clear
                 return host
             }, actionProvider: { [weak self] _ in self?.contextActions(entry: entry, track: track) })
+        }
+
+        func collectionView(_ collectionView: UICollectionView, contextMenuConfiguration configuration: UIContextMenuConfiguration,
+            highlightPreviewForItemAt indexPath: IndexPath) -> UITargetedPreview? {
+            rowPreview(collectionView, indexPath: indexPath)
+        }
+        func collectionView(_ collectionView: UICollectionView, contextMenuConfiguration configuration: UIContextMenuConfiguration,
+            dismissalPreviewForItemAt indexPath: IndexPath) -> UITargetedPreview? {
+            rowPreview(collectionView, indexPath: indexPath)
+        }
+
+        /// Highlight precisely the pressed row, never an entire history section or a reused previous cell.
+        private func rowPreview(_ collection: UICollectionView, indexPath: IndexPath) -> UITargetedPreview? {
+            guard let cell = collection.cellForItem(at: indexPath), cell.window != nil,
+                  let entry = dataSource.itemIdentifier(for: indexPath), tracks[entry] != nil else { return nil }
+            if let mask = historyMasks.object(forKey: cell), cell.layer.mask === mask {
+                cell.layer.mask = nil; historyMasks.removeObject(forKey: cell)
+            }
+            previewCell = cell
+            let parameters = UIPreviewParameters()
+            parameters.backgroundColor = .clear
+            parameters.visiblePath = UIBezierPath(roundedRect: cell.contentView.bounds, cornerRadius: Layout.cardRadius)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--sonora-review-url") {
+                let url = URL.applicationSupportDirectory.appendingPathComponent("queue-context-preview-review.json")
+                var records = ((try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [[String: Any]] ?? []
+                records.append(["section": indexPath.section, "item": indexPath.item, "hasLiveCell": true,
+                    "kind": indexPath.section == 0 ? "history" : "queue"])
+                if let data = try? JSONSerialization.data(withJSONObject: Array(records.suffix(20))) { try? data.write(to: url, options: .atomic) }
+            }
+            #endif
+            return UITargetedPreview(view: cell.contentView, parameters: parameters)
+        }
+
+        func collectionView(_ collectionView: UICollectionView, willDisplayContextMenu configuration: UIContextMenuConfiguration,
+            animator: (any UIContextMenuInteractionAnimating)?) { contextMenuVisible = true }
+        func collectionView(_ collectionView: UICollectionView, willEndContextMenuInteraction configuration: UIContextMenuConfiguration,
+            animator: (any UIContextMenuInteractionAnimating)?) {
+            let restore = { [weak self, weak collectionView] in
+                guard let self, let collectionView else { return }
+                self.contextMenuVisible = false; self.previewCell = nil; self.previewEntry = nil
+                self.refresh(); self.clipUnderHistoryHeader(collectionView)
+            }
+            if let animator { animator.addCompletion(restore) } else { restore() }
+        }
+
+        func collectionView(_ collectionView: UICollectionView, willPerformPreviewActionForMenuWith configuration: UIContextMenuConfiguration,
+            animator: any UIContextMenuInteractionCommitAnimating) {
+            guard let entry = previewEntry, let track = tracks[entry] else { return }
+            animator.addCompletion { [weak self] in
+                guard let self else { return }
+                if case .song(let id) = entry { self.parent.playback.selectQueueItem(id) }
+                else { self.parent.playback.play(track, in: self.parent.settings.history) }
+            }
         }
 
         private func contextActions(entry: Entry, track: MusicTrack) -> UIMenu {
@@ -426,6 +484,28 @@ private struct QueueSongLabel: View {
         }
         .padding(.vertical, Layout.compact / 2)
         .frame(maxWidth: .infinity, minHeight: Layout.control, alignment: .leading).contentShape(Rectangle())
+    }
+}
+
+/// The lifted preview is a single opaque card, with the selected song's own artwork and metadata.
+private struct QueueContextPreview: View {
+    let track: MusicTrack
+    var body: some View {
+        HStack(spacing: Layout.spacing) {
+            ArtworkView(track: track, side: Layout.contextPreviewArtwork, cornerRadius: Layout.cardRadius)
+            VStack(alignment: .leading, spacing: Layout.compact / 2) {
+                Text(track.title).appFont(.subheadline, weight: .semibold).lineLimit(2)
+                Text(track.artist).appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if let album = track.albumTitle, !album.isEmpty {
+                    Text(album).appFont(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(Layout.spacing)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(.thickMaterial, in: RoundedRectangle(cornerRadius: Layout.contextPreviewRadius))
+        .accessibilityElement(children: .combine).accessibilityIdentifier("queue-context-preview")
     }
 }
 

@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Downloaded music mirrors Library categories; active transfers have separate, actionable rows.
 struct DownloadsView: View {
+    @Namespace private var coverTransition
     @Environment(DownloadsStore.self) private var downloads
     @State private var selectedRecent: MusicTrack?
     private var tracks: [MusicTrack] { downloads.completedTracks }
@@ -53,6 +54,7 @@ struct DownloadsView: View {
                             Button { selectedRecent = track } label: {
                                 SquareCard(title: track.albumTitle ?? track.title, subtitle: track.artist,
                                     artworkURL: track.displayArtworkURL, fillsColumn: true)
+                                    .coverSource(id: track.id, in: coverTransition)
                             }.buttonStyle(.plain)
                         }
                     }
@@ -67,6 +69,7 @@ struct DownloadsView: View {
         .navigationDestination(item: $selectedRecent) { track in
             DownloadedCollectionView(title: track.albumTitle ?? track.title, subtitle: track.artist,
                 artwork: track.displayArtworkURL, trackIDs: albumTracks(for: track).map(\.id))
+                .collectionCoverTransition(id: track.id, in: coverTransition)
         }
         .overlay {
             if downloads.isRestoring { ProgressView("ios-restoring-downloads") }
@@ -178,6 +181,7 @@ private enum DownloadSort: String, CaseIterable, Identifiable {
 }
 
 struct DownloadedAlbumsView: View {
+    @Namespace private var coverTransition
     @Environment(DownloadsStore.self) private var downloads
     @Environment(PlaybackController.self) private var playback
     @AppStorage("sonora.downloaded-albums.grid") private var grid = true
@@ -199,19 +203,21 @@ struct DownloadedAlbumsView: View {
             }
         }
         .listStyle(.plain).listSectionIndexVisibility(.visible).appNavigationTitle("ios-albums").collectionSearch(text: $query)
-        .toolbar { ToolbarItem(placement: .primaryAction) { CollectionGridMenu(grid: $grid) } }
+        .toolbar { ToolbarItem(id: "library-collection-options", placement: .topBarTrailing) { CollectionGridMenu(grid: $grid) } }
     }
 
     private func albumLink(_ album: LocalAlbum) -> some View {
         NavigationLink {
             DownloadedCollectionView(title: album.title, subtitle: album.artist,
                 artwork: album.tracks.first?.displayArtworkURL, trackIDs: album.tracks.map(\.id))
+                .collectionCoverTransition(id: album.id, in: coverTransition)
         } label: {
             if grid {
                 SquareCard(title: album.title, subtitle: album.artist, artworkURL: album.tracks.first?.displayArtworkURL,
-                    fillsColumn: true)
+                    fillsColumn: true).coverSource(id: album.id, in: coverTransition)
             } else {
                 DownloadedCollectionLabel(title: album.title, subtitle: album.artist, artwork: album.tracks.first?.displayArtworkURL)
+                    .coverSource(id: album.id, in: coverTransition)
             }
         }.buttonStyle(.plain)
     }
@@ -246,6 +252,7 @@ struct DownloadedArtistsView: View {
 }
 
 struct DownloadedPlaylistsView: View {
+    @Namespace private var coverTransition
     @Environment(DownloadsStore.self) private var downloads
     @AppStorage("sonora.downloaded-playlists.grid") private var grid = true
     @State private var query = ""
@@ -258,7 +265,7 @@ struct DownloadedPlaylistsView: View {
             if grid { CollectionGridRows(playlists) { playlist in playlistLink(playlist) } }
             else { ForEach(playlists) { playlist in playlistLink(playlist) } }
         }.listStyle(.plain).appNavigationTitle("ios-playlists").collectionSearch(text: $query)
-        .toolbar { ToolbarItem(placement: .primaryAction) { CollectionGridMenu(grid: $grid) } }
+        .toolbar { ToolbarItem(id: "library-collection-options", placement: .topBarTrailing) { CollectionGridMenu(grid: $grid) } }
         .overlay {
             if playlists.isEmpty {
                 ContentUnavailableView("ios-playlists", systemImage: "music.note.list",
@@ -271,10 +278,13 @@ struct DownloadedPlaylistsView: View {
         NavigationLink {
             DownloadedCollectionView(title: playlist.title, subtitle: playlist.author,
                 artwork: playlist.artworkURL, trackIDs: playlist.trackIDs)
+                .collectionCoverTransition(id: playlist.id, in: coverTransition)
         } label: {
             if grid {
                 SquareCard(title: playlist.title, subtitle: playlist.author, artworkURL: playlist.artworkURL, fillsColumn: true)
-            } else { DownloadedCollectionLabel(title: playlist.title, subtitle: playlist.author, artwork: playlist.artworkURL) }
+                    .coverSource(id: playlist.id, in: coverTransition)
+            } else { DownloadedCollectionLabel(title: playlist.title, subtitle: playlist.author, artwork: playlist.artworkURL)
+                    .coverSource(id: playlist.id, in: coverTransition) }
         }.buttonStyle(.plain)
     }
 }
@@ -309,9 +319,13 @@ struct DownloadedCollectionLabel: View {
     let title: String
     let subtitle: String
     let artwork: URL?
+    var coverOrigin: CollectionArtworkSource? = nil
+    func coverSource(id: String, in namespace: Namespace.ID) -> Self {
+        var row = self; row.coverOrigin = CollectionArtworkSource(id: id, namespace: namespace); return row
+    }
     var body: some View {
         HStack(spacing: Layout.spacing) {
-            ArtworkView(url: artwork, side: Layout.rowArtwork)
+            ArtworkView(url: artwork, side: Layout.rowArtwork).collectionCoverSource(coverOrigin)
             VStack(alignment: .leading, spacing: Layout.compact / 2) {
                 Text(title).appFont(.body).lineLimit(2)
                 if !subtitle.isEmpty { Text(subtitle).appFont(.subheadline).foregroundStyle(.secondary).lineLimit(1) }

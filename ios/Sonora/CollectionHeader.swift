@@ -138,3 +138,25 @@ extension View {
         modifier(CollectionCoverTransition(id: id, namespace: namespace))
     }
 }
+
+
+/// Identifies only the cover portion of a reusable collection card as a native navigation origin.
+struct CollectionArtworkSource {
+    let id: String
+    let namespace: Namespace.ID
+}
+
+private struct CollectionCoverSource: ViewModifier {
+    let source: CollectionArtworkSource?
+    func body(content: Content) -> some View {
+        if let source { content.matchedTransitionSource(id: source.id, in: source.namespace) }
+        else { content }
+    }
+}
+
+extension View {
+    /// Keeps labels outside the native zoom's source snapshot while preserving its cover shape.
+    func collectionCoverSource(_ source: CollectionArtworkSource?) -> some View {
+        modifier(CollectionCoverSource(source: source))
+    }
+}

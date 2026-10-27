@@ -72,6 +72,17 @@ final class LibraryStore {
         }
     }
 
+    /// Populates the real Library root with an imported album and local playlist for cover navigation checks.
+    func reviewCollectionSurface(_ local: LocalLibraryStore) {
+        reviewTask?.cancel()
+        reviewTask = Task { [weak self] in
+            guard let self, let track = await self.importReviewRecording() else { return }
+            await local.load()
+            guard !Task.isCancelled else { return }
+            local.create(name: "Sonora Collection Review", tracks: [track.id]) { _ in }
+        }
+    }
+
     /// Opens a real imported recording paused so touch tests can check the actual AVPlayer clock after seeks.
     func reviewSeekSurface(_ playback: PlaybackController, ready: @escaping @MainActor () -> Void) {
         reviewTask?.cancel()
