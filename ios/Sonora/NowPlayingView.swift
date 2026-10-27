@@ -176,7 +176,7 @@ struct NowPlayingView: View {
                 if mode == .lyrics { compactTrackHeader(presentation: .lyrics).transition(.opacity) }
                 Group {
                     switch mode {
-                    case .artwork: artworkStage(side: artworkSide).simultaneousGesture(trackSwipeGesture)
+                    case .artwork: artworkStage(side: artworkSide).contentShape(Rectangle()).simultaneousGesture(trackSwipeGesture)
                     case .lyrics: lyricsStage.transition(.opacity)
                     case .queue: queueStage.transition(.opacity)
                     }
