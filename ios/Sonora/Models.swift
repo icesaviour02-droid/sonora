@@ -295,6 +295,8 @@ enum Layout {
     static let volumeTrackInset: CGFloat = 24
     static let volumeExpansion: CGFloat = 8
     static let playerSpacing: CGFloat = 12
+    static let artworkTransportHeight: CGFloat = 100
+    static let artworkVerticalOffset: CGFloat = -12
     static let accessibleArtwork: CGFloat = 200
     static let artworkRadius: CGFloat = 12
     static let spacing: CGFloat = 16

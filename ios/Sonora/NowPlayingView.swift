@@ -391,6 +391,7 @@ struct NowPlayingView: View {
             VStack(spacing: Layout.spacing) {
                 ZStack {
                     artworkTarget(side: boundedSide * ((playback.isPlaying || !settings.animatedArtwork) ? 1 : Layout.pausedArtworkScale), presentation: .artwork)
+                        .offset(y: Layout.artworkVerticalOffset)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle()).accessibilityIdentifier("player-artwork-swipe")
                 trackHeaderRow
@@ -827,7 +828,7 @@ struct NowPlayingView: View {
             .accessibilityLabel(Text("ios-next"))
         }
         .padding(.horizontal, Layout.spacing)
-        .frame(height: mode == .artwork ? Layout.control + Layout.playerMargin : Layout.transportHeight)
+        .frame(height: mode == .artwork ? Layout.artworkTransportHeight : Layout.transportHeight)
     }
 
     private var volumeSection: some View {
