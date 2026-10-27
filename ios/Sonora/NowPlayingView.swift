@@ -142,6 +142,7 @@ struct NowPlayingView: View {
         .preferredColorScheme(.dark)
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
+        .interactiveDismissDisabled(mode != .artwork)
         .sensoryFeedback(.selection, trigger: mode)
         .onAppear { loadLyricsIfNeeded() }
         .onChange(of: playback.current?.id) { _, _ in loadLyricsIfNeeded() }
@@ -315,6 +316,12 @@ struct NowPlayingView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text("ios-done"))
             .accessibilityIdentifier("player-dismiss")
+            .simultaneousGesture(DragGesture(minimumDistance: Layout.compact).onEnded { gesture in
+                guard mode != .artwork else { return }
+                if gesture.translation.height > Layout.control || gesture.predictedEndTranslation.height > Layout.control * 2 {
+                    dismiss()
+                }
+            })
             Spacer()
         }
         .frame(height: Layout.grabberHeight)

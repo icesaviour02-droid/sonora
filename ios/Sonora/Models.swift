@@ -308,7 +308,7 @@ enum Layout {
     static let soundResponseHeight: CGFloat = 180
     static let rowArtwork: CGFloat = 48
     static let miniArtwork: CGFloat = 32
-    static let inlineMiniArtwork: CGFloat = 28
+    static let inlineMiniArtwork: CGFloat = 30
     static let metadataFade: CGFloat = 24
     static let historyRevealThreshold: CGFloat = 48
     static let historyRevealReset: CGFloat = 20

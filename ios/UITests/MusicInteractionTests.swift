@@ -61,9 +61,15 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(app.buttons["download-songs"].waitForExistence(timeout: 30))
         app.buttons["download-songs"].tap()
         XCTAssertTrue(app.staticTexts["Sonora Review Tone"].firstMatch.waitForExistence(timeout: 10))
-        app.collectionViews.matching(NSPredicate(format: "hittable == true")).firstMatch.swipeDown()
-        let search = app.searchFields.matching(NSPredicate(format: "hittable == true")).firstMatch
-        XCTAssertTrue(search.waitForExistence(timeout: 8))
+        guard let list = app.collectionViews.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
+            XCTFail("The Songs list is not visible"); return
+        }
+        list.swipeDown()
+        expectation(for: NSPredicate { _, _ in app.searchFields.allElementsBoundByIndex.contains { $0.isHittable } }, evaluatedWith: app)
+        waitForExpectations(timeout: 8)
+        guard let search = app.searchFields.allElementsBoundByIndex.first(where: { $0.isHittable }) else {
+            XCTFail("The pull-down search field is not visible"); return
+        }
         search.tap()
         let missing = "zzNoMatchzz"
         search.typeText(missing)
