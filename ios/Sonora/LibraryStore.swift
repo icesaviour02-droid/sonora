@@ -89,7 +89,7 @@ final class LibraryStore {
         reviewTask?.cancel()
         reviewTask = Task { [weak self] in
             guard let self else { return }
-            func record(_ stage: String) {
+            @MainActor func record(_ stage: String) {
                 let report: [String: Any] = ["stage": stage, "cancelled": Task.isCancelled,
                     "restoring": downloads.isRestoring, "has_entry": downloads.entry(for: "youtube:reviewSaved") != nil,
                     "has_audio": downloads.fileURL(for: "youtube:reviewSaved") != nil, "restore_only": restoreOnly]
