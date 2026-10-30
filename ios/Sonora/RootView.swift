@@ -62,7 +62,9 @@ struct RootView: View {
         .modifier(PlayerAccessory(hero: playerHero, open: {
             showPlayer = true
         }))
-        .onChange(of: downloads.isOffline, initial: true) { _, offline in if offline { selectedTab = .downloads } }
+        .onChange(of: downloads.isOffline, initial: true) { _, offline in
+            if offline, selectedTab == .home { selectedTab = .downloads }
+        }
         .preferredColorScheme(settings.theme.colorScheme)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showSoundProfiles) { NavigationStack { SoundProfilesView() } }

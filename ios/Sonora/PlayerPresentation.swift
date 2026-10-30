@@ -21,8 +21,27 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
         private var wanted = false
         private var dismissalSucceeded = false
         private var root: AnyView = AnyView(EmptyView())
-        override func loadView() { view = UIView(); view.isUserInteractionEnabled = false }
+        override func loadView() {
+            let anchor = WindowAnchor()
+            anchor.attached = { [weak self] in self?.reconcile() }
+            anchor.isUserInteractionEnabled = false
+            view = anchor
+        }
         override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); reconcile() }
+
+        /// Tab changes can attach a background presenter without another controller appearance callback.
+        private final class WindowAnchor: UIView {
+            var attached: (() -> Void)?
+            override func didMoveToWindow() {
+                super.didMoveToWindow()
+                guard window != nil else { return }
+                // Complete hierarchy attachment before asking UIKit to present a controller.
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.window != nil else { return }
+                    self.attached?()
+                }
+            }
+        }
 
         func update(show: Bool, root: AnyView, hero: PlayerHeroState, changed: @escaping (Bool) -> Void) {
             wanted = show; self.root = root; self.hero = hero; self.changed = changed
