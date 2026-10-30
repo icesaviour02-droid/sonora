@@ -3,10 +3,11 @@ import Observation
 
 /// Stable errors cross the native boundary; raw provider responses and signed URLs never reach alerts.
 enum ProviderError: LocalizedError {
-    case unavailable, timeout, signInRequired, verificationRequired, equalizerInvalid
+    case unavailable, timeout, signInRequired, verificationRequired, equalizerInvalid, offline
 
     var errorDescription: String? {
         switch self {
+        case .offline: String(localized: "ios-offline-required")
         case .unavailable: String(localized: "ios-provider-error")
         case .timeout: String(localized: "ios-provider-timeout")
         case .signInRequired: String(localized: "ios-provider-sign-in-required")
@@ -508,6 +509,11 @@ enum NativeProvider {
     private static func request<Value: Decodable>(_ request: [String: Any]) async throws -> Value {
         try Task.checkCancellation()
         let cancellation = NativeCancellation()
+        let localOperations = ["local_library", "parse_lyrics", "equalizer_describe", "equalizer_configure", "configure", "sign_out", "review_wait"]
+        let registration: UUID?
+        if localOperations.contains(request["operation"] as? String ?? "") { registration = nil }
+        else { registration = try NetworkAccess.shared.register { cancellation.cancel() } }
+        defer { if let registration { NetworkAccess.shared.unregister(registration) } }
         var payload = request
         payload["request_id"] = cancellation.id
         let encoded = try JSONSerialization.data(withJSONObject: payload)

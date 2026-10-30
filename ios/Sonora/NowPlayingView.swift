@@ -159,6 +159,7 @@ struct NowPlayingView: View {
         .onAppear { loadLyricsIfNeeded() }
         .onChange(of: playback.currentQueueID) { _, _ in resetTrackSwipe(); loadLyricsIfNeeded() }
         .onChange(of: downloads.entry(for: playback.current?.id ?? "")?.lyricsState) { _, _ in loadLyricsIfNeeded() }
+        .onChange(of: downloads.isOffline) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: settings.localFileLyrics) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: settings.lyricsSources) { _, _ in loadLyricsIfNeeded() }
         .onChange(of: mode) { _, _ in loadLyricsIfNeeded() }

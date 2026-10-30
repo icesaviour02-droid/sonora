@@ -157,7 +157,7 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(app.buttons["player-lyrics"].waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ready offline")).firstMatch.waitForExistence(timeout: 10))
         app.terminate()
-        app.launchArguments = ["--sonora-review-seek", "--sonora-review-url", "sonora://downloadlyricsrestore"]
+        app.launchArguments = ["--sonora-review-seek", "--sonora-review-offline", "--sonora-review-url", "sonora://downloadlyricsrestore"]
         app.launch()
         XCTAssertTrue(app.buttons["player-lyrics"].waitForExistence(timeout: 30), app.debugDescription)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ready offline")).firstMatch.waitForExistence(timeout: 10))
@@ -192,11 +192,11 @@ final class MusicInteractionTests: XCTestCase {
         expectation(for: NSPredicate { _, _ in (search.value as? String) == missing }, evaluatedWith: app)
         waitForExpectations(timeout: 12)
         let emptyResult = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", missing)).firstMatch
-        expectation(for: NSPredicate { _, _ in
-            let previous = list.staticTexts["Sonora Review Tone"].firstMatch
-            return emptyResult.exists && emptyResult.isHittable && (!previous.exists || !previous.isHittable)
-        }, evaluatedWith: app)
-        waitForExpectations(timeout: 12)
+        // Query separately: a combined predicate can spend its entire deadline taking several AX snapshots.
+        XCTAssertTrue(emptyResult.waitForExistence(timeout: 12), app.debugDescription)
+        XCTAssertTrue(emptyResult.isHittable)
+        let previousResults = list.staticTexts.matching(identifier: "Sonora Review Tone").allElementsBoundByIndex
+        XCTAssertFalse(previousResults.contains { $0.isHittable })
         search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: missing.count) + "Review")
         expectation(for: NSPredicate { _, _ in list.staticTexts["Sonora Review Tone"].firstMatch.isHittable }, evaluatedWith: app)
         waitForExpectations(timeout: 12)

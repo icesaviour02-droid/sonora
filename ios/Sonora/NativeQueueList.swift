@@ -85,7 +85,7 @@ struct NativeQueueList: UIViewRepresentable {
                 guard let self else { return }
                 cell.backgroundConfiguration = .clear()
                 cell.contentConfiguration = UIHostingConfiguration { [weak self] in
-                    if let self { self.row(entry).environment(self.parent.settings).environment(\.appTypeface, self.parent.typeface) }
+                    if let self { self.row(entry).environment(self.parent.settings).environment(self.parent.downloads).environment(\.appTypeface, self.parent.typeface) }
                 }.margins(.all, 0)
                 if case .song = entry { cell.accessories = [.reorder(displayed: .always)] }
                 else { cell.accessories = [] }
@@ -168,7 +168,7 @@ struct NativeQueueList: UIViewRepresentable {
         private func configureHistoryHeader(_ cell: QueueHistoryHeader) {
             cell.apply(UIHostingConfiguration { [weak self] in
                 if let self {
-                    self.row(.historyHeader).environment(self.parent.settings).environment(\.appTypeface, self.parent.typeface)
+                    self.row(.historyHeader).environment(self.parent.settings).environment(self.parent.downloads).environment(\.appTypeface, self.parent.typeface)
                 }
             }.margins(.all, 0))
         }
@@ -288,7 +288,7 @@ struct NativeQueueList: UIViewRepresentable {
             return UIContextMenuConfiguration(identifier: nil, previewProvider: { [weak self] in
                 guard let self else { return nil }
                 let host = UIHostingController(rootView: QueueContextPreview(track: track)
-                    .environment(\.appTypeface, self.parent.typeface).environment(self.parent.settings)
+                    .environment(\.appTypeface, self.parent.typeface).environment(self.parent.settings).environment(self.parent.downloads)
                     .preferredColorScheme(.dark))
                 host.preferredContentSize = CGSize(width: min(Layout.contextPreviewWidth, collectionView.bounds.width),
                     height: Layout.queuePreviewHeight)

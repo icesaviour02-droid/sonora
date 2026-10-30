@@ -50,7 +50,7 @@ protocol ScrobbleTransport: Sendable {
 
 private struct ScrobbleHTTP: ScrobbleTransport {
     func send(_ request: URLRequest) async throws -> Bool {
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await NetworkAccess.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return false }
         if request.url?.path.hasSuffix("newscrobble") == true {
             let answer = try JSONSerialization.jsonObject(with: data) as? [String: Any]

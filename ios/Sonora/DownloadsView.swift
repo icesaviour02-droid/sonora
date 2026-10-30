@@ -26,10 +26,22 @@ struct DownloadsView: View {
         }
         .collectionSearch(text: $query)
         .appNavigationTitle("ios-downloads")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Toggle("ios-offline-mode", isOn: Binding(get: { downloads.offlineMode }, set: { downloads.offlineMode = $0 }))
+                    Button("ios-repair-offline-assets") { downloads.repairOfflineAssets() }.disabled(downloads.isOffline)
+                } label: { Image(systemName: downloads.isOffline ? "wifi.slash" : "ellipsis.circle") }
+                .accessibilityLabel(Text("ios-download-options"))
+            }
+        }
     }
 
     private var downloadList: some View {
         List {
+            if downloads.isOffline {
+                Section { Label("ios-offline-active", systemImage: "wifi.slash").foregroundStyle(.secondary) }
+            }
             if !tracks.isEmpty {
                 Section {
                     NavigationLink { DownloadedPlaylistsView() } label: { Label("ios-playlists", systemImage: "music.note.list") }.accessibilityIdentifier("download-playlists")

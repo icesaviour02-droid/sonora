@@ -9,6 +9,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- iPhone downloads preserve full-quality provider artwork and available timed lyrics beside the audio. Missing files for existing downloads backfill automatically, with a manual repair action in Downloads and Settings.
+- iPhone Offline Mode pauses network requests and transfers, plays saved/imported music, searches downloads and skips unavailable queue entries. It activates automatically when connectivity is lost.
+
 - Music downloads automatically save available lyrics, preferring synchronized line and word timing. Saved JSON and LRC sidecars work offline, survive cache clearing and are removed with the audio file.
 
 - Long-press iPhone queue and history songs to open native preview menus for queue order, favorites, playlists, downloads and removal.

@@ -129,7 +129,7 @@ def run_interactions(udid, export_images=True):
     finally:
         if failed: export_crash_summaries(bundle)
         current = Path(sim("get_app_container", udid, BUNDLE, "data"))
-        for filename in ["queue-drag-review.json", "player-presentation-review.json", "queue-context-preview-review.json", "download-lyrics-review.json", "player-cover-handoff-review.json"]:
+        for filename in ["queue-drag-review.json", "player-presentation-review.json", "queue-context-preview-review.json", "download-lyrics-review.json", "player-cover-handoff-review.json", "offline-artwork-restore-review.json"]:
             evidence = current / "Library/Application Support" / filename
             if evidence.exists():
                 (OUTPUT / filename).write_bytes(evidence.read_bytes())
@@ -200,6 +200,7 @@ def review_interactions_only(udid, container):
     previews = json.loads((OUTPUT / "queue-context-preview-review.json").read_text())
     assert {item["kind"] for item in previews} >= {"queue", "history"}, "Missing selected-row native preview evidence"
     assert json.loads((OUTPUT / "download-lyrics-review.json").read_text())["passed"], "Downloaded timed lyrics did not persist"
+    assert json.loads((OUTPUT / "offline-artwork-restore-review.json").read_text())["passed"], "Offline relaunch did not decode saved artwork"
     handoffs = json.loads((OUTPUT / "player-cover-handoff-review.json").read_text())
     closing = [event for event in handoffs if event["event"] == "handoff" and not event["opening"]]
     assert closing and all(event["afterRelease"] and event["threshold"] >= 0.5999 for event in closing), "Cover detached before committed late dismissal"

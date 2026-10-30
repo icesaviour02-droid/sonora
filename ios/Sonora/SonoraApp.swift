@@ -20,6 +20,12 @@ struct SonoraApp: App {
     init() {
         let settings = SettingsStore()
         let downloads = DownloadsStore()
+        #if DEBUG
+        // Review launches use the real production toggle, without changing Release preferences.
+        if ProcessInfo.processInfo.arguments.contains("--sonora-review-url") {
+            downloads.offlineMode = ProcessInfo.processInfo.arguments.contains("--sonora-review-offline")
+        }
+        #endif
         _settings = State(initialValue: settings)
         _downloads = State(initialValue: downloads)
         _playback = State(initialValue: PlaybackController(downloads: downloads, settings: settings))
@@ -41,6 +47,15 @@ struct SonoraApp: App {
                 .fontDesign(settings.typefaceID == "rounded" ? .rounded : .default)
                 .font(InterfaceTypography.font(.body, typeface: settings.typefaceID))
                 .tint(appearance.color(for: settings.accent))
+                .onChange(of: downloads.artworkRevision) { _, _ in
+                    playback.refreshArtwork()
+                    appearance.updateArtwork(settings.accent == .artwork ? playback.current?.displayArtworkURL : nil)
+                }
+                .onChange(of: downloads.isOffline, initial: true) { _, offline in
+                    playback.connectivityChanged()
+                    poTokenMinter.connectivityChanged()
+                    if !offline { downloads.resumeQueue(); account.retryRestore(); catalog.loadHome(force: true) }
+                }
                 .onChange(of: settings.lyricsSources) { _, _ in downloads.resumeQueue() }
                 .onChange(of: settings.audioConfigurationKey, initial: true) { _, _ in playback.applyAudioGain() }
                 .onChange(of: playback.current?.displayArtworkURL, initial: true) { _, url in

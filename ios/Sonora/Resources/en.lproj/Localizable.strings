@@ -63,6 +63,7 @@
 "ios-download" = "Download";
 "ios-download-failed" = "Download failed. Check your connection, then try again.";
 "ios-download-invalid" = "The provider returned incomplete or unsupported audio. Try again.";
+"ios-download-options" = "Download Options";
 "ios-download-preparing" = "Preparing download";
 "ios-download-progress" = "Download progress";
 "ios-download-quality" = "Download Quality";
@@ -193,9 +194,16 @@
 "ios-normalize-loudness" = "Normalize Loudness";
 "ios-now-playing" = "Now Playing";
 "ios-off" = "Off";
+"ios-offline-active" = "You're Offline";
+"ios-offline-assets-description" = "Missing artwork and available lyrics are saved automatically for existing downloads when connected, subject to your cellular setting. Some songs may not have timed lyrics.";
+"ios-offline-home-description" = "Your downloaded songs, saved artwork and available lyrics are ready on this device.";
+"ios-offline-mode" = "Offline Mode";
+"ios-offline-mode-description" = "Play downloaded and imported music without using the internet. This also activates automatically when your connection is lost.";
+"ios-offline-required" = "You're offline. Choose downloaded or imported music, or reconnect to stream.";
 "ios-offline-songs-only" = "Only songs available offline are shown.";
 "ios-on" = "On";
 "ios-on-my-iphone" = "On My iPhone";
+"ios-open-downloads" = "Open Downloads";
 "ios-open-player" = "Opens Now Playing";
 "ios-pause" = "Pause";
 "ios-pin" = "Pin to Home";
@@ -240,6 +248,7 @@
 "ios-remove-from-queue" = "Remove from Queue";
 "ios-rename-playlist" = "Rename Playlist";
 "ios-reorder-song" = "Reorder Song";
+"ios-repair-offline-assets" = "Download Missing Artwork & Lyrics";
 "ios-repeat" = "Repeat";
 "ios-repeat-all" = "Repeat all";
 "ios-repeat-one" = "Repeat one";
@@ -249,6 +258,7 @@
 "ios-romanized-lyrics" = "Romanized Pronunciation";
 "ios-save" = "Save";
 "ios-save-to-library" = "Add to Library";
+"ios-saved-artwork" = "Saved Artwork";
 "ios-saved-lyrics" = "Saved Lyrics";
 "ios-scrobble-enable" = "Enable Scrobbling";
 "ios-scrobble-pending" = "Saved Listens Waiting to Send";

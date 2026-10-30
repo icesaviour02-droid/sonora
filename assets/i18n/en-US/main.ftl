@@ -1693,3 +1693,16 @@ ios-playlist-kind = Playlist
 
 ios-play-last = Play Last
 ios-remove-from-history = Remove from History
+
+# Durable iPhone downloads and network controls.
+ios-offline-mode = Offline Mode
+ios-offline-active = You're Offline
+ios-offline-mode-description = Play downloaded and imported music without using the internet. This also activates automatically when your connection is lost.
+ios-offline-required = You're offline. Choose downloaded or imported music, or reconnect to stream.
+ios-offline-home-description = Your downloaded songs, saved artwork and available lyrics are ready on this device.
+ios-open-downloads = Open Downloads
+ios-download-options = Download Options
+ios-repair-offline-assets = Download Missing Artwork & Lyrics
+ios-offline-assets-description = Missing artwork and available lyrics are saved automatically for existing downloads when connected, subject to your cellular setting. Some songs may not have timed lyrics.
+ios-saved-artwork = Saved Artwork
+ios-saved-lyrics = Saved Lyrics

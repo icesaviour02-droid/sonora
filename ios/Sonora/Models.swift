@@ -25,6 +25,7 @@ struct MusicTrack: Codable, Identifiable, Hashable {
 
     /// A relative cover filename survives the container path changing during app upgrades.
     var displayArtworkURL: URL? {
+        if let downloaded = DownloadArtworkIndex.shared.localURL(trackID: id) { return downloaded }
         if let filename = artworkFilename, URL(fileURLWithPath: filename).lastPathComponent == filename {
             return ArtworkFiles.root.appendingPathComponent(filename)
         }
@@ -362,6 +363,26 @@ enum Layout {
 
 /// Requests a retina-sized rendition only from the provider's known resizable artwork hosts.
 enum ArtworkRendition {
+    /// Ask image hosts for their full-resolution source; preserve a working original as fallback.
+    static func downloadCandidates(_ track: MusicTrack) -> [URL] {
+        var urls: [URL] = []
+        if let original = track.artworkURL {
+            let host = original.host ?? ""
+            if host.hasSuffix(".googleusercontent.com") || host.hasSuffix(".ggpht.com") {
+                let base = original.absoluteString.split(separator: "=", maxSplits: 1)[0]
+                if let originalSize = URL(string: String(base) + "=s0") { urls.append(originalSize) }
+                if let full = URL(string: String(base) + "=w2048-h2048-l100") { urls.append(full) }
+            } else if host == "i.ytimg.com" {
+                urls.append(original.deletingLastPathComponent().appendingPathComponent("maxresdefault.jpg"))
+            }
+            urls.append(original)
+        } else if let id = track.youtubeID, id.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }), id.count <= 64 {
+            if let full = URL(string: "https://i.ytimg.com/vi/\(id)/maxresdefault.jpg") { urls.append(full) }
+            if let fallback = URL(string: "https://i.ytimg.com/vi/\(id)/hqdefault.jpg") { urls.append(fallback) }
+        }
+        var seen: Set<URL> = []
+        return urls.filter { ($0.isFileURL || $0.scheme == "https") && seen.insert($0).inserted }
+    }
     static func url(_ original: URL?, side: CGFloat) -> URL? {
         guard let original, let host = original.host,
               host.hasSuffix(".googleusercontent.com") || host.hasSuffix(".ggpht.com") else { return original }

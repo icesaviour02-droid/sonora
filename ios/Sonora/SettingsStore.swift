@@ -535,7 +535,7 @@ final class PoTokenMinter: NSObject, WKNavigationDelegate {
     private var warmed = false
 
     func start() {
-        guard pollTask == nil else { return }
+        guard !NetworkAccess.shared.isOffline, pollTask == nil else { return }
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
@@ -546,6 +546,14 @@ final class PoTokenMinter: NSObject, WKNavigationDelegate {
                 try? await Task.sleep(for: .milliseconds(350))
             }
         }
+    }
+
+    /// Deliberate offline mode also stops the helper browser, rather than leaving hidden network work running.
+    func connectivityChanged() {
+        if NetworkAccess.shared.isOffline {
+            pollTask?.cancel(); pollTask = nil
+            webView?.stopLoading(); webView = nil; warmed = false
+        } else { start() }
     }
 
     private func ensureWebView() -> WKWebView {
@@ -566,6 +574,7 @@ final class PoTokenMinter: NSObject, WKNavigationDelegate {
     }
 
     private func mint(binding: String) async {
+        guard !NetworkAccess.shared.isOffline, !Task.isCancelled else { return }
         let view = ensureWebView()
         // Match JavaScript encodeURIComponent, including base64url '-' and '_' characters.
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))

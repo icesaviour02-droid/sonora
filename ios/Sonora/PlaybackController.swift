@@ -142,11 +142,12 @@ final class PlaybackController {
 
     func play(_ track: MusicTrack, in tracks: [MusicTrack], source: String? = nil) {
         guard track.available != false else { return }
+        guard canPlay(track) else { error = String(localized: "ios-offline-required"); return }
         // Explicit playback wins over a still-pending library/queue restoration.
         didRestore = true
         queueSource = source
         error = nil
-        let playable = tracks.filter { $0.available != false }
+        let playable = tracks.filter { canPlay($0) }
         originalQueue = (playable.isEmpty ? [track] : playable).map { QueuedTrack(track: $0) }
         queueItems = originalQueue
         isShuffled = false
@@ -154,7 +155,7 @@ final class PlaybackController {
     }
 
     func playShuffled(_ tracks: [MusicTrack], source: String? = nil) {
-        let playable = tracks.filter { $0.available != false }.map { QueuedTrack(track: $0) }
+        let playable = tracks.filter { canPlay($0) }.map { QueuedTrack(track: $0) }
         guard let first = playable.randomElement() else { return }
         didRestore = true
         queueSource = source
@@ -305,7 +306,7 @@ final class PlaybackController {
     }
 
     func addToQueue(_ tracks: [MusicTrack]) {
-        let playable = tracks.filter { $0.available != false }
+        let playable = tracks.filter { canPlay($0) }
         guard !playable.isEmpty else { return }
         if current == nil || queue.isEmpty, let first = playable.first {
             play(first, in: playable)
@@ -402,6 +403,7 @@ final class PlaybackController {
     /// Selects an occurrence rather than the first copy of a repeated song.
     func selectQueueItem(_ id: UUID, autoplay: Bool = true) {
         guard let item = queueItems.first(where: { $0.id == id }) else { return }
+        guard canPlay(item.track) else { error = String(localized: "ios-offline-required"); return }
         let track = item.track
         seekID = nil; pendingSeekTarget = nil
         pause()
@@ -527,6 +529,7 @@ final class PlaybackController {
                 startAudio()
                 return
             }
+            guard !downloads.isOffline else { error = String(localized: "ios-offline-required"); return }
             resolve(videoID, for: current.id)
             return
         }
@@ -653,11 +656,11 @@ final class PlaybackController {
             listen = ListeningProgress(); listenID = UUID(); announcedListen = false
             resume(); return
         }
-        if index + 1 < queueItems.count {
-            selectQueueItem(queueItems[index + 1].id)
-        } else if repeatMode == .all, let first = queueItems.first {
+        if let next = queueItems.dropFirst(index + 1).first(where: { canPlay($0.track) }) {
+            selectQueueItem(next.id)
+        } else if repeatMode == .all, let first = queueItems.first(where: { canPlay($0.track) }) {
             selectQueueItem(first.id)
-        } else if automatically, settings.autoplayRadio, let videoID = current.youtubeID {
+        } else if automatically, !downloads.isOffline, settings.autoplayRadio, let videoID = current.youtubeID {
             extendWithRadio(videoID: videoID, after: current)
         } else {
             pause()
@@ -698,7 +701,7 @@ final class PlaybackController {
     func previous() {
         guard let index = currentQueueIndex else { return }
         if elapsed > 3 || index == 0 { seek(to: 0) }
-        else { selectQueueItem(queueItems[index - 1].id) }
+        else if let prior = queueItems.prefix(index).last(where: { canPlay($0.track) }) { selectQueueItem(prior.id) }
     }
 
     func toggleShuffle() {
@@ -743,6 +746,30 @@ final class PlaybackController {
         saveQueue()
     }
 
+    private func canPlay(_ track: MusicTrack) -> Bool {
+        track.available != false && (!downloads.isOffline || track.youtubeID == nil || downloads.fileURL(for: track.id) != nil)
+    }
+
+    /// Download backfill can replace an old remote artwork URL without changing the queue's track identity.
+    func refreshArtwork() { if let current { loadLockScreenArtwork(for: current) } }
+
+    /// Offline playback uses local audio only; stop an already resolving/streaming remote item as well.
+    func connectivityChanged() {
+        guard downloads.isOffline else { return }
+        resolutionTask?.cancel(); radioTask?.cancel()
+        guard let current, current.youtubeID != nil else { return }
+        let shouldResume = wantsToPlay || isPlaying
+        let position = presentationElapsed
+        if let url = downloads.fileURL(for: current.id) {
+            pause(); install(AVPlayerItem(url: url)); seek(to: position)
+            if shouldResume { resume() }
+        } else {
+            pause(); player.replaceCurrentItem(with: nil)
+            error = String(localized: "ios-offline-required")
+        }
+        refreshArtwork()
+    }
+
     private func loadLockScreenArtwork(for track: MusicTrack) {
         artworkTask?.cancel()
         if artworkTrackID != track.id {
@@ -759,6 +786,16 @@ final class PlaybackController {
             let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
             guard let self, self.current?.id == trackID else { return }
             self.currentArtwork = image
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--sonora-review-offline") {
+                let passed = url.isFileURL && NetworkAccess.shared.isOffline && self.downloads.fileURL(for: trackID) != nil && image.size.width > 0
+                let report: [String: Any] = ["passed": passed, "offline": NetworkAccess.shared.isOffline, "local_artwork": url.isFileURL,
+                    "width": image.size.width, "height": image.size.height]
+                if let data = try? JSONSerialization.data(withJSONObject: report) {
+                    try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("offline-artwork-restore-review.json"), options: .atomic)
+                }
+            }
+            #endif
             self.nowPlayingArtwork = artwork
             self.publishNowPlaying()
         }

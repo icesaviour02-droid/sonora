@@ -34,7 +34,9 @@ struct RootView: View {
         TabView(selection: $selectedTab) {
             Tab("ios-home", systemImage: "house.fill", value: Destination.home) {
                 NavigationStack {
-                    HomeView(openSettings: { showSettings = true })
+                    if downloads.isOffline {
+                        OfflineHomeView(openDownloads: { selectedTab = .downloads }, openSettings: { showSettings = true })
+                    } else { HomeView(openSettings: { showSettings = true }) }
                 }
             }
             Tab("ios-library", systemImage: "square.stack.fill", value: Destination.library) {
@@ -52,7 +54,7 @@ struct RootView: View {
             }
             Tab("ios-search", systemImage: "magnifyingglass", value: Destination.search, role: .search) {
                 NavigationStack {
-                    SearchView()
+                    if downloads.isOffline { OfflineSearchView() } else { SearchView() }
                 }
             }
         }
@@ -60,6 +62,7 @@ struct RootView: View {
         .modifier(PlayerAccessory(hero: playerHero, open: {
             showPlayer = true
         }))
+        .onChange(of: downloads.isOffline, initial: true) { _, offline in if offline { selectedTab = .downloads } }
         .preferredColorScheme(settings.theme.colorScheme)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showSoundProfiles) { NavigationStack { SoundProfilesView() } }
@@ -1656,7 +1659,7 @@ struct ArtistDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Layout.spacing * 1.5) {
                 VStack(spacing: Layout.compact) {
-                    AsyncImage(url: ArtworkRendition.url(detail?.artwork_url ?? fallbackArtwork, side: Layout.detailArtwork)) { image in
+                    ArtworkImage(url: ArtworkRendition.url(detail?.artwork_url ?? fallbackArtwork, side: Layout.detailArtwork)) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Image(systemName: "music.mic")
@@ -2013,7 +2016,7 @@ struct SearchView: View {
                                 )
                             } label: {
                                 HStack(spacing: Layout.spacing) {
-                                    AsyncImage(url: album.artworkURL) { image in
+                                    ArtworkImage(url: album.artworkURL) { image in
                                         image.resizable().scaledToFill()
                                     } placeholder: {
                                         Image(systemName: "square.stack")
@@ -2039,7 +2042,7 @@ struct SearchView: View {
                                 ArtistDetailView(browseID: artist.id, fallbackName: artist.name, fallbackArtwork: artist.artworkURL)
                             } label: {
                                 HStack(spacing: Layout.spacing) {
-                                    AsyncImage(url: artist.artworkURL) { image in
+                                    ArtworkImage(url: artist.artworkURL) { image in
                                         image.resizable().scaledToFill()
                                     } placeholder: {
                                         Image(systemName: "music.mic")
@@ -2067,7 +2070,7 @@ struct SearchView: View {
                                 )
                             } label: {
                                 HStack(spacing: Layout.spacing) {
-                                    AsyncImage(url: playlist.artworkURL) { image in
+                                    ArtworkImage(url: playlist.artworkURL) { image in
                                         image.resizable().scaledToFill()
                                     } placeholder: {
                                         Image(systemName: "music.note.list")
@@ -2108,6 +2111,11 @@ struct SettingsView: View {
         @Bindable var settings = settings
         NavigationStack {
             List {
+                Section("ios-offline-mode") {
+                    Toggle("ios-offline-mode", isOn: $downloads.offlineMode).accessibilityIdentifier("offline-mode-toggle")
+                    if downloads.isOffline { Label("ios-offline-active", systemImage: "wifi.slash") }
+                    Text("ios-offline-mode-description").foregroundStyle(.secondary)
+                }
                 Section("ios-music-service") {
                     LabeledContent("ios-youtube-music", value: account.name ?? String(localized: "ios-guest-mode"))
                     if let handle = account.handle, !handle.isEmpty {
@@ -2118,7 +2126,7 @@ struct SettingsView: View {
                             .disabled(account.isBusy)
                     } else {
                         Button("ios-account-sign-in") { showSignIn = true }
-                            .disabled(account.isBusy || account.isRestoring)
+                            .disabled(downloads.isOffline || account.isBusy || account.isRestoring)
                     }
                     if let error = account.error {
                         Text(error).foregroundStyle(.secondary)
@@ -2183,6 +2191,11 @@ struct SettingsView: View {
                 Section {
                     Toggle("ios-cellular-downloads", isOn: $downloads.allowsCellular)
                     LabeledContent("ios-downloads-space", value: formatBytes(downloads.totalBytesUsed))
+                    LabeledContent("ios-saved-artwork", value: "\(downloads.savedArtworkCount) / \(downloads.completedTracks.count)")
+                    LabeledContent("ios-saved-lyrics", value: "\(downloads.savedLyricsCount) / \(downloads.completedTracks.count)")
+                    Button("ios-repair-offline-assets") { downloads.repairOfflineAssets() }
+                        .disabled(downloads.isOffline || downloads.entries.isEmpty)
+                    Text("ios-offline-assets-description").appFont(.caption).foregroundStyle(.secondary)
                     if !downloads.entries.isEmpty {
                         Button("ios-remove-all-downloads", role: .destructive) {
                             confirmRemoveDownloads = true
@@ -2220,6 +2233,7 @@ struct SettingsView: View {
                     Text("ios-license").foregroundStyle(.secondary)
                 }
             }
+            .onChange(of: downloads.isOffline) { _, offline in if offline { showSignIn = false } }
             .onAppear { settings.measureCache() }
             .sheet(isPresented: $showSignIn) { AccountSignInView() }
             .confirmationDialog("ios-account-sign-out-confirm", isPresented: $confirmSignOut, titleVisibility: .visible) {

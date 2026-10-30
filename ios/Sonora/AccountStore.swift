@@ -337,7 +337,7 @@ struct AccountSignInView: View {
                                     account.selectAccount(item)
                                 } label: {
                                     HStack(spacing: Layout.spacing) {
-                                        AsyncImage(url: item.avatar_url.flatMap(URL.init(string:))) { image in
+                                        ArtworkImage(url: item.avatar_url.flatMap(URL.init(string:))) { image in
                                             image.resizable().scaledToFill()
                                         } placeholder: {
                                             Image(systemName: "person.crop.circle.fill")
