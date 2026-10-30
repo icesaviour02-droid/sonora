@@ -2,7 +2,7 @@ import Observation
 import SwiftUI
 import UIKit
 
-/// The cover stays in its rounded player until a committed dismissal reaches its final handoff region.
+/// The cover follows the rounded player, then settles into the pill using the panel's remaining motion.
 @MainActor @Observable final class PlayerHeroState {
     @ObservationIgnored private(set) weak var pillView: UIView?
     @ObservationIgnored private weak var mini: PlayerArtworkVisual.Node?
@@ -13,12 +13,20 @@ import UIKit
     @ObservationIgnored private var displayLink: CADisplayLink?
     @ObservationIgnored private var opening = false
     @ObservationIgnored private var waitingForRelease = false
-    @ObservationIgnored private var thresholdY: CGFloat = 0
+    @ObservationIgnored private var handoffY: CGFloat = 0
     @ObservationIgnored private var lastY: CGFloat = 0
     @ObservationIgnored private var height: CGFloat = 1
     @ObservationIgnored private var coverRect: CGRect = .zero
+    @ObservationIgnored private var handoffRect: CGRect = .zero
+    @ObservationIgnored private var targetRect: CGRect = .zero
+    @ObservationIgnored private var settleDuration = Layout.playerTransitionDuration
     @ObservationIgnored private var handedOff = false
     @ObservationIgnored private lazy var ticker = Ticker(self)
+    #if DEBUG
+    @ObservationIgnored private var capturesMotion = false
+    @ObservationIgnored private var samples: [[String: Double]] = []
+    @ObservationIgnored private var motionStart: CFTimeInterval = 0
+    #endif
 
     func register(_ view: UIView) { pillView = view }
     func register(_ view: PlayerArtworkVisual.Node, role: PlayerArtworkVisual.Role) {
@@ -34,9 +42,15 @@ import UIKit
         guard !rect.isEmpty else { return }
         self.surface = surface; self.window = window; self.opening = opening
         coverRect = rect; height = max(1, surface.bounds.height)
-        thresholdY = height * Layout.playerCoverHandoffStart
+        handoffY = 0; handoffRect = rect
+        targetRect = mini.convert(mini.bounds, to: window)
+        settleDuration = Layout.playerTransitionDuration
         lastY = opening ? height : 0
         waitingForRelease = interactive && !opening
+        #if DEBUG
+        capturesMotion = ProcessInfo.processInfo.arguments.contains("--sonora-review-fullscreen")
+        samples = []; motionStart = 0
+        #endif
         let image = UIImageView(image: expanded.artwork)
         image.contentMode = .scaleAspectFill; image.clipsToBounds = true
         image.isUserInteractionEnabled = false; image.isAccessibilityElement = false; image.alpha = 0
@@ -47,11 +61,16 @@ import UIKit
         update(y: lastY)
     }
 
-    /// Crossing the threshold while the finger is down never detaches the artwork.
-    func release(committing: Bool) {
+    /// Start at the visible release frame, rather than waiting for a late threshold and rushing the cover.
+    func release(committing: Bool, settleDuration: TimeInterval) {
         guard !opening else { return }
         waitingForRelease = !committing
-        if committing { thresholdY = max(height * Layout.playerCoverHandoffStart, currentY()) }
+        guard committing else { return }
+        handoffY = currentY()
+        handoffRect = coverRect.offsetBy(dx: 0, dy: handoffY)
+        self.settleDuration = settleDuration
+        if let mini, let window { targetRect = mini.convert(mini.bounds, to: window) }
+        update(y: handoffY)
     }
 
     private func currentY() -> CGFloat {
@@ -61,30 +80,50 @@ import UIKit
     private func tick() { update(y: currentY()) }
 
     private func update(y: CGFloat) {
-        guard let overlay, let expanded, let mini, let window else { return }
-        let progress = min(1, max(0, (y - thresholdY) / max(1, height - thresholdY)))
-        guard !waitingForRelease, y >= thresholdY else {
+        guard let overlay, let expanded, let mini else { return }
+        guard !waitingForRelease else {
             overlay.alpha = 0; expanded.alpha = 1; mini.alpha = 1
             return
         }
-        let start = coverRect.offsetBy(dx: 0, dy: thresholdY)
-        let target = mini.convert(mini.bounds, to: window)
+        let remaining = max(1, height - handoffY)
+        let progress = min(1, max(0, (y - handoffY) / remaining))
+        let start = handoffRect
+        let target = targetRect
         guard !target.isEmpty else { return }
-        // Use the panel's visible displacement, so interactive cancellation and the image cannot desynchronize.
-        func mix(_ a: CGFloat, _ b: CGFloat) -> CGFloat { a + (b - a) * progress }
+        // A monotone Hermite path starts downward with the panel and gently bends toward the pill.
+        // The same presentation-layer displacement drives position, size and rounding on every frame.
+        let eased = progress * progress * (3 - 2 * progress)
+        let tangent = min(remaining, max(0, 3 * (target.midY - start.midY)))
+        let bend = progress * (1 - progress) * (1 - progress)
+        func mix(_ a: CGFloat, _ b: CGFloat) -> CGFloat { a + (b - a) * eased }
+        let size = CGSize(width: mix(start.width, target.width), height: mix(start.height, target.height))
+        let center = CGPoint(x: mix(start.midX, target.midX), y: mix(start.midY, target.midY) + tangent * bend)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         overlay.image = expanded.artwork
-        overlay.frame = CGRect(x: mix(start.minX, target.minX), y: mix(start.minY, target.minY),
-            width: mix(start.width, target.width), height: mix(start.height, target.height))
+        overlay.frame = CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2,
+            width: size.width, height: size.height)
         overlay.layer.cornerRadius = mix(expanded.radius, mini.radius)
         overlay.alpha = 1; expanded.alpha = 0; mini.alpha = 0
         CATransaction.commit()
         if !handedOff { handedOff = true; record("handoff") }
+        #if DEBUG
+        if capturesMotion, samples.count < 120 {
+            let now = CACurrentMediaTime()
+            if motionStart == 0 { motionStart = now }
+            samples.append(["t": now - motionStart, "progress": Double(progress), "panelY": Double(y),
+                "x": Double(overlay.frame.minX), "y": Double(overlay.frame.minY),
+                "width": Double(overlay.frame.width), "height": Double(overlay.frame.height)])
+        }
+        #endif
     }
 
     /// Restore the real UIKit images synchronously; no SwiftUI opacity update or delayed return jump is needed.
-    func finish() {
+    func finish(completed: Bool = false) {
+        if completed, handedOff { update(y: opening ? 0 : height) }
         displayLink?.invalidate(); displayLink = nil
+        #if DEBUG
+        if capturesMotion, handedOff { recordMotion(completed: completed) }
+        #endif
         overlay?.removeFromSuperview(); overlay = nil
         expanded?.alpha = 1; mini?.alpha = 1
         if handedOff { record("restored") }
@@ -95,12 +134,28 @@ import UIKit
         guard ProcessInfo.processInfo.arguments.contains("--sonora-review-fullscreen") else { return }
         let url = URL.applicationSupportDirectory.appendingPathComponent("player-cover-handoff-review.json")
         var events = ((try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [[String: Any]] ?? []
-        events.append(["event": event, "opening": opening, "afterRelease": !waitingForRelease, "threshold": thresholdY / height,
+        events.append(["event": event, "opening": opening, "afterRelease": !waitingForRelease, "startFraction": handoffY / height,
+            "sharedPanelProgress": true, "settleDuration": settleDuration,
             "miniWidth": mini?.bounds.width ?? 0, "coverWidth": coverRect.width,
             "sourceAlpha": expanded?.alpha ?? 1, "miniAlpha": mini?.alpha ?? 1])
         if let data = try? JSONSerialization.data(withJSONObject: Array(events.suffix(12))) { try? data.write(to: url, options: .atomic) }
         #endif
     }
+    #if DEBUG
+    /// Count-only geometry and timestamps let native checks detect rushed motion without screenshots.
+    private func recordMotion(completed: Bool) {
+        let url = URL.applicationSupportDirectory.appendingPathComponent("player-cover-motion-review.json")
+        var events = ((try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [[String: Any]] ?? []
+        events.append(["opening": opening, "completed": completed, "settleDuration": settleDuration,
+            "startFraction": handoffY / height, "samples": samples,
+            "startX": handoffRect.minX, "startY": handoffRect.minY,
+            "startWidth": handoffRect.width, "targetX": targetRect.minX, "targetY": targetRect.minY,
+            "targetWidth": targetRect.width])
+        if let data = try? JSONSerialization.data(withJSONObject: Array(events.suffix(6))) {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+    #endif
     @MainActor private final class Ticker: NSObject {
         weak var hero: PlayerHeroState?
         init(_ hero: PlayerHeroState) { self.hero = hero }

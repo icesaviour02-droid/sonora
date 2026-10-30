@@ -158,8 +158,16 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
                 let velocity = pan.velocity(in: player.view).y
                 let projected = progress + velocity / height * 0.2
                 let finish = pan.state != .cancelled && (progress > 0.25 || projected > 0.35) && velocity > -100
-                interaction?.completionSpeed = min(1.5, max(0.5, abs(velocity) / height))
-                hero?.release(committing: finish)
+                let remaining = max(1, height * (1 - progress))
+                let settle = min(Layout.playerDismissMaximumSettle,
+                    max(Layout.playerDismissMinimumSettle, Double(remaining / max(1, velocity))))
+                if finish {
+                    // Keep a long pull from reducing the remaining cover journey to a few frames.
+                    interaction?.completionSpeed = CGFloat(Layout.playerTransitionDuration / settle) * max(0.001, 1 - progress)
+                } else {
+                    interaction?.completionSpeed = min(1.5, max(0.5, abs(velocity) / height))
+                }
+                hero?.release(committing: finish, settleDuration: settle)
                 if finish { interaction?.finish() } else { interaction?.cancel() }
                 interaction = nil
             default: break
@@ -203,7 +211,7 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
         init(opening: Bool, hero: PlayerHeroState?, completed: @escaping (Bool) -> Void = { _ in }) {
             self.opening = opening; self.hero = hero; self.completed = completed
         }
-        func transitionDuration(using context: (any UIViewControllerContextTransitioning)?) -> TimeInterval { 0.5 }
+        func transitionDuration(using context: (any UIViewControllerContextTransitioning)?) -> TimeInterval { Layout.playerTransitionDuration }
         func animateTransition(using context: any UIViewControllerContextTransitioning) {
             interruptibleAnimator(using: context).startAnimation()
         }
@@ -236,7 +244,7 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
                 surface.transform = .identity; surface.alpha = 1
                 surface.layer.cornerRadius = 0; surface.layer.masksToBounds = false
                 if !success && self.opening { surface.removeFromSuperview() }
-                self.hero?.finish()
+                self.hero?.finish(completed: success)
                 self.completed(success)
                 context.completeTransition(success)
                 self.animator = nil

@@ -50,6 +50,7 @@ struct MiniPlayer: View {
             }
             .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text((playback.isPlaying || playback.isLoading) ? LocalizedStringKey("ios-pause") : LocalizedStringKey("ios-play")))
+            .accessibilityIdentifier("player-play-pause")
 
             if placement == .expanded { Button {
                 playback.next()
@@ -203,6 +204,25 @@ struct NowPlayingView: View {
         .padding(.top, Layout.compact)
         .padding(.bottom, Layout.spacing)
         .coordinateSpace(name: "player-artwork-space")
+        .overlayPreferenceValue(PlayerTimingAnchors.self) { anchors in
+            GeometryReader { geometry in
+                if let badge = qualityBadgeText, let labels = anchors[.timeLabels], let play = anchors[.playButton] {
+                    let labelsBottom = geometry[labels].maxY
+                    let controlsTop = geometry[play].minY
+                    Text(badge)
+                        .appFont(.caption2, weight: .semibold)
+                        .padding(.horizontal, Layout.compact - 2)
+                        .padding(.vertical, Layout.compact / 4)
+                        .background(.white.opacity(0.14), in: Capsule())
+                        .foregroundStyle(.white.opacity(0.68))
+                        .fixedSize()
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                        .position(x: geometry.size.width / 2, y: (labelsBottom + controlsTop) / 2)
+                        .accessibilityIdentifier("player-offline-badge")
+                }
+            }
+            .allowsHitTesting(false)
+        }
         .overlay(alignment: .topLeading) {
             ZStack(alignment: .topLeading) {
             if !artworkFrame.isEmpty {
@@ -827,23 +847,14 @@ struct NowPlayingView: View {
                 #endif
             }
 
-            ZStack {
-                HStack {
-                    Text(time(isSeeking ? seekValue : playback.elapsed))
-                    Spacer()
-                    Text("-" + time(max(0, playback.duration - (isSeeking ? seekValue : playback.elapsed))))
-                }
-                .appFont(.caption).monospacedDigit()
-                .offset(y: -Layout.playerTimeLabelLift)
-                if let badge = qualityBadgeText {
-                    Text(badge)
-                        .appFont(.caption2, weight: .semibold)
-                        .padding(.horizontal, Layout.compact - 2)
-                        .padding(.vertical, Layout.compact / 4)
-                        .background(.white.opacity(0.14), in: Capsule())
-                        .offset(y: Layout.playerOfflineBadgeOffset)
-                }
+            HStack {
+                Text(time(isSeeking ? seekValue : playback.elapsed))
+                Spacer()
+                Text("-" + time(max(0, playback.duration - (isSeeking ? seekValue : playback.elapsed))))
             }
+            .appFont(.caption).monospacedDigit()
+            .offset(y: -Layout.playerTimeLabelLift)
+            .anchorPreference(key: PlayerTimingAnchors.self, value: .bounds) { [.timeLabels: $0] }
             .foregroundStyle(.white.opacity(0.68))
             .accessibilityHidden(true)
         }
@@ -886,6 +897,7 @@ struct NowPlayingView: View {
             }
             .buttonStyle(PlayerControlStyle())
             .accessibilityLabel(Text((playback.isPlaying || playback.isLoading) ? LocalizedStringKey("ios-pause") : LocalizedStringKey("ios-play")))
+            .anchorPreference(key: PlayerTimingAnchors.self, value: .bounds) { [.playButton: $0] }
 
             Spacer(minLength: Layout.compact)
 
@@ -1003,6 +1015,15 @@ struct NowPlayingView: View {
     private func time(_ seconds: Double) -> String {
         let value = Int(max(0, seconds.isFinite ? seconds : 0))
         return String(format: "%d:%02d", value / 60, value % 60)
+    }
+}
+
+/// Resolve the visible time labels and central transport button in the same player coordinate space.
+private struct PlayerTimingAnchors: PreferenceKey {
+    enum Element: Hashable { case timeLabels, playButton }
+    static var defaultValue: [Element: Anchor<CGRect>] { [:] }
+    static func reduce(value: inout [Element: Anchor<CGRect>], nextValue: () -> [Element: Anchor<CGRect>]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, next in next })
     }
 }
 

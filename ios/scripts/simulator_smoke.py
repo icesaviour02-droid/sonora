@@ -130,7 +130,7 @@ def run_interactions(udid, export_images=True):
     finally:
         if failed: export_crash_summaries(bundle)
         current = Path(sim("get_app_container", udid, BUNDLE, "data"))
-        for filename in ["queue-drag-review.json", "player-presentation-review.json", "queue-context-preview-review.json", "download-lyrics-review.json", "player-cover-handoff-review.json", "offline-artwork-restore-review.json", "download-player-setup-review.json", "download-player-presentation-review.json"]:
+        for filename in ["queue-drag-review.json", "player-presentation-review.json", "queue-context-preview-review.json", "download-lyrics-review.json", "player-cover-handoff-review.json", "player-cover-motion-review.json", "offline-artwork-restore-review.json", "download-player-setup-review.json", "download-player-presentation-review.json"]:
             evidence = current / "Library/Application Support" / filename
             if evidence.exists():
                 (OUTPUT / filename).write_bytes(evidence.read_bytes())
@@ -204,7 +204,16 @@ def review_interactions_only(udid, container):
     assert json.loads((OUTPUT / "offline-artwork-restore-review.json").read_text())["passed"], "Offline relaunch did not decode saved artwork"
     handoffs = json.loads((OUTPUT / "player-cover-handoff-review.json").read_text())
     closing = [event for event in handoffs if event["event"] == "handoff" and not event["opening"]]
-    assert closing and all(event["afterRelease"] and event["threshold"] >= 0.5999 for event in closing), "Cover detached before committed late dismissal"
+    assert closing and all(event["afterRelease"] and event["sharedPanelProgress"] and event["settleDuration"] >= 0.48 for event in closing), "Cover did not share the committed panel settling motion"
+    motions = json.loads((OUTPUT / "player-cover-motion-review.json").read_text())
+    settled = [event for event in motions if not event["opening"] and event["completed"]]
+    assert len(settled) >= 2, "Missing artwork/empty-space dismissal motion evidence"
+    for event in settled:
+        frames = event["samples"]
+        assert len(frames) >= 6 and frames[-1]["t"] >= 0.3, "Cover settling was rushed into too few frames"
+        for field, original, target in [("x", "startX", "targetX"), ("y", "startY", "targetY"), ("width", "startWidth", "targetWidth")]:
+            assert abs(frames[0][field] - event[original]) <= 1, "Cover jumped at release"
+            assert abs(frames[-1][field] - event[target]) <= 1, "Cover missed the mini-player target"
     restored = [event for event in handoffs if event["event"] == "restored"]
     assert restored and all(event["sourceAlpha"] == 1 and event["miniAlpha"] == 1 for event in restored), "Cover was not restored after transition"
     (OUTPUT / "review-scope.json").write_text(json.dumps({

@@ -45,6 +45,10 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(surface.exists)
         XCTAssertLessThanOrEqual(surface.frame.minY, 1)
         XCTAssertGreaterThanOrEqual(surface.frame.maxY, app.frame.maxY - 1)
+        let offlineBadge = app.staticTexts["player-offline-badge"]
+        XCTAssertTrue(offlineBadge.waitForExistence(timeout: 8))
+        XCTAssertEqual(offlineBadge.frame.midX, app.frame.midX, accuracy: 1)
+        XCTAssertLessThan(offlineBadge.frame.maxY, app.buttons["player-play-pause"].frame.minY)
         // Pull a short way down and reverse: the player must survive cancellation.
         let artwork = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
         artwork.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.36)),
