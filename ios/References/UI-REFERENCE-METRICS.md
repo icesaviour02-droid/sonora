@@ -122,3 +122,10 @@ Reference files are local-only: build20-collections-comparison.mp4 (21:20), buil
 
 
 Build22 refinement (pending native acceptance): offline capsule has an independent+16pt vertical offset relative to the unshifted time row, while elapsed/remaining retain-10pt. It remains horizontally centered in the gap before transport. Volume is now plain MPVolumeView with native internals and no custom expansion/external icons, as explicitly permitted by the user. A committed player dismissal begins artwork-to-pill handoff only after release and at/after60% of surface travel; actual image nodes and presentation-layer displacement avoid detached artwork during the finger drag. Original Apple video remains the reference; exact phone appearance is not certified.
+
+
+## Build23 acceptance including build22 player refinements
+
+Source6ea741e29933ba8e3c2881b60bb67bc6e0aef8d2; successful run https://github.com/icesaviour02-droid/sonora/actions/runs/41052925941. All12 targeted iPhone13/iOS27.0(24A434) interaction cases passed, with zero runtime warnings. Committed closing cover handoff occurs after release and at/after60% of surface travel; original/mini image alpha restores to1. Queue and history actual-cell preview evidence passed. This accepts the included build22/23 interaction refinements, while the simple MPVolumeView and exact reference appearance still need physical-phone review. It also verifies13 permanent-asset/timing/offline-policy flags, saved-cover decoding after cold offline launch and native audio-clock movement from a preserved timed lyric. No appearance screenshots were exported/reviewed and no iOS26 tests ran.
+
+Delivered ios/build/LATEST-VERSION/Sonora-0.3.0-build23-6ea741e2.ipa;8,738,116 bytes;SHA2564e418899093c7de9158d4974c08bb84f875b147f5f2cfc08f80e1ea0aadba319. Earlier IPAs/reference media remain preserved. Exact Apple Music identity, hardware volume, real network transitions, live provider/account playback and complete desktop parity are not certified.
