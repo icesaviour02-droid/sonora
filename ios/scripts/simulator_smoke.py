@@ -121,15 +121,16 @@ def run_interactions(udid, export_images=True):
     test_run = next((IOS / "build/simulator/Build/Products").glob("*.xctestrun"))
     bundle = OUTPUT / "MusicInteractions.xcresult"
     failed = True
+    selection = ["-only-testing:SonoraUITests/MusicInteractionTests/testDownloadedTimedLyricsSurviveCacheClearAndRelaunch"] if os.environ.get("SONORA_REVIEW_SCOPE") == "offline_assets" else []
     try:
         subprocess.run(["xcodebuild", "test-without-building", "-xctestrun", str(test_run),
             "-destination", "id=" + udid, "-parallel-testing-enabled", "NO",
-            "-resultBundlePath", str(bundle)], check=True, timeout=600)
+            "-resultBundlePath", str(bundle)] + selection, check=True, timeout=900)
         failed = False
     finally:
         if failed: export_crash_summaries(bundle)
         current = Path(sim("get_app_container", udid, BUNDLE, "data"))
-        for filename in ["queue-drag-review.json", "player-presentation-review.json", "queue-context-preview-review.json", "download-lyrics-review.json", "player-cover-handoff-review.json", "offline-artwork-restore-review.json"]:
+        for filename in ["queue-drag-review.json", "player-presentation-review.json", "queue-context-preview-review.json", "download-lyrics-review.json", "player-cover-handoff-review.json", "offline-artwork-restore-review.json", "download-player-setup-review.json", "download-player-presentation-review.json"]:
             evidence = current / "Library/Application Support" / filename
             if evidence.exists():
                 (OUTPUT / filename).write_bytes(evidence.read_bytes())
@@ -373,6 +374,14 @@ if __name__ == "__main__":
         if BUNDLE not in processes:
             raise RuntimeError("Sonora did not remain running after launch")
         container = Path(sim("get_app_container", udid, BUNDLE, "data"))
+        if os.environ.get("SONORA_REVIEW_SCOPE") == "offline_assets":
+            generate_review_media(container)
+            run_interactions(udid, export_images=False)
+            assert json.loads((OUTPUT / "download-lyrics-review.json").read_text())["passed"]
+            assert json.loads((OUTPUT / "offline-artwork-restore-review.json").read_text())["passed"]
+            (OUTPUT / "review-scope.json").write_text(json.dumps({"scope": "offline_assets", "passed": True,
+                "checks": ["downloaded_assets_and_offline_relaunch"], "full_provider_acceptance": False}, indent=2))
+            raise SystemExit(0)
         if os.environ.get("SONORA_REVIEW_SCOPE") == "interactions":
             review_interactions_only(udid, container)
             raise SystemExit(0)

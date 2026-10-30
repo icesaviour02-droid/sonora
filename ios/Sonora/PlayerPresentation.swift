@@ -71,8 +71,11 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
         /// DEBUG evidence records lifecycle flags only, without account or media content.
         private func record(_ event: String) {
             #if DEBUG
-            guard ProcessInfo.processInfo.arguments.contains("--sonora-review-fullscreen") else { return }
-            let url = URL.applicationSupportDirectory.appendingPathComponent("player-presentation-review.json")
+            let arguments = ProcessInfo.processInfo.arguments
+            let downloadReview = arguments.contains { $0.contains("sonora://downloadlyrics") }
+            guard arguments.contains("--sonora-review-fullscreen") || downloadReview else { return }
+            let filename = downloadReview ? "download-player-presentation-review.json" : "player-presentation-review.json"
+            let url = URL.applicationSupportDirectory.appendingPathComponent(filename)
             var events = ((try? Data(contentsOf: url)).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [[String: Any]] ?? []
             events.append(["event": event, "wanted": wanted, "hasPlayer": player != nil,
                 "hasPresented": presentedViewController != nil, "inWindow": viewIfLoaded?.window != nil])

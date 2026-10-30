@@ -89,15 +89,26 @@ final class LibraryStore {
         reviewTask?.cancel()
         reviewTask = Task { [weak self] in
             guard let self else { return }
+            func record(_ stage: String) {
+                let report: [String: Any] = ["stage": stage, "cancelled": Task.isCancelled,
+                    "restoring": downloads.isRestoring, "has_entry": downloads.entry(for: "youtube:reviewSaved") != nil,
+                    "has_audio": downloads.fileURL(for: "youtube:reviewSaved") != nil, "restore_only": restoreOnly]
+                if let data = try? JSONSerialization.data(withJSONObject: report) {
+                    try? data.write(to: URL.applicationSupportDirectory.appendingPathComponent("download-player-setup-review.json"), options: .atomic)
+                }
+            }
+            record("started")
             if !restoreOnly {
                 guard let track = await self.importReviewRecording() else { return }
                 await downloads.reviewDownloads(file: self.url(for: track), track: track)
-                guard await downloads.reviewDownloadedLyrics() else { return }
+                guard await downloads.reviewDownloadedLyrics() else { record("assets_failed"); return }
             }
+            record("assets_ready")
             for _ in 0..<150 where downloads.isRestoring { try? await Task.sleep(for: .milliseconds(20)) }
             guard let track = downloads.entry(for: "youtube:reviewSaved")?.track,
-                  downloads.fileURL(for: track.id) != nil, !Task.isCancelled else { return }
+                  downloads.fileURL(for: track.id) != nil, !Task.isCancelled else { record("player_guard_failed"); return }
             playback.play(track, in: [track]); playback.pause(); ready()
+            record("player_requested")
         }
     }
 
