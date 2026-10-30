@@ -46,7 +46,7 @@ actor ArtworkFiles {
 
     init() { cache.totalCostLimit = Self.maximumData }
 
-    func data(_ url: URL) async throws -> Data {
+    func data(_ url: URL, allowsCellular: Bool = true) async throws -> Data {
         let url = DownloadArtworkIndex.shared.localURL(for: url) ?? url
         if let cached = cache.object(forKey: url as NSURL) { return cached as Data }
         let data: Data
@@ -56,6 +56,7 @@ actor ArtworkFiles {
             data = try Data(contentsOf: url)
         } else {
             var request = URLRequest(url: url); request.timeoutInterval = 30
+            request.allowsCellularAccess = allowsCellular
             let (received, response) = try await NetworkAccess.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200, received.count <= Self.maximumData else { throw URLError(.badServerResponse) }
             data = received

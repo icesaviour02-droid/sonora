@@ -105,6 +105,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
     @ObservationIgnored private let network = NWPathMonitor()
     private var lyricsNetworkAvailable = true
     private var lyricsOnCellular = false
+    @ObservationIgnored private var networkPathKnown = false
     private var lyricsSources: [String] {
         if let data = UserDefaults.standard.data(forKey: "sonora.settings.lyricsSources"),
            let saved = try? JSONDecoder().decode([LyricsSourcePreference].self, from: data) {
@@ -158,6 +159,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         network.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 guard let self else { return }
+                self.networkPathKnown = true
                 self.lyricsNetworkAvailable = path.status == .satisfied
                 self.lyricsOnCellular = path.usesInterfaceType(.cellular)
                 self.updateConnectivity()
@@ -320,7 +322,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
     private func pump() {
         pumpLyrics()
         pumpArtwork()
-        guard !isOffline, !isRestoring, error == nil, UIApplication.shared.applicationState != .background else { return }
+        guard networkPathKnown, !isOffline, !isRestoring, error == nil, UIApplication.shared.applicationState != .background else { return }
         let active = entries.filter { $0.state == .resolving }.count
         let queued = entries.filter { $0.state == .queued }.prefix(max(0, 2 - active))
         for entry in queued { start(entry) }
@@ -359,7 +361,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--sonora-review-url") { return }
         #endif
-        guard !isOffline, !isRestoring, error == nil, artworkTask == nil,
+        guard networkPathKnown, !isOffline, !isRestoring, error == nil, artworkTask == nil,
               allowsCellular || !lyricsOnCellular,
               let entry = entries.first(where: { $0.state == .downloaded && ($0.artworkState == nil || $0.artworkState == .queued) }) else { return }
         artworkGeneration = UUID(); let token = artworkGeneration
@@ -384,7 +386,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
             for url in candidates {
                 do {
                     try Task.checkCancellation()
-                    let data = try await ArtworkFiles.shared.data(url)
+                    let data = try await ArtworkFiles.shared.data(url, allowsCellular: self.allowsCellular)
                     guard !self.isOffline, !Task.isCancelled, self.entry(for: entry.id)?.filename == entry.filename else { return }
                     try await ArtworkFiles.shared.saveDownloaded(data, audioURL: audio)
                     guard !Task.isCancelled else { return }
@@ -410,7 +412,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--sonora-review-url") { return }
         #endif
-        guard !isOffline, !isRestoring, error == nil, lyricsTask == nil, lyricsNetworkAvailable,
+        guard networkPathKnown, !isOffline, !isRestoring, error == nil, lyricsTask == nil, lyricsNetworkAvailable,
               allowsCellular || !lyricsOnCellular else { return }
         let sources = lyricsSources
         guard !sources.isEmpty, let entry = entries.first(where: {
@@ -596,7 +598,7 @@ final class DownloadsStore: NSObject, URLSessionDownloadDelegate {
                 transfer.resume()
                 self.pump()
             } catch is CancellationError {
-                // Removing a queued download owns the cancellation state.
+                // Removal or offline suspension owns the cancellation state.
             } catch {
                 guard let self else { return }
                 self.resolving.removeValue(forKey: entry.id)
