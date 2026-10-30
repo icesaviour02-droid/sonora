@@ -765,7 +765,8 @@ final class PlaybackController {
             if shouldResume { resume() }
         } else {
             pause(); player.replaceCurrentItem(with: nil)
-            error = String(localized: "ios-offline-required")
+            // Restoring a paused queue is not a playback attempt and must not raise an alert.
+            if shouldResume { error = String(localized: "ios-offline-required") }
         }
         refreshArtwork()
     }

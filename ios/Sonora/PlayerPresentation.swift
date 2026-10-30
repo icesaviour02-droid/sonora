@@ -20,6 +20,7 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
         private var interaction: UIPercentDrivenInteractiveTransition?
         private var wanted = false
         private var dismissalSucceeded = false
+        private var retryScheduled = false
         private var root: AnyView = AnyView(EmptyView())
         override func loadView() {
             let anchor = WindowAnchor()
@@ -52,6 +53,16 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
         private func reconcile() {
             guard viewIfLoaded?.window != nil else { return }
             if wanted, player == nil, presentedViewController == nil {
+                // SwiftUI can still be dismissing its error alert when the user opens a song.
+                var owner: UIViewController? = self
+                while let controller = owner {
+                    if controller.presentedViewController != nil || controller.isBeingDismissed || controller.isBeingPresented {
+                        record("waiting-for-presentation")
+                        retryPresentation()
+                        return
+                    }
+                    owner = controller.parent
+                }
                 let host = Hosting(rootView: root)
                 host.modalPresentationStyle = .custom
                 host.modalPresentationCapturesStatusBarAppearance = true
@@ -63,8 +74,25 @@ struct PlayerPresentation<Content: View>: UIViewControllerRepresentable {
                 player = host
                 record("present")
                 present(host, animated: true) { [weak self] in self?.record("present-complete") }
+                // A rejected UIKit presentation never completes; retain the request rather than a stale host.
+                DispatchQueue.main.async { [weak self, weak host] in
+                    guard let self, let host, self.player === host, host.presentingViewController == nil else { return }
+                    self.player = nil
+                    self.retryPresentation()
+                }
             } else if !wanted, let player, !player.isBeingDismissed {
                 player.dismiss(animated: true) { [weak self] in self?.player = nil; self?.reconcile() }
+            }
+        }
+
+        /// Coalesces retries while an ancestor alert or sheet finishes its native transition.
+        private func retryPresentation() {
+            guard wanted, !retryScheduled else { return }
+            retryScheduled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                guard let self else { return }
+                self.retryScheduled = false
+                self.reconcile()
             }
         }
 

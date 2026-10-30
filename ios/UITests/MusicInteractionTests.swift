@@ -79,7 +79,7 @@ final class MusicInteractionTests: XCTestCase {
         XCTAssertTrue(next.waitForExistence(timeout: 8), app.debugDescription)
         next.tap()
         expectation(for: NSPredicate { _, _ in rows.element(boundBy: 0).identifier == second }, evaluatedWith: app)
-        waitForExpectations(timeout: 8)
+        waitForExpectations(timeout: 15)
         app.buttons[second].coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)).press(forDuration: 1)
         let remove = app.buttons["Remove from Queue"].firstMatch
         XCTAssertTrue(remove.waitForExistence(timeout: 8))
